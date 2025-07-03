@@ -3,23 +3,24 @@
 ###     dir: /mnt/c/wsl/scripts/sys_init.sh
 
 
-######------------Folder Structure
-######  /mnt/c/scripts     (c:\scripts)
-######  ├── sys_init.sh           # Main script
-######  ├── lib
-######  │   ├── logging.sh        # Logging functions
-######  │   ├── set_dirs.sh       # create directories and set scripts as executable
-######  │   ├── #snapshots.sh      # WSL snapshot functions
-######  │   ├── install.sh        # Package installation functions
-######  │   ├── config
-######  │   │   ├── nvim.sh      # Neovim configurations
-######  │   │   ├── tmux.sh      # Tmux configurations
-######  │   │   ├── zsh.sh       # Zsh configurations
-######  │   │   ├── p10k.sh      # P10k configurations
-######  │   │   ├── zxc_nvim.sh  #cat configuration files for NVIM
-######  │   │   ├── zxc_tmux.sh  #cat configuration files for TMUX
-######  │   │   ├── zxc_zsh.sh   #cat configuration files for ZSH
-######  └   └   └── zxc_p10k.sh  #cat configuration files for ZSH p10K  
+######------Structure
+######      Git/Setup/
+######      ├── 1_sys_init.sh           # Main script
+######      ├── Install.ps              # Power Shell Install Script
+######      ├── lib
+######      │   ├── 2_set_dirs.sh       # create directories and set scripts as executable
+######      │   ├── 3_logging.sh        # Logging functions
+######      │   ├── #snapshots.sh       # WSL snapshot functions -- Functionality to check
+######      │   ├── 4_install.sh        # Package/Main installation functions
+######      │   ├── config
+######      │   │   ├── nvim.sh      # Neovim configurations
+######      │   │   ├── tmux.sh      # Tmux configurations
+######      │   │   ├── zsh.sh       # Zsh configurations
+######      │   │   ├── p10k.sh      # P10k configurations
+######      │   │   ├── zxc_nvim.sh  #cat configuration files for NVIM
+######      │   │   ├── zxc_tmux.sh  #cat configuration files for TMUX
+######      │   │   ├── zxc_zsh.sh   #cat configuration files for ZSH
+######      └   └   └── zxc_p10k.sh  #cat configuration files for ZSH p10K  
 
 
 
