@@ -1,7 +1,7 @@
 import os
 import subprocess
 
-def export_git_repo_to_text(output_filename="repo_contents.txt"):
+def export_git_repo_to_text(output_filename="repo_contents1.txt"):
     """
     Exports the structure and content of text files in a Git repository
     to a single text file.
