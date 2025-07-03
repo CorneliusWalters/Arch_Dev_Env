@@ -2,7 +2,7 @@
 
 # --- CONFIGURATION: EDIT THESE VARIABLES ---
 $githubRepoUrl = "https://github.com/CorneliusWalters/Arch_Dev_Env.git" 
-#$localClonePath = "C:\wsl-dev-setup"                               # <-- Optional: Change clone location
+$localClonePath = "C:\wsl-dev-setup"                               # <-- Optional: Change clone location
 $wslDistroName = "Arch"                                            # <-- Your WSL distribution name
 $wslUsername = "CHW"                                               # <-- VERY IMPORTANT: EDIT THIS to your default WSL username
 # -------------------------------------------
