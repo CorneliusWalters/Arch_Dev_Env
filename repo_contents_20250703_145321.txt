@@ -1,0 +1,1745 @@
+Exported Git Repository Contents - Generated on 2025-07-03 14:53:21
+--------------------------------------------------------
+
+--- FILE 1: LICENSE ---
+```
+This is free and unencumbered software released into the public domain.
+
+Anyone is free to copy, modify, publish, use, compile, sell, or
+distribute this software, either in source code form or as a compiled
+binary, for any purpose, commercial or non-commercial, and by any
+means.
+
+In jurisdictions that recognize copyright laws, the author or authors
+of this software dedicate any and all copyright interest in the
+software to the public domain. We make this dedication for the benefit
+of the public at large and to the detriment of our heirs and
+successors. We intend this dedication to be an overt act of
+relinquishment in perpetuity of all present and future rights to this
+software under copyright law.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+OTHER DEALINGS IN THE SOFTWARE.
+
+For more information, please refer to <https://unlicense.org>
+
+```
+
+--- FILE 2: README.md ---
+```
+# Arch_Dev_Env
+Arch Development Environment
+
+```
+
+--- FILE 3: Setup/.gitignore ---
+```
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Dependencies
+/node_modules
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build artifacts
+/build
+/dist
+/out
+
+# Generated repository content
+repo_contents.txt
+
+# OS generated files
+.DS_Store
+Thumbs.db
+```
+
+--- FILE 4: Setup/1_sys_init.sh ---
+```
+#!/bin/bash
+###     file name: sys_init.sh
+###     dir: /mnt/c/wsl/scripts/sys_init.sh
+
+
+######------------Folder Structure
+######  /mnt/c/scripts     (c:\scripts)
+######  ├── sys_init.sh           # Main script
+######  ├── lib
+######  │   ├── logging.sh        # Logging functions
+######  │   ├── set_dirs.sh       # create directories and set scripts as executable
+######  │   ├── #snapshots.sh      # WSL snapshot functions
+######  │   ├── install.sh        # Package installation functions
+######  │   ├── config
+######  │   │   ├── nvim.sh      # Neovim configurations
+######  │   │   ├── tmux.sh      # Tmux configurations
+######  │   │   ├── zsh.sh       # Zsh configurations
+######  │   │   ├── p10k.sh      # P10k configurations
+######  │   │   ├── zxc_nvim.sh  #cat configuration files for NVIM
+######  │   │   ├── zxc_tmux.sh  #cat configuration files for TMUX
+######  │   │   ├── zxc_zsh.sh   #cat configuration files for ZSH
+######  └   └   └── zxc_p10k.sh  #cat configuration files for ZSH p10K  
+
+
+
+#######--- START OF FILE ---#######
+# Main initialization script for WSL Arch Linux setup
+# Exit on any error
+set -e
+
+
+# set directory source
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Source Directory setup
+source "$SCRIPT_DIR/lib/set_dirs.sh"
+
+# Source all library functions
+source "$SCRIPT_DIR/lib/logging.sh" || exit 1
+source "$SCRIPT_DIR/lib/install.sh" || exit 1
+
+# Initialize logging
+init_logging || exit 1
+
+
+#test_caller_logging
+#exit 
+sync_wsl_time || exit 1
+stabilise_keyring || exit 1
+check_dependencies || exit 1
+
+
+
+# Main installation flow
+{
+    print_status "MAIN" "Starting system initialization..."
+    
+    # System update and base dependencies
+    # After check_dependencies
+    optimise_mirrors || exit 1
+    print_status "MIRROR_TEST" "Testing mirrors..."
+if execute_and_log_with_retry "sudo pacman -Sy archlinux-keyring --noconfirm" 3 5 "MIRROR_TEST"; then
+    print_success "MIRROR_TEST" "Mirrors are working properly"
+else
+    print_error "MIRROR_TEST" "Mirror test failed, cannot continue"
+    exit 1
+fi
+    optimise_pacman || exit 1
+
+    update_system || exit 1
+    setup_locale || exit 1
+    install_base_packages || exit 1
+    
+    # Development tools
+    install_dev_tools || exit 1
+    install_db_tools || exit 1
+    install_python_environment || exit 1
+    
+    # source Configurations
+    source lib/config/tmux.sh
+    source lib/config/zsh.sh
+    source lib/config/nvim.sh
+    source lib/config/p10k.sh
+    
+    # Configurations
+    setup_shell || exit 1
+    setup_p10k || exit 1
+    setup_tmux || exit 1
+    setup_neovim || exit 1
+    
+    print_success "MAIN" "Installation complete!"
+    print_status "MAIN" "Please log out and log back in for all changes to take effect."
+    print_status "MAIN" "After logging back in, run 'nvim' and wait for plugins to install."
+    print_status "MAIN" "Check logs at: $LOGFILE"
+} || {
+    print_error "MAIN" "Installation failed. Check logs at: $LOGFILE"
+    exit 1
+}
+
+
+#######--- END OF FILE ---#######
+
+
+```
+
+--- FILE 5: Setup/Install.ps1 ---
+```
+# install.ps1 - Bootstrapper for configuring an existing WSL Arch Linux instance.
+
+# --- CONFIGURATION: EDIT THESE VARIABLES ---
+$githubRepoUrl = "https://github.com/CorneliusWalters/Arch_Dev_Env.git" 
+#$localClonePath = "C:\wsl-dev-setup"                               # <-- Optional: Change clone location
+$wslDistroName = "Arch"                                            # <-- Your WSL distribution name
+$wslUsername = "CHW"                                               # <-- VERY IMPORTANT: EDIT THIS to your default WSL username
+# -------------------------------------------
+
+# --- SCRIPT LOGIC ---
+function Write-Header {
+    param([string]$Message)
+    Write-Host "=================================================================" -ForegroundColor Cyan
+    Write-Host $Message -ForegroundColor Cyan
+    Write-Host "================================================================="
+}
+
+Write-Header "Starting WSL Arch Linux Configuration"
+
+# 1. Prerequisite Checks
+Write-Host "Checking for prerequisites (git, wsl)..."
+$gitExists = Get-Command git -ErrorAction SilentlyContinue
+if (-not $gitExists) {
+    Write-Host "ERROR: Git is not installed or not in your PATH." -ForegroundColor Red
+    Write-Host "Please install Git for Windows and try again: https://git-scm.com/download/win"
+    exit 1
+}
+
+$wslDistro = wsl -l -v | Select-String $wslDistroName
+if (-not $wslDistro) {
+    Write-Host "ERROR: WSL distribution '$wslDistroName' not found." -ForegroundColor Red
+    Write-Host "Please run 'wsl --install archlinux' first and complete the initial user setup."
+    exit 1
+}
+Write-Host "Prerequisites found." -ForegroundColor Green
+
+# 2. Clone the Git Repository
+Write-Header "Cloning Setup Scripts"
+if (Test-Path $localClonePath) {
+    Write-Host "Setup directory already exists at '$localClonePath'. Removing for a clean clone."
+    Remove-Item -Recurse -Force $localClonePath
+}
+Write-Host "Cloning repository from $githubRepoUrl to $localClonePath..."
+git clone $githubRepoUrl $localClonePath
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: Failed to clone the Git repository." -ForegroundColor Red
+    exit 1
+}
+Write-Host "Repository cloned successfully." -ForegroundColor Green
+
+# 3. Execute the Main Setup Script inside WSL
+Write-Header "Executing Main Setup Script inside WSL"
+Write-Host "This will run '1_sys_init.sh' as user '$wslUsername' in the '$wslDistroName' distro."
+Write-Host "You will see output from the script and may be prompted for your sudo password."
+
+# Convert Windows path to WSL path
+$wslScriptPath = "/mnt/" + ($localClonePath -replace ':', '').Replace('\', '/') + "/1_sys_init.sh"
+
+# The command to run inside WSL. It makes the script executable, then runs it.
+$wslCommand = "chmod +x $wslScriptPath && $wslScriptPath"
+
+# Execute the command
+wsl -d $wslDistroName -u $wslUsername -e bash -c $wslCommand
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: The setup script inside WSL failed. Check the terminal output above for details." -ForegroundColor Red
+    exit 1
+}
+
+Write-Header "Setup Complete!"
+Write-Host "Please close this terminal and open a new Arch WSL terminal." -ForegroundColor Green
+Write-Host "All changes should be applied."
+```
+
+--- FILE 6: Setup/lib/2_set_dirs.sh ---
+```
+#!/bin/bash
+###     file name: set_dirs.sh
+###     dir: /mnt/c/wsl/scripts/lib/config/set_dirs.sh
+
+#######--- START OF FILE ---#######
+# Create project structure
+
+# Create project structure
+mkdir -p \
+  ~/.config/nvim/lua/config \
+  ~/.config/zsh \
+  ~/.config/tmux \
+  ~/.local/{bin,share,opt,logs} \
+  ~/.cache
+
+# Make all scripts executable
+chmod +x sys_init.sh lib/*.sh lib/config/*.sh
+
+# Set directory permissions (700 for config dirs, 755 for others)
+find ~/.config -type d -exec chmod 700 {} \;  # All config directories
+chmod 755 ~/.local/* ~/.cache  # Non-sensitive directories
+
+
+# Set permissions recursively from .config/nvim downward
+find ~/.config/nvim -type d -exec chmod 700 {} \;
+
+# Fix permissions and ownership (NEW ADDITIONS)
+chown -R "$USER:$USER" ~/.config
+
+echo "Final permissions for Neovim config:"
+ls -ld ~/.config/nvim \
+      ~/.config/nvim/lua \
+      ~/.config/nvim/lua/config
+
+#######--- END OF FILE ---#######
+
+
+```
+
+--- FILE 7: Setup/lib/3_logging.sh ---
+```
+#!/bin/bash
+###     file name: logging.sh
+###     dir: /mnt/c/wsl/scripts/lib/config/
+
+
+#######--- START OF FILE ---#######
+# Create logs directory
+# logging.sh
+#!/bin/bash
+
+# Setup logging with detailed timestamps and categories
+LOG_DIR="/mnt/c/wsl/tmp/logs/$(date +%Y%m%d_%H%M%S)"
+mkdir -p "$LOG_DIR"
+LOGFILE="$LOG_DIR/sys_init.log"
+
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+init_logging() {
+    {
+        echo "=== Installation Log Started at $(date) ==="
+        echo "=== System Information ==="
+        echo "User: $(whoami)"
+        echo "Hostname: $(hostname)"
+        echo "WSL Version: $(wsl.exe --version 2>/dev/null || echo 'WSL version not available')"
+        echo "Kernel: $(uname -r)"
+        echo "Distribution: $(cat /etc/os-release | grep PRETTY_NAME)"
+        echo "Memory: $(free -h)"
+        echo "Disk Space: $(df -h /)"
+        echo "Network Status: $(ip addr show | grep 'inet ')"
+        echo "Current Shell: $SHELL"
+        echo "=== Environment Status ==="
+        echo "Working Directory: $(pwd)"
+        echo "Script Directory: $SCRIPT_DIR"
+        echo "=========================="
+    } >> "$LOGFILE"
+}
+log_message() {
+    local level=$1
+    local category=$2
+    local message=$3
+    local func="${FUNCNAME[2]:-main}"  # Get the calling function, default to 'main'
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo "[$timestamp] [$level] [$category] [$func] $message" >> "$LOGFILE"
+}
+
+print_status() {
+    local category=$1
+    local message=$2
+    local func="${FUNCNAME[1]:-main}"
+    echo -e "${BLUE}[STATUS]${NC} [$category] [$func] $message"
+    log_message "STATUS" "$category" "$message"
+}
+
+print_success() {
+    local category=$1
+    local message=$2
+    local func="${FUNCNAME[1]:-main}"
+    echo -e "${GREEN}[SUCCESS]${NC} [$category] [$func] $message"
+    log_message "SUCCESS" "$category" "$message"
+}
+
+print_warning() {
+    local category=$1
+    local message=$2
+    local func="${FUNCNAME[1]:-main}"
+    echo -e "${YELLOW}[WARNING]${NC} [$category] [$func] $message"
+    log_message "WARNING" "$category" "$message"
+}
+
+print_error() {
+    local category=$1
+    local message=$2
+    local func="${FUNCNAME[1]:-main}"
+    echo -e "${RED}[ERROR]${NC} [$category] [$func] $message"
+    log_message "ERROR" "$category" "$message"
+}
+
+execute_and_log() {
+    local cmd="$1"
+    local desc="$2"
+    local category="${3:-COMMAND}"
+
+    # Get caller context using BASH_SOURCE array
+    local stack_trace=""
+    for ((i=1; i<${#BASH_SOURCE[@]}; i++)); do
+        local script=$(basename "${BASH_SOURCE[$i]}")
+        local line="${BASH_LINENO[$i-1]}"
+        local func="${FUNCNAME[$i]}"
+        [[ "$func" != "main" ]] && stack_trace+="$script[${func}]:$line -> "
+    done
+    stack_trace+=$(basename "${BASH_SOURCE[0]}")
+
+    # Log execution start with stack trace
+    print_status "$category" "Stack trace: $stack_trace"
+    print_status "$category" "Executing: $desc"
+    log_message "COMMAND" "$category" "$ $cmd"
+
+    # Execute with timing and error capture
+    local start_time=$(date +%s)
+    if output=$( { eval "$cmd"; } 2>&1 ); then
+        local end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+
+        log_message "SUCCESS" "$category" "[${FUNCNAME[1]}] Command completed successfully"
+        log_message "OUTPUT" "$category" "[${FUNCNAME[1]}] Output:\n$output"
+        log_message "TIMING" "$category" "[${FUNCNAME[1]}] Duration: ${duration}s"
+        
+        print_success "$category" "[${FUNCNAME[1]}] $desc completed (${duration}s)"
+        return 0
+    else
+        local exit_code=$?
+        local end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+
+        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Command failed with exit code: $exit_code"
+        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Stack trace: $stack_trace"
+        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Failed command: $cmd"
+        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Description: $desc"
+        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Duration: ${duration}s"
+        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Output:\n$output"
+
+        print_error "$category" "[${FUNCNAME[1]}] FAILED: $desc (${duration}s)"
+        return $exit_code
+    fi
+}
+# Execute command with logging and snapshot support
+execute_and_log() {
+    local cmd="$1"
+    local desc="$2"
+    local category="${3:-COMMAND}"
+
+    # Get caller context using BASH_SOURCE array
+    local stack_trace=""
+    for ((i=1; i<${#BASH_SOURCE[@]}; i++)); do
+        local script=$(basename "${BASH_SOURCE[$i]}")
+        local line="${BASH_LINENO[$i-1]}"
+        local func="${FUNCNAME[$i]}"
+        [[ "$func" != "main" ]] && stack_trace+="$script:$line($func) -> "
+    done
+    stack_trace+=$(basename "${BASH_SOURCE[0]}")
+
+    # Log execution start with stack trace
+    print_status "$category" "Stack trace: $stack_trace"
+    print_status "$category" "Executing: $desc"
+    log_message "COMMAND" "$category" "$ $cmd"
+
+    # Execute with timing and error capture
+    local start_time=$(date +%s)
+    if output=$( { eval "$cmd"; } 2>&1 ); then
+        local end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+
+        log_message "SUCCESS" "$category" "Command completed successfully"
+        log_message "OUTPUT" "$category" "Output:\n$output"
+        log_message "TIMING" "$category" "Duration: ${duration}s"
+        
+        print_success "$category" "$desc completed (${duration}s)"
+        return 0
+    else
+        local exit_code=$?
+        local end_time=$(date +%s)
+        local duration=$((end_time - start_time))
+
+        log_message "ERROR" "$category" "Command failed with exit code: $exit_code"
+        log_message "ERROR" "$category" "Stack trace: $stack_trace"
+        log_message "ERROR" "$category" "Failed command: $cmd"
+        log_message "ERROR" "$category" "Description: $desc"
+        log_message "ERROR" "$category" "Duration: ${duration}s"
+        log_message "ERROR" "$category" "Output:\n$output"
+
+        print_error "$category" "FAILED: $desc (${duration}s)"
+        return $exit_code
+    fi
+}
+execute_and_log_with_retry() {
+    local cmd="$1"
+    local max_attempts="${2:-3}"  # Default to 3 attempts
+    local delay="${3:-5}"        # Default to 5 second delay
+    local category="${4:-RETRY}"
+    local attempt=1
+    local start_time=$(date +%s)
+    local func="${FUNCNAME[1]:-main}"
+
+    while [ $attempt -le $max_attempts ]; do
+        print_status "$category" "[$func] Attempt $attempt of $max_attempts"
+        log_message "RETRY" "$category" "[$func] Executing attempt $attempt: $cmd"
+
+        if output=$( { eval "$cmd"; } 2>&1 ); then
+            local exit_code=$?
+            local end_time=$(date +%s)
+            local duration=$((end_time - start_time))
+            
+            log_message "SUCCESS" "$category" "[$func] Succeeded on attempt $attempt (${duration}s)"
+            log_message "OUTPUT" "$category" "[$func] Output:\n$output"
+            log_message "TIMING" "$category" "[$func] Total duration: ${duration}s, Attempts: $attempt"
+            print_success "$category" "[$func] Command succeeded on attempt $attempt (${duration}s)"
+            
+            # Add performance logging if duration is significant
+            if [ $duration -gt 5 ]; then
+                log_message "PERF" "$category" "[$func] Command took ${duration}s to complete after $attempt attempts"
+            fi
+            
+            return $exit_code  # Return actual exit code instead of 0
+        else
+            local exit_code=$?
+            local current_time=$(date +%s)
+            local current_duration=$((current_time - start_time))
+            
+            log_message "WARNING" "$category" "[$func] Attempt $attempt failed with exit code: $exit_code"
+            log_message "WARNING" "$category" "[$func] Output:\n$output"
+            log_message "TIMING" "$category" "[$func] Current duration: ${current_duration}s"
+
+            if [ $attempt -lt $max_attempts ]; then
+                print_warning "$category" "[$func] Retrying in $delay seconds (attempt $attempt/$max_attempts, ${current_duration}s elapsed)"
+                sleep $delay
+            fi
+        fi
+        
+        attempt=$((attempt + 1))
+    done
+
+    local final_time=$(date +%s)
+    local total_duration=$((final_time - start_time))
+    
+    log_message "ERROR" "$category" "[$func] Failed after $max_attempts attempts (${total_duration}s)"
+    log_message "ERROR" "$category" "[$func] Final exit code: $exit_code"
+    print_error "$category" "[$func] Command failed after $max_attempts attempts (${total_duration}s)"
+    
+    return $exit_code  # Return the last exit code
+}
+
+#######--- END OF FILE ---#######
+
+
+```
+
+--- FILE 8: Setup/lib/4_install.sh ---
+```
+#!/bin/bash
+###     file name: install.sh
+###     dir: /mnt/c/wsl/scripts/lib/install.sh
+
+
+#######--- START OF FILE ---#######
+# Function to check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+# Check Dependencies
+
+check_dependencies() {
+    local deps=("git" "curl" "sudo" "wsl.exe")
+    for dep in "${deps[@]}"; do
+        if ! command -v "$dep" >/dev/null 2>&1; then
+            print_error "Required dependency not found: $dep"
+            return 1
+        fi
+    done
+}
+mount_with_retry() {
+    local attempts=0
+    until mount -t drvfs C: /mnt/c; do
+        ((attempts++))
+        if [ $attempts -ge 5 ]; then
+            echo "Failed to mount C: drive after 5 attempts"
+            return 1
+        fi
+        sleep 2
+    done
+}
+
+test_caller_logging() {
+    print_status "TEST" "Starting logging system test"
+    log_message "INFO" "TEST" "Call stack information:"
+    log_message "INFO" "TEST" "BASH_SOURCE: ${BASH_SOURCE[@]}"
+    log_message "INFO" "TEST" "FUNCNAME: ${FUNCNAME[@]}"
+    log_message "INFO" "TEST" "BASH_LINENO: ${BASH_LINENO[@]}"
+    
+    execute_and_log "false" "Test caller logging" "DEBUG"
+    local test_result=$?
+    
+    if [ $test_result -ne 0 ]; then
+        log_message "TEST" "DEBUG" "Test failed as expected (this is normal for testing)"
+    fi
+    
+    return $test_result
+}
+
+stabilise_keyring() {
+    print_status "KEYRING" "Initializing pacman keyring..."
+
+    # Clean existing state
+    execute_and_log "sudo rm -rf /etc/pacman.d/gnupg" "Clean keyring" "KEYRING"
+    execute_and_log "sudo pkill gpg-agent || true" "Stop key processes" "KEYRING"
+
+    # Initialize keyring
+    execute_and_log_with_retry "sudo pacman-key --init" 3 5 "KEYRING"
+    execute_and_log "sudo chmod 700 /etc/pacman.d/gnupg" "Set permissions" "KEYRING"
+
+    # Temporarily allow weak signatures for initial setup
+    execute_and_log "echo 'allow-weak-key-signatures' | sudo tee -a /etc/pacman.d/gnupg/gpg.conf" \
+        "Allow weak keys" "KEYRING"
+
+    # Populate keys with retry logic
+    execute_and_log_with_retry "sudo pacman-key --populate archlinux" 3 5 "KEYRING"
+
+    # Remove weak signature allowance
+    execute_and_log "sudo sed -i '/allow-weak-key-signatures/d' /etc/pacman.d/gnupg/gpg.conf" \
+        "Remove weak key allowance" "KEYRING"
+
+    return 0
+}
+
+optimise_pacman() {
+    print_status "PACMAN" "Optimizing pacman configuration"
+    
+    # Enable parallel downloads, color, and multilib
+    execute_and_log "sudo sed -i \
+        -e 's/^#ParallelDownloads = 5/ParallelDownloads = 10/' \
+        -e 's/^#Color/Color/' \
+        -e 's/^#\[multilib\]/\[multilib\]/; /^\[multilib\]/,/Include/ s/^#Include/Include/' \
+        /etc/pacman.conf" \
+        "Optimise pacman.conf" \
+        "PACMAN" || return 1
+
+    # Update databases with new configuration
+    execute_and_log "sudo pacman -Syy" \
+        "Refresh package databases" \
+        "PACMAN" || return 1
+}
+
+sync_wsl_time() {
+    print_status "TIME" "Synchronizing WSL system time with Windows host..."
+    
+    # Disable and stop timesyncd if it exists
+    if command_exists systemctl; then
+        execute_and_log "sudo systemctl stop systemd-timesyncd || true" \
+            "Stop timesyncd service if it exists" "TIME"
+        execute_and_log "sudo systemctl disable systemd-timesyncd || true" \
+            "Disable timesyncd service if it exists" "TIME"
+    fi
+    
+    # Force time sync from Windows host
+    local wintime=$(powershell.exe -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'")
+    if [ -n "$wintime" ]; then
+        execute_and_log "sudo date -s \"$wintime\"" \
+            "Setting system time from Windows host" "TIME"
+    else
+        print_warning "TIME" "Failed to get time from Windows host, trying NTP"
+        execute_and_log "sudo timedatectl set-ntp true" \
+            "Enable NTP time synchronization" "TIME"
+    fi
+    
+    print_status "TIME" "Current system time: $(date)"
+}
+optimise_mirrors() {
+    print_status "MIRROR" "Updating mirror list"
+    
+    # Install reflector if needed
+    if ! command_exists reflector; then
+        execute_and_log "sudo pacman -S --noconfirm reflector" \
+            "Install reflector" \
+            "MIRROR" || {
+                # Fallback if reflector install fails
+                print_warning "MIRROR" "Reflector install failed, using manual mirror setup"
+                
+                # Create a basic mirror list with reliable mirrors
+                execute_and_log "sudo bash -c 'cat > /etc/pacman.d/mirrorlist << EOF
+# Arch Linux mirrorlist
+# Generated with manual fallback
+Server = https://mirror.rackspace.com/archlinux/\$repo/os/\$arch
+Server = https://mirrors.kernel.org/archlinux/\$repo/os/\$arch
+Server = https://arch.mirror.constant.com/\$repo/os/\$arch
+Server = https://mirror.f4st.host/archlinux/\$repo/os/\$arch
+EOF'" "Creating basic mirror list" "MIRROR"
+                return 0
+            }
+    fi
+
+    # Backup original mirrorlist
+    execute_and_log "sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup" \
+        "Backup mirrorlist" \
+        "MIRROR" || return 1
+
+    # Try multiple mirror generation strategies
+    local success=0
+    
+    # Strategy 1: Try with South Africa mirrors first
+    if execute_and_log "sudo reflector --country ZA --protocol https --latest 50 --sort rate --save /etc/pacman.d/mirrorlist" \
+        "Generating South Africa mirror list" "MIRROR"; then
+        success=1
+    # Strategy 2: Try global mirrors
+    elif execute_and_log "sudo reflector --protocol https --latest 100 --sort rate --save /etc/pacman.d/mirrorlist" \
+        "Generating global mirror list" "MIRROR"; then
+        success=1
+    # Strategy 3: Try specific reliable mirrors
+    elif execute_and_log "sudo reflector --country US,GB,DE --protocol https --latest 50 --sort rate --save /etc/pacman.d/mirrorlist" \
+        "Generating US/GB/DE mirror list" "MIRROR"; then
+        success=1
+    # Final fallback: Create manual list
+    else
+        print_warning "MIRROR" "All reflector strategies failed, using manual fallback"
+        
+        execute_and_log "sudo bash -c 'cat > /etc/pacman.d/mirrorlist << EOF
+# Arch Linux mirrorlist
+# Generated with manual fallback
+Server = https://mirror.rackspace.com/archlinux/\$repo/os/\$arch
+Server = https://mirrors.kernel.org/archlinux/\$repo/os/\$arch
+Server = https://arch.mirror.constant.com/\$repo/os/\$arch
+Server = https://mirror.f4st.host/archlinux/\$repo/os/\$arch
+EOF'" "Creating basic mirror list" "MIRROR"
+        success=1
+    fi
+    
+    if [ $success -eq 1 ]; then
+        print_success "MIRROR" "Mirror list updated successfully"
+        return 0
+    else
+        print_error "MIRROR" "Failed to generate any working mirror list"
+        return 1
+    fi
+}
+update_system() {
+    print_status "UPDT" "Updating system packages..."
+    execute_and_log "sudo pacman -Syu --noconfirm" \
+    "Installing Update" \
+    "UPDT" || return 1
+}
+
+
+setup_locale() {
+    print_status "LOCALE" "Setting up system-wide locale..."
+
+    # Enable locale in locale.gen
+    execute_and_log "sudo sed -i 's/#en_ZA.UTF-8/en_ZA.UTF-8/' /etc/locale.gen" \
+        "Uncommenting en_ZA.UTF-8 in locale.gen" \
+        "LOCALE" || return 1
+
+    # Create system-wide locale.conf
+    execute_and_log "sudo tee /etc/locale.conf << 'EOL'
+LANG=en_ZA.UTF-8
+LC_ALL=en_ZA.UTF-8
+LC_CTYPE=en_ZA.UTF-8
+LC_NUMERIC=en_ZA.UTF-8
+LC_TIME=en_ZA.UTF-8
+LC_COLLATE=en_ZA.UTF-8
+LC_MONETARY=en_ZA.UTF-8
+LC_MESSAGES=en_ZA.UTF-8
+LC_PAPER=en_ZA.UTF-8
+LC_NAME=en_ZA.UTF-8
+LC_ADDRESS=en_ZA.UTF-8
+LC_TELEPHONE=en_ZA.UTF-8
+LC_MEASUREMENT=en_ZA.UTF-8
+LC_IDENTIFICATION=en_ZA.UTF-8
+EOL" \
+        "Setting system-wide locale configuration" \
+        "LOCALE" || return 1
+
+    # Generate locales
+    execute_and_log "sudo locale-gen" \
+        "Generating locales" \
+        "LOCALE" || return 1
+
+    print_success "LOCALE" "System-wide locale configuration complete"
+}
+
+install_base_packages() {
+    print_status "Packages" "Installing base dependencies..."
+
+    local BASE_DEPS="base-devel git github-cli bat cmake ninja zsh tmux neovim htop btop duf ncdu bat lsd ripgrep fd fzf zoxide lazygit git-delta jq yq shellcheck tree tree-sitter unzip zip tar wl-clipboard xclip curl wget httpie procs tldr man-db man-pages"
+    execute_and_log "sudo pacman -S --needed --noconfirm $BASE_DEPS" \
+        "Installing base dependencies" \
+        "Packages" || return 1
+}
+install_db_tools() {
+    print_status "DB" "Installing database tools..."
+    # Add clients for databases you use
+    local DB_TOOLS="postgresql-libs sqlite"
+    execute_and_log "sudo pacman -S --needed --noconfirm $DB_TOOLS" \
+        "Installing database client tools" \
+        "DB" || return 1
+}
+
+install_dev_tools() {
+    print_status "DEV" "Installing development tools..."
+    local DEV_TOOLS="nodejs npm go rust zig"
+    execute_and_log "sudo pacman -S --needed --noconfirm $DEV_TOOLS" \
+        "Installing development tools" \
+        "DEV" || return 1
+}
+
+install_python_environment() {
+    print_status "PYENV" "Installing Python environment..."
+    local PYTHON_DEPS="python python-pip python-pipx python-poetry python-pynvim"
+    execute_and_log "sudo pacman -S --needed --noconfirm $PYTHON_DEPS" \
+        "Installing Python packages" \
+        "PYENV" || return 1
+
+    # Setup Python virtual environment for Neovim
+    print_status "VIMENV" "Installing Python environment..."
+    execute_and_log "python -m venv ~/.local/share/nvim-venv" \
+        "Creating Neovim Python virtual environment" \
+        "VIMENV" || return 1
+
+    # Install Python packages in virtual environment
+    print_status "SETPYENV" "Installing Python packages in virtual environment"
+    execute_and_log "source ~/.local/share/nvim-venv/bin/activate && pip install pynvim debugpy && deactivate" \
+        "Installing Python packages in virtual environment" \
+        "SETPYENV" || return 1
+}
+    install_omz() {
+        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+}
+    zsh_auto() {
+        git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-autosuggestions
+}
+    install_omz_syntax() {
+        git clone https://github.com/zsh-users/zsh-syntax-highlighting ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-syntax-highlighting
+}
+    install_p10k() {
+        git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$ZSH/custom}/themes/powerlevel10k
+}
+
+setup_shell() {
+    local zsh_path=$(which zsh)
+    
+    # First set up ZSH and its configurations
+    setup_zsh || return 1
+
+    # Set it as default shell if needed
+    if [ "$SHELL" != "$zsh_path" ]; then
+        print_status "DEF_SHELL" "Setting zsh as default shell..."
+        execute_and_log "sudo chsh -s $zsh_path $USER" \
+            "Setting ZSH as default shell" \
+            "DEF_SHELL" || return 1
+
+        # Add verification here
+        print_status "DEF_SHELL" "Verifying shell change..."
+        if grep -q "$zsh_path" /etc/passwd; then
+            print_success "DEF_SHELL" "Shell change verified in /etc/passwd"
+        else
+            print_error "DEF_SHELL" "Shell change verification failed"
+            return 1
+        fi
+    fi
+}
+
+setup_winyank() {
+    print_status "CLIPBOARD" "Setting up win32yank for Neovim clipboard..."
+    
+    # Create directory for win32yank
+    execute_and_log "mkdir -p ~/.local/bin" \
+        "Creating local bin directory" \
+        "CLIPBOARD" || return 1
+
+    # Download win32yank
+    execute_and_log "curl -sLo /tmp/win32yank.zip https://github.com/equalsraf/win32yank/releases/download/v0.0.4/win32yank-x64.zip" \
+        "Downloading win32yank" \
+        "CLIPBOARD" || return 1
+
+    # Extract win32yank
+    execute_and_log "unzip -o /tmp/win32yank.zip -d /tmp/" \
+        "Extracting win32yank" \
+        "CLIPBOARD" || return 1
+
+    # Move to local bin and make executable
+    execute_and_log "mv /tmp/win32yank.exe ~/.local/bin/" \
+        "Installing win32yank" \
+        "CLIPBOARD" || return 1
+
+    execute_and_log "chmod +x ~/.local/bin/win32yank.exe" \
+        "Making win32yank executable" \
+        "CLIPBOARD" || return 1
+
+    # Clean up
+    execute_and_log "rm /tmp/win32yank.zip" \
+        "Cleaning up" \
+        "CLIPBOARD" || return 1
+}
+
+#######--- END OF FILE ---#######
+
+
+```
+
+--- FILE 9: Setup/lib/config/nvim.sh ---
+```
+#!/bin/bash
+###     file name: nvim.sh
+###     dir: /mnt/c/wsl/scripts/lib/config/nvim.sh
+
+
+#######--- START OF FILE ---#######
+
+setup_neovim() {
+    print_status "NVIM-TREE" "Setting up Neovim configuration..."
+
+    # Install Node packages for Neovim
+    execute_and_log "npm install --prefix ~/.local neovim tree-sitter-cli" \
+        "Installing Neovim Node packages" \
+        "NVIM-TREE" || return 1
+    # Add clipboard support
+    setup_winyank || exit 1
+
+    # Copy Neovim configurations
+    print_status "Neovim configuration complete. Run 'nvim' to install plugins."
+
+    source "$SCRIPT_DIR/lib/config/zxc_nvim.sh"
+}
+
+
+#######--- END OF FILE ---#######
+
+
+```
+
+--- FILE 10: Setup/lib/config/p10k.sh ---
+```
+#!/bin/bash
+###     file name: p10k.sh
+###     dir: /mnt/c/wsl/scripts/lib/config/p10k.sh
+
+
+#######--- START OF FILE ---#######
+setup_p10k() {
+    print_status "P10K" "Setting up Powerlevel10k configuration..."
+    
+    # Create ZSH config directory if it doesn't exist
+    mkdir -p ~/.config/zsh
+    
+    # Copy P10K configurations
+    source "$SCRIPT_DIR/lib/config/zxc_p10k.sh"
+    
+    print_success "Powerlevel10k configuration complete"
+}
+
+
+#######--- END OF FILE ---#######
+
+
+
+```
+
+--- FILE 11: Setup/lib/config/tmux.sh ---
+```
+#!/bin/bash
+###     file name: tmux.sh
+###     dir: /mnt/c/wsl/scripts/lib/config/tmux.sh
+
+
+#######--- START OF FILE ---#######
+setup_tmux() {
+    print_status "Setting up TMUX configuration..."
+    
+    # Create TMUX config directory
+    mkdir -p ~/.config/tmux
+    
+    # Copy TMUX configurations
+    source "$SCRIPT_DIR/lib/config/zxc_tmux.sh"
+    
+    print_success "TMUX configuration complete"
+}
+
+
+#######--- END OF FILE ---#######
+
+
+```
+
+--- FILE 12: Setup/lib/config/zsh.sh ---
+```
+#!/bin/bash
+###     filename: zsh.sh
+###     dir: /mnt/c/wsl/scripts/lib/config/zsh.sh
+
+
+#######--- START OF FILE ---#######
+setup_zsh() {
+    print_status "ZSH_CONF" "Setting up ZSH configuration..."
+    
+    # Install oh-my-zsh if not already installed
+    if [ ! -d "$HOME/.local/share/zsh/oh-my-zsh" ]; then
+        print_status "OMZ_START" "Installing Oh My Zsh..."
+        export ZSH="$HOME/.local/share/zsh/oh-my-zsh"
+        
+        print_status "OMZ_INST" "Installing Oh My Zsh..."
+        execute_and_log "install_omz" \
+            "Installing Oh My Zsh" \
+            "OMW_INST" || return 1
+
+        # Install zsh plugins
+        print_status "ZSHAUTO" "Cloning autocomplete ..."
+        execute_and_log "zsh_auto" \
+            "Installing zsh-autosuggestions" \
+            "ZSHAUTO" || return 1
+
+        print_status "HGLGT_SYNT" "Cloning Syntax Highlighting ..."
+        execute_and_log "install_omz_syntax" \
+            "Installing zsh-syntax-highlighting" \
+            "HGLGT_SYNT" || return 1
+        
+        print_status "P10K" "Cloning PwerLVL 10K ..."
+        execute_and_log "install_p10k" \
+            "Installing powerlevel10k" \
+            "P10K" || return 1
+    fi
+    echo "export ZDOTDIR=\"\$HOME/.config/zsh\"" > ~/.zshenv
+
+    # Copy ZSH configurations
+    source "$SCRIPT_DIR/lib/config/zxc_zsh.sh"
+}
+
+
+#######--- END OF FILE ---#######
+
+
+```
+
+--- FILE 13: Setup/lib/config/zxc_nvim.sh ---
+```
+#!/bin/bash
+###     file name: zxc_nvim.sh
+###     dir: /mnt/c/wsl/scripts/lib/config/zxc_nvim.sh
+
+cat > ~/.config/nvim/init.lua << 'EOL'
+-- ##--init.lua (Corrected)
+
+-- Set leader key early, as many plugins might use it during setup
+vim.g.mapleader = " "
+
+-- Bootstrap lazy.nvim
+local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
+if not vim.loop.fs_stat(lazypath) then
+  vim.fn.system({
+    'git',
+    'clone',
+    '--filter=blob:none',
+    'https://github.com/folke/lazy.nvim.git',
+    '--branch=stable',
+    lazypath,
+  })
+end
+vim.opt.rtp:prepend(lazypath)
+
+-- Load core preferences that don't depend on plugins
+require('preferences')
+require('keymaps')
+
+-- Tell lazy.nvim to setup plugins from the 'plugins' module
+-- This is where the magic happens.
+require('lazy').setup('plugins', {
+    -- Optional lazy.nvim global options can go here
+    -- checker = { enabled = true },
+})
+
+-- Set colorscheme (can also be done in the theme's config)
+vim.cmd([[colorscheme kanagawa]])
+EOL
+
+cat > ~/.config/nvim/preferences.lua << 'EOL'
+
+-- This file is required by init.lua before plugins are loaded.
+-- It's for settings that don't depend on any plugins.
+
+print("Loading core preferences...")
+
+vim.opt.number = true
+vim.opt.relativenumber = true
+vim.opt.mouse = 'a'
+vim.opt.ignorecase = true
+vim.opt.smartcase = true
+vim.opt.termguicolors = true
+vim.opt.expandtab = true
+vim.opt.shiftwidth = 2
+vim.opt.tabstop = 2
+vim.opt.autoindent = true
+vim.opt.showcmd = true
+vim.opt.showmatch = true
+vim.opt.wrap = false
+EOL
+
+cat > ~/.config/nvim/plugins.lua << 'EOF'
+return {
+  -- Appearance
+  { "rebelot/kanagawa.nvim", priority = 1000 },
+  {
+    "nvim-lualine/lualine.nvim",
+    dependencies = { "nvim-tree/nvim-web-devicons" },
+    config = function() require("lualine").setup({ theme = "kanagawa" }) end
+  },
+
+  -- File Explorer
+  {
+    "nvim-tree/nvim-tree.lua",
+    dependencies = { "nvim-tree/nvim-web-devicons" },
+    config = function() require("nvim-tree").setup({ view = { side = "right", width = 30 } }) end,
+    keys = { 
+    { "<leader>e", 
+    "<cmd>NvimTreeToggle<CR>", 
+    desc = "Toggle NvimTree" } 
+    }
+  },
+
+  -- LSP, Completion, Snippets
+  {
+    "neovim/nvim-lspconfig",
+    dependencies = { 
+    "hrsh7th/nvim-cmp", 
+    "hrsh7th/cmp-nvim-lsp", 
+    "L3MON4D3/LuaSnip", 
+    "saadparwaiz1/cmp_luasnip" 
+    },
+    config = function()
+      local lspconfig = require('lspconfig')
+      local capabilities = require('cmp_nvim_lsp').default_capabilities()
+      -- Setup servers
+      lspconfig.pyright.setup { capabilities = capabilities }
+      lspconfig.tsserver.setup { capabilities = capabilities }
+      lspconfig.rust_analyzer.setup({}) -- Basic setup is fine
+      lspconfig.zls.setup({})           -- Basic setup is fine
+      lspconfig.lua_ls.setup {
+        capabilities = capabilities,
+        settings = { Lua = { diagnostics = { globals = { 'vim' } } } }
+      }
+      -- Setup completion
+      local cmp = require('cmp')
+      cmp.setup {
+        snippet = { expand = function(args) require('luasnip').lsp_expand(args.body) end },
+        sources = cmp.config.sources({ { name = 'nvim_lsp' }, { name = 'luasnip' } }, { { name = 'buffer' } }),
+        mapping = cmp.mapping.preset.insert({
+            ['<C-Space>'] = cmp.mapping.complete(),
+            ['<CR>'] = cmp.mapping.confirm({ select = true }),
+        }),
+      }
+      -- Setup LSP keymaps
+      vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = "Go to definition" })
+      vim.keymap.set('n', 'K', vim.lsp.buf.hover, { desc = "Show hover info" })
+    end
+  },
+
+  -- Fuzzy Finding
+  {
+    "nvim-telescope/telescope.nvim",
+    dependencies = { "nvim-lua/plenary.nvim" },
+    config = function() require("telescope").setup({}) end,
+    keys = {
+      { "<leader>ff", function() require('telescope.builtin').find_files() end, desc = "Find files" },
+      { "<leader>fg", function() require('telescope.builtin').live_grep() end, desc = "Find by grep" },
+    }
+  },
+
+  -- Database Support
+  { "tpope/vim-dadbod" },
+  {
+    "kristijanhusak/vim-dadbod-ui",
+    dependencies = { 
+    "tpope/vim-dadbod", 
+    "nvim-lua/plenary.nvim" 
+    },
+    config = function() vim.g.dadbod_ui_use_nvim_notify = 1 end,
+    keys = { { 
+    "<leader>db", 
+    "<cmd>DBUIToggle<cr>", 
+    desc = "DBUI: Toggle" 
+    } }
+  },
+
+  -- API Testing
+  {
+    "rest-nvim/rest.nvim",
+    dependencies = { "nvim-lua/plenary.nvim" },
+    config = function() require("rest-nvim").setup({}) end,
+  },
+
+  -- Treesitter
+  {
+    "nvim-treesitter/nvim-treesitter",
+    build = ":TSUpdate",
+    config = function()
+      require("nvim-treesitter.configs").setup({
+        ensure_installed = 
+        { 
+        "python", 
+        "lua", 
+        "javascript", 
+        "rust", 
+        "zig", 
+        "sql", 
+        "bash" 
+        },
+        auto_install = true,
+        highlight = { enable = true }
+      })
+    end
+  },
+
+  -- Other QoL plugins
+  { 
+  "lewis6991/gitsigns.nvim", 
+  config = function() require('gitsigns').setup() end 
+  },
+  { "windwp/nvim-autopairs", config = true },
+  { "nvim-lua/plenary.nvim" }, -- Explicit dependency
+
+EOF
+
+cat > ~/.config/nvim/keymaps.lua << 'EOL'
+-- Core keymaps that do not depend on any plugins
+
+print("Loading core keymaps...")
+
+-- File operations
+vim.keymap.set('n', '<leader>w', ':w<CR>', { desc = "Save file" })
+vim.keymap.set('n', '<leader>q', ':q<CR>', { desc = "Quit" })
+
+-- Window navigation
+vim.keymap.set('n', '<C-h>', '<C-w>h', { desc = "Move to left window" })
+vim.keymap.set('n', '<C-j>', '<C-w>j', { desc = "Move to window below" })
+vim.keymap.set('n', '<C-k>', '<C-w>k', { desc = "Move to window above" })
+vim.keymap.set('n', '<C-l>', '<C-w>l', { desc = "Move to right window" })
+
+-- Buffer navigation
+vim.keymap.set('n', '<Tab>', ':bnext<CR>', { desc = "Next buffer" })
+vim.keymap.set('n', '<S-Tab>', ':bprevious<CR>', { desc = "Previous buffer" })
+EOL
+```
+
+--- FILE 14: Setup/lib/config/zxc_p10k.sh ---
+```
+#!/bin/bash
+###     fname: zxc_p10k.sh
+###     dir: /mnt/c/wsl/scripts/lib/config/zxc_p10k.sh
+
+
+#######--- START OF FILE ---#######
+print_status "Setting up p10k configuration..."
+cat > ~/.config/zsh/.p10k.zsh << 'EOL'
+# Generated by Powerlevel10k configuration wizard
+'builtin' 'local' '-a' 'p10k_config_opts'
+[[ ! -o 'aliases'         ]] || p10k_config_opts+=('aliases')
+[[ ! -o 'sh_glob'        ]] || p10k_config_opts+=('sh_glob')
+[[ ! -o 'no_brace_expand' ]] || p10k_config_opts+=('no_brace_expand')
+'builtin' 'setopt' 'no_aliases' 'no_sh_glob' 'brace_expand'
+
+() {
+  emulate -L zsh -o extended_glob
+
+  # Kanagawa-inspired colors
+  local dark_sumiInk='#1F1F28'
+  local fujiWhite='#DCD7BA'
+  local springViolet='#938AA9'
+  local oniViolet='#957FB8'
+  local crystalBlue='#7E9CD8'
+  local springGreen='#98BB6C'
+  local autumnGreen='#76946A'
+  local autumnRed='#C34043'
+  local autumnYellow='#DCA561'
+  local boatYellow='#938056'
+  local fujiGray='#727169'
+
+  # Customize prompt
+  typeset -g POWERLEVEL9K_MODE=nerdfont-complete
+  typeset -g POWERLEVEL9K_PROMPT_ADD_NEWLINE=true
+  typeset -g POWERLEVEL9K_PROMPT_ON_NEWLINE=true
+  typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX=""
+  typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_PREFIX="%F{$springViolet}❯%f "
+
+  # Left prompt segments
+  typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
+    dir                     # current directory
+    vcs                     # git status
+    virtualenv             # python virtual environment
+    command_execution_time  # duration of the last command
+  )
+
+  # Right prompt segments
+  typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
+    status                  # exit code of the last command
+    background_jobs        # presence of background jobs
+    direnv                 # direnv status
+    asdf                   # asdf version manager
+    virtualenv            # python virtual environment
+    anaconda              # conda environment
+    pyenv                 # python environment
+    nodenv                # node.js version
+    nvm                   # node.js version
+    nodeenv               # node.js environment
+    node_version          # node.js version
+    go_version            # go version
+    rust_version          # rustc version
+    dotnet_version        # .net version
+    php_version           # php version
+    laravel_version       # laravel php framework version
+    java_version          # java version
+    package               # name@version from package.json
+    rbenv                 # ruby version
+    rvm                   # ruby version
+    fvm                   # flutter version
+    luaenv               # lua version
+    jenv                 # java version
+    plenv                # perl version
+    phpenv               # php version
+    haskell_stack        # haskell version
+    kubecontext          # current kubernetes context
+    terraform            # terraform workspace
+    aws                  # aws profile
+    aws_eb_env           # aws elastic beanstalk environment
+    azure                # azure account name
+    gcloud               # google cloud profile
+    google_app_cred      # google application credentials
+    context              # user@hostname
+    nordvpn              # nordvpn connection status
+    ranger               # ranger shell
+    nnn                  # nnn shell
+    vim_shell            # vim shell indicator
+    midnight_commander   # midnight commander shell
+    nix_shell            # nix shell
+    vi_mode              # vi mode (you might want to remove this if you don't use vi mode)
+    # Load and customize the prompt
+    prompt_char          # prompt symbol
+  )
+
+  # Directory
+  typeset -g POWERLEVEL9K_DIR_BACKGROUND=$dark_sumiInk
+  typeset -g POWERLEVEL9K_DIR_FOREGROUND=$crystalBlue
+  typeset -g POWERLEVEL9K_SHORTEN_STRATEGY=truncate_to_unique
+  typeset -g POWERLEVEL9K_SHORTEN_DELIMITER=
+  typeset -g POWERLEVEL9K_DIR_SHORTENED_FOREGROUND=$autumnYellow
+
+  # VCS
+  typeset -g POWERLEVEL9K_VCS_CLEAN_BACKGROUND=$dark_sumiInk
+  typeset -g POWERLEVEL9K_VCS_CLEAN_FOREGROUND=$springGreen
+  typeset -g POWERLEVEL9K_VCS_MODIFIED_BACKGROUND=$dark_sumiInk
+  typeset -g POWERLEVEL9K_VCS_MODIFIED_FOREGROUND=$autumnYellow
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND=$dark_sumiInk
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND=$autumnRed
+
+  # Command execution time
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_BACKGROUND=$dark_sumiInk
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_FOREGROUND=$boatYellow
+
+  # Status
+  typeset -g POWERLEVEL9K_STATUS_OK_BACKGROUND=$dark_sumiInk
+  typeset -g POWERLEVEL9K_STATUS_OK_FOREGROUND=$springGreen
+  typeset -g POWERLEVEL9K_STATUS_ERROR_BACKGROUND=$dark_sumiInk
+  typeset -g POWERLEVEL9K_STATUS_ERROR_FOREGROUND=$autumnRed
+
+  # Prompt character
+  typeset -g POWERLEVEL9K_PROMPT_CHAR_OK_{VIINS,VICMD,VIVIS,VIOWR}_FOREGROUND=$oniViolet
+  typeset -g POWERLEVEL9K_PROMPT_CHAR_ERROR_{VIINS,VICMD,VIVIS,VIOWR}_FOREGROUND=$autumnRed
+
+  # Other settings
+  typeset -g POWERLEVEL9K_BACKGROUND_JOBS_BACKGROUND=$dark_sumiInk
+  typeset -g POWERLEVEL9K_BACKGROUND_JOBS_FOREGROUND=$springViolet
+  typeset -g POWERLEVEL9K_VIRTUALENV_BACKGROUND=$dark_sumiInk
+  typeset -g POWERLEVEL9K_VIRTUALENV_FOREGROUND=$crystalBlue
+}
+
+(( ${#p10k_config_opts} )) && setopt ${p10k_config_opts[@]}
+'builtin' 'unset' 'p10k_config_opts'
+EOL
+
+
+#######--- END OF FILE ---#######
+
+
+```
+
+--- FILE 15: Setup/lib/config/zxc_tmux.sh ---
+```
+
+#!/bin/bash
+###     file name: zxc_tmux.sh
+###     dir: /mnt/c/wsl/scripts/lib/config/zxc_tmux.sh
+
+
+#######--- START OF FILE ---#######
+# Setup tmux configuration
+print_status "Setting up tmux configuration..."
+cat > ~/.config/tmux/tmux.conf << 'EOL'
+# Change prefix from 'Ctrl+b' to 'Ctrl+a' 
+unbind C-b 
+set-option -g prefix C-a 
+bind-key C-a send-prefix 
+
+set-option -g status-position top
+
+
+# Split panes using | and -
+bind | split-window -h
+bind - split-window -v
+unbind '"'
+unbind %
+
+# Enable mouse mode
+set -g mouse on 
+
+# Start window numbering at 1 
+set -g base-index 1 
+set -g pane-base-index 1
+
+# Modern colors 
+set -g default-terminal "tmux-256color"
+set -ga terminal-overrides ",xterm-256color:Tc"
+set -g status-bg black
+set -g status-fg colour91
+set -g pane-active-border-style fg=colour91
+
+bind -n M-Left select-pane -L
+bind -n M-Right select-pane -R
+bind -n M-Up select-pane -U
+bind -n M-Down select-pane -D
+
+# Set locale options
+set-option -g default-shell /usr/bin/zsh
+set-option -g status-interval 1
+
+# Improve escape time
+set -sg escape-time 0
+
+# Increase scrollback buffer size
+set -g history-limit 50000
+
+# Enable focus events
+set -g focus-events on
+EOL
+
+
+#######--- END OF FILE ---#######
+
+```
+
+--- FILE 16: Setup/lib/config/zxc_zsh.sh ---
+```
+#!/bin/bash
+###     file name: zxc_zsh.sh
+###     dir: /mnt/c/wsl/scripts/lib/config/zxc_zsh.sh
+
+
+#######--- START OF FILE ---#######
+print_status "Setting up zsh configuration..."
+cat > ~/.config/zsh/.zshrc << 'EOL'
+# p10k instant prompt
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+path=(
+    $HOME/.local/opt/go/bin
+    $HOME/.local/opt
+    $HOME/.local/bin
+    $HOME/go/bin
+    $path
+)
+
+# XDG Base Directory Specification
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_CACHE_HOME="$HOME/.cache"
+export XDG_DATA_HOME="$HOME/.local/share"
+
+# Updated paths
+export TMUX_CONFIG_DIR="$HOME/.config/tmux"
+export ZSH="$XDG_DATA_HOME/zsh/oh-my-zsh"
+export TERM="xterm-256color"
+
+ZSH_THEME="powerlevel10k/powerlevel10k"
+
+plugins=(
+    git
+    z
+    zsh-autosuggestions
+    zsh-syntax-highlighting
+)
+
+source $ZSH/oh-my-zsh.sh
+# For WSL specific clipboard
+
+
+if [[ "$-" == *i* ]] &&[[ -n "$WSL_DISTRO_NAME" ]] && [[ -z "$TMUX" ]] && [[ "$TERM_PROGRAM" != "vscode" ]]; then
+    tmux -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -A -s main
+fi
+
+[[ ! -f $XDG_CONFIG_HOME/zsh/.p10k.zsh ]] || source $XDG_CONFIG_HOME/zsh/.p10k.zsh
+
+# SET Alias Shortcuts
+alias ls='lsd -lah'
+alias ll='lsd -l'
+alias la='lsd --tree ./*'
+alias cat='bat'
+alias top='btop'
+alias find='fd'
+alias grep='rg'
+
+# Git shortcuts
+alias g='git'
+alias lg='lazygit'
+
+# Development shortcuts
+alias v='nvim'
+alias py='python'
+alias ipy='ipython'
+
+# System
+alias update='sudo pacman -Syu'
+alias free='free -h'
+alias df='df -h'
+alias du='du -h'
+
+# Directory navigation
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+
+# Quick edit configs
+alias zshconf='${EDITOR:-nvim} ~/.config/zsh/.zshrc'
+alias tmuxconf='${EDITOR:-nvim} ~/.config/tmux/.tmux.conf'
+alias nvimconf='${EDITOR:-nvim} ~/.config/nvim/init.lua'
+
+
+EOL
+
+#######--- END OF FILE ---#######
+
+
+```
+
+--- FILE 17: Setup/lib/snapshots.sh ---
+```
+# #!/bin/bash
+# ###     file: snapshots.sh
+###     dir: /mnt/c/wsl/scripts/lib/snapshots.sh
+
+
+# #######--- START OF FILE ---#######
+
+# SNAPSHOT_DIR=~/wsl_snapshots
+
+# init_snapshots() {
+#     mkdir -p "$SNAPSHOT_DIR"
+#     log_message "INFO" "Initialized snapshot system at $SNAPSHOT_DIR"
+# }
+
+# create_snapshot() {
+#     local snapshot_name="snapshot_$(date +%Y%m%d_%H%M%S)"
+#     local snapshot_path="$SNAPSHOT_DIR/${snapshot_name}.tar"
+    
+#     print_status "Creating WSL snapshot: $snapshot_name"
+#     log_message "SNAPSHOT" "Creating snapshot: $snapshot_path"
+    
+#     local distro_name=$(wsl.exe -l --running | grep -i "Arch" | awk '{print $1}')
+    
+#     if wsl.exe --export "$distro_name" "$snapshot_path"; then
+#         log_message "SNAPSHOT" "Successfully created snapshot: $snapshot_path"
+#         echo "$snapshot_path"
+#         return 0
+#     else
+#         log_message "ERROR" "Failed to create snapshot: $snapshot_path"
+#         return 1
+#     fi
+# }
+
+# restore_snapshot() {
+#     local snapshot_path="$1"
+#     local distro_name=$(wsl.exe -l --running | grep -i "Arch" | awk '{print $1}')
+    
+#     print_status "Restoring WSL snapshot: $snapshot_path"
+#     log_message "SNAPSHOT" "Restoring snapshot: $snapshot_path"
+    
+#     wsl.exe --terminate "$distro_name"
+#     wsl.exe --unregister "$distro_name"
+    
+#     if wsl.exe --import "$distro_name" "$HOME/wsl/$distro_name" "$snapshot_path"; then
+#         log_message "SNAPSHOT" "Successfully restored snapshot: $snapshot_path"
+#         return 0
+#     else
+#         log_message "ERROR" "Failed to restore snapshot: $snapshot_path"
+#         return 1
+#     fi
+# }
+
+# cleanup_old_snapshots() {
+#     local keep_last=5
+#     print_status "Cleaning up old snapshots..."
+#     ls -t "$SNAPSHOT_DIR"/*.tar 2>/dev/null | tail -n +$((keep_last + 1)) | xargs -r rm
+#     log_message "CLEANUP" "Removed old snapshots, keeping last $keep_last"
+# }
+
+
+# #######--- END OF FILE ---#######
+```
+
+--- FILE 18: export_repo.py ---
+```
+import os
+import subprocess
+from datetime import datetime # Import the datetime module
+
+def export_git_repo_to_text():
+    """
+    Exports the structure and content of text files in a Git repository
+    to a single text file, with a timestamp in the filename.
+    """
+    repo_root = os.getcwd() # Assumes script is run from repo root
+
+    # Generate a timestamp for the filename
+    now = datetime.now()
+    timestamp_str = now.strftime("%Y%m%d_%H%M%S") # Format: YYYYMMDD_HHMMSS
+
+    # Construct the output filename
+    output_filename = f"repo_contents_{timestamp_str}.txt"
+
+    print(f"Attempting to list Git files from: {repo_root}")
+    try:
+        # Get list of tracked files using git ls-files
+        result = subprocess.run(
+            ["git", "ls-files"],
+            capture_output=True,
+            text=True,
+            check=True # This will raise an error if the git command fails
+        )
+        # Split lines and filter out any empty strings that might result
+        files_to_export = [f for f in result.stdout.strip().split('\n') if f]
+
+    except subprocess.CalledProcessError as e:
+        print(f"ERROR: Git command failed. Is '{repo_root}' a Git repository and is Git installed?")
+        print(f"Git command output (stderr): {e.stderr}")
+        return
+    except FileNotFoundError:
+        print("ERROR: 'git' command not found. Is Git installed and in your system's PATH?")
+        return
+
+    if not files_to_export:
+        print("WARNING: No files found by 'git ls-files'.")
+        print("This could mean:")
+        print("  - The repository is empty.")
+        print("  - There are no files currently tracked by Git (i.e., you haven't run 'git add' and 'git commit').")
+        print(f"Raw output from 'git ls-files': '{result.stdout.strip()}'")
+        print("No output file will be generated as there's no content to export.")
+        return
+
+    print(f"Found {len(files_to_export)} tracked files. Exporting to {output_filename}")
+
+    # Use 'with open' to ensure the file is properly closed
+    with open(output_filename, 'w', encoding='utf-8') as outfile:
+        # Write header with full timestamp
+        outfile.write(f"Exported Git Repository Contents - Generated on {now.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        outfile.write("--------------------------------------------------------\n\n")
+
+        file_counter = 0 # Initialize a counter for exported text files
+
+        for file_path in files_to_export:
+            full_path = os.path.join(repo_root, file_path)
+
+            if not os.path.isfile(full_path):
+                # This case might happen if a file was tracked but then deleted locally
+                outfile.write(f"--- FILE NOT FOUND (SKIPPED): {file_path} ---\n\n")
+                continue
+
+            try:
+                # Try to read the file as text (UTF-8 encoding is common for code)
+                with open(full_path, 'r', encoding='utf-8') as infile:
+                    content = infile.read()
+                
+                file_counter += 1 # Increment counter for successfully read text files
+                outfile.write(f"--- FILE {file_counter}: {file_path} ---\n") # Add file counter
+                outfile.write("```\n") # Markdown-style code block start
+                outfile.write(content)
+                outfile.write("\n```\n\n") # Markdown-style code block end
+            except UnicodeDecodeError:
+                # If it's not valid UTF-8, it's likely a binary file
+                outfile.write(f"--- BINARY FILE (SKIPPED): {file_path} ---\n\n")
+            except Exception as e:
+                # Catch any other reading errors
+                outfile.write(f"--- ERROR READING FILE: {file_path} (Error: {e}) ---\n\n")
+
+    print(f"Export complete. Check '{output_filename}'. {file_counter} text files processed.")
+
+if __name__ == "__main__":
+    export_git_repo_to_text()
+```
+
+--- FILE 19: export_repo.sh ---
+```
+#!/bin/bash
+
+# Define the output file name
+OUTPUT_FILE="repo_contents.txt"
+
+# Clear the output file if it already exists
+> "$OUTPUT_FILE"
+
+echo "Exporting Git repository structure and content to $OUTPUT_FILE"
+echo "--------------------------------------------------------" >> "$OUTPUT_FILE"
+
+# Use 'git ls-files' to get a list of all tracked files
+# -z ensures filenames with spaces are handled correctly
+git ls-files -z | while IFS= read -r -d $'\0' file; do
+  # Check if the file is likely a text file
+  # Note: 'file --mime-type' might not be available or behave the same on all systems (e.g., Windows Git Bash might be different)
+  if [[ $(file --mime-type -b "$file") == text/* ]]; then
+    echo "" >> "$OUTPUT_FILE"
+    echo "--- FILE: $file ---" >> "$OUTPUT_FILE"
+    echo "```" >> "$OUTPUT_FILE" # Markdown-style code block start
+    cat "$file" >> "$OUTPUT_FILE"
+    echo "```" >> "$OUTPUT_FILE" # Markdown-style code block end
+    echo "" >> "$OUTPUT_FILE"
+  else
+    echo "--- BINARY FILE (SKIPPED): $file ---" >> "$OUTPUT_FILE"
+  fi
+done
+
+echo "--------------------------------------------------------"
+echo "Export complete. Check '$OUTPUT_FILE'."
+```
+
+--- FILE 20: wsl-import.ps1 ---
+```
+#!/bin/bash
+###     file: wsl-import.ps1
+###     dir: c:\wsl\scripts\wsl-import.ps1
+
+
+$distroName = "Arch"
+$installDir = "C:\WSL\$distroName"
+$tarPath = "C:\wsl\tmp\arch_clean.tar"
+$scriptDir = "C:\WSL\scripts"
+
+# Import WSL distribution
+wsl --terminate $distroName
+wsl --unregister $distroName
+wsl --import $distroName $installDir $tarPath
+
+# Copy setup scripts to Windows directory
+robocopy "$PSScriptRoot\scripts" $scriptDir /MIR /NP /NFL /NDL
+
+# Configure first launch
+wsl -d $distroName -u root bash -c "echo 'source /mnt/c/WSL/scripts/sys_init.sh' >> /etc/bash.bashrc"
+wsl -d $distroName -u root bash -c "echo 'source /mnt/c/WSL/scripts/sys_init.sh' >> /etc/zsh/zshenv"
+
+# Launch the instance
+wsl -d $distroName
+```
+

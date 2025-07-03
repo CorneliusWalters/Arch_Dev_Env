@@ -42,7 +42,7 @@ source $ZSH/oh-my-zsh.sh
 # For WSL specific clipboard
 
 
-if [[ "$-" == *i* ]] &&[[ -n "$WSL_DISTRO_NAME" ]] && [[ -z "$TMUX" ]] && [[ "$TERM_PROGRAM" != "vscode" ]]; then
+if [[ "$-" == *i* ]] && [[ -n "$WSL_DISTRO_NAME" ]] && [[ -z "$TMUX" ]] && [[ "$TERM_PROGRAM" != "vscode" ]]; then
     tmux -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -A -s main
 fi
 
@@ -79,7 +79,7 @@ alias ....='cd ../../..'
 
 # Quick edit configs
 alias zshconf='${EDITOR:-nvim} ~/.config/zsh/.zshrc'
-alias tmuxconf='${EDITOR:-nvim} ~/.config/tmux/.tmux.conf'
+alias tmuxconf='${EDITOR:-nvim} ~/.config/tmux/tmux.conf'
 alias nvimconf='${EDITOR:-nvim} ~/.config/nvim/init.lua'
 
 
