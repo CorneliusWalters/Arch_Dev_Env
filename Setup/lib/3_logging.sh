@@ -129,55 +129,7 @@ execute_and_log() {
         return $exit_code
     fi
 }
-# Execute command with logging and snapshot support
-execute_and_log() {
-    local cmd="$1"
-    local desc="$2"
-    local category="${3:-COMMAND}"
 
-    # Get caller context using BASH_SOURCE array
-    local stack_trace=""
-    for ((i=1; i<${#BASH_SOURCE[@]}; i++)); do
-        local script=$(basename "${BASH_SOURCE[$i]}")
-        local line="${BASH_LINENO[$i-1]}"
-        local func="${FUNCNAME[$i]}"
-        [[ "$func" != "main" ]] && stack_trace+="$script:$line($func) -> "
-    done
-    stack_trace+=$(basename "${BASH_SOURCE[0]}")
-
-    # Log execution start with stack trace
-    print_status "$category" "Stack trace: $stack_trace"
-    print_status "$category" "Executing: $desc"
-    log_message "COMMAND" "$category" "$ $cmd"
-
-    # Execute with timing and error capture
-    local start_time=$(date +%s)
-    if output=$( { eval "$cmd"; } 2>&1 ); then
-        local end_time=$(date +%s)
-        local duration=$((end_time - start_time))
-
-        log_message "SUCCESS" "$category" "Command completed successfully"
-        log_message "OUTPUT" "$category" "Output:\n$output"
-        log_message "TIMING" "$category" "Duration: ${duration}s"
-        
-        print_success "$category" "$desc completed (${duration}s)"
-        return 0
-    else
-        local exit_code=$?
-        local end_time=$(date +%s)
-        local duration=$((end_time - start_time))
-
-        log_message "ERROR" "$category" "Command failed with exit code: $exit_code"
-        log_message "ERROR" "$category" "Stack trace: $stack_trace"
-        log_message "ERROR" "$category" "Failed command: $cmd"
-        log_message "ERROR" "$category" "Description: $desc"
-        log_message "ERROR" "$category" "Duration: ${duration}s"
-        log_message "ERROR" "$category" "Output:\n$output"
-
-        print_error "$category" "FAILED: $desc (${duration}s)"
-        return $exit_code
-    fi
-}
 execute_and_log_with_retry() {
     local cmd="$1"
     local max_attempts="${2:-3}"  # Default to 3 attempts

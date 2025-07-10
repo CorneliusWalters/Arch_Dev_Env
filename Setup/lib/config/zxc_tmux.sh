@@ -8,6 +8,7 @@
 # Setup tmux configuration
 print_status "Setting up tmux configuration..."
 cat > ~/.config/tmux/tmux.conf << 'EOL'
+
 # Change prefix from 'Ctrl+b' to 'Ctrl+a' 
 unbind C-b 
 set-option -g prefix C-a 

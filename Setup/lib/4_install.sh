@@ -1,7 +1,4 @@
 #!/bin/bash
-###     file name: install.sh
-###     dir: /mnt/c/wsl/scripts/lib/install.sh
-
 
 #######--- START OF FILE ---#######
 # Function to check if a command exists
@@ -229,11 +226,30 @@ EOL" \
 install_base_packages() {
     print_status "Packages" "Installing base dependencies..."
 
-    local BASE_DEPS="base-devel git github-cli bat cmake ninja zsh tmux neovim htop btop duf ncdu bat lsd ripgrep fd fzf zoxide lazygit git-delta jq yq shellcheck tree tree-sitter unzip zip tar wl-clipboard xclip curl wget httpie procs tldr man-db man-pages"
-    execute_and_log "sudo pacman -S --needed --noconfirm $BASE_DEPS" \
-        "Installing base dependencies" \
+    # Define a core set of packages that are always installed
+    local CORE_BASE_DEPS="base-devel git github-cli bat cmake ninja zsh tmux neovim htop btop duf ncdu bat lsd ripgrep fd fzf zoxide lazygit git-delta jq yq shellcheck tree tree-sitter unzip zip tar wl-clipboard xclip curl wget httpie procs tldr man-db man-pages"
+    
+    # Path to the dynamically generated package list within the Git repository
+    local CUSTOM_PACKAGES_FILE="$REPO_ROOT/installed_packages.txt" # Assuming REPO_ROOT is accessible and correct
+
+    local ALL_DEPS="$CORE_BASE_DEPS"
+
+    # Check if the custom package list exists and add its content
+    if [ -f "$CUSTOM_PACKAGES_FILE" ]; then
+        # Read the file line by line and add to ALL_DEPS, handling newlines
+        local additional_pkgs
+        additional_pkgs=$(cat "$CUSTOM_PACKAGES_FILE" | tr '\n' ' ')
+        ALL_DEPS="$ALL_DEPS $additional_pkgs"
+        print_status "Packages" "Including additional packages from $CUSTOM_PACKAGES_FILE."
+    else
+        print_warning "Packages" "No custom package list found at $CUSTOM_PACKAGES_FILE. Installing only core base dependencies."
+    fi
+
+    execute_and_log "sudo pacman -S --needed --noconfirm $ALL_DEPS" \
+        "Installing core and custom dependencies" \
         "Packages" || return 1
 }
+
 install_db_tools() {
     print_status "DB" "Installing database tools..."
     # Add clients for databases you use
@@ -245,7 +261,7 @@ install_db_tools() {
 
 install_dev_tools() {
     print_status "DEV" "Installing development tools..."
-    local DEV_TOOLS="nodejs npm go rust zig"
+    local DEV_TOOLS="nodejs npm go rust zig rust-analyzer zls"
     execute_and_log "sudo pacman -S --needed --noconfirm $DEV_TOOLS" \
         "Installing development tools" \
         "DEV" || return 1
@@ -340,5 +356,36 @@ setup_winyank() {
         "CLIPBOARD" || return 1
 }
 
+setup_pacman_git_hook() {
+    print_status "HOOK_SETUP" "Setting up pacman hook for Git repository synchronization..."
+
+    local sync_script_source="$SCRIPT_DIR/lib/sync_installed_packages.sh"
+    local sync_script_target="/usr/local/bin/sync_installed_packages.sh"
+    local hook_file="/etc/pacman.d/hooks/auto-git-sync.hook"
+
+    # Copy the sync script and make it executable
+    execute_and_log "sudo cp \"$sync_script_source\" \"$sync_script_target\"" \
+        "Copying package sync script to $sync_script_target" "HOOK_SETUP" || return 1
+    execute_and_log "sudo chmod +x \"$sync_script_target\"" \
+        "Making package sync script executable" "HOOK_SETUP" || return 1
+
+    # Create the pacman hook file
+    # Use tee to write to the hook file with sudo
+    execute_and_log "sudo bash -c 'cat > \"$hook_file\" << EOL
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Syncing installed packages to Git repository...
+When = PostTransaction
+Exec = $sync_script_target
+EOL'" "Creating pacman hook file $hook_file" "HOOK_SETUP" || return 1
+
+    print_success "HOOK_SETUP" "Pacman Git sync hook setup complete."
+}
 #######--- END OF FILE ---#######
 
