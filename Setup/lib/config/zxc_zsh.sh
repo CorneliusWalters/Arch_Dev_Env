@@ -5,6 +5,7 @@
 
 #######--- START OF FILE ---#######
 print_status "Setting up zsh configuration..."
+if [ ! -f ~/.config/zsh/.zshrc ]; then
 cat > ~/.config/zsh/.zshrc << 'EOL'
 # p10k instant prompt
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
@@ -84,6 +85,9 @@ alias nvimconf='${EDITOR:-nvim} ~/.config/nvim/init.lua'
 
 
 EOL
-
+else
+    print_warning "ZSH_CONF" "ZSH config (~/.config/zsh/.zshrc) already exists. Skipping overwrite to preserve user settings."
+    print_status "ZSH_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/zsh/.zshrc and rerun."
+fi
 #######--- END OF FILE ---#######
 

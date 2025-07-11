@@ -22,7 +22,7 @@ This repository provides a fully automated and opinionated setup for a powerful 
 - [License](#license)
 
 ## Structure
-
+```
 Arch_Dev_Env/
 ├── Setup/                       # Main setup directory
 │   ├── 1_sys_init.sh            # Main Bash setup script 
@@ -51,8 +51,7 @@ Arch_Dev_Env/
 ├── export_repo.sh               # Bash utility to export repository contents
 ├── LICENSE                      # Public domain license (Unlicense)
 └── README.md                    # This documentation file
-
-
+```
 ## Features
 
 *   **Automated Installation:** Bootstrap script handles most of the heavy lifting.

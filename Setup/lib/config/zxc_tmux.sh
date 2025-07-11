@@ -6,7 +6,10 @@
 
 #######--- START OF FILE ---#######
 # Setup tmux configuration
+
 print_status "Setting up tmux configuration..."
+if [ ! -f ~/.config/tmux/tmux.conf ]; then
+
 cat > ~/.config/tmux/tmux.conf << 'EOL'
 
 # Change prefix from 'Ctrl+b' to 'Ctrl+a' 
@@ -55,6 +58,9 @@ set -g history-limit 50000
 # Enable focus events
 set -g focus-events on
 EOL
-
+else
+    print_warning "TMUX_CONF" "TMux config (~/.config/tmux/tmux.conf) already exists. Skipping overwrite to preserve user settings."
+    print_status "TMUX_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/tmux/tmux.conf and rerun."
+fi
 
 #######--- END OF FILE ---#######
