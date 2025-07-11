@@ -33,6 +33,11 @@ set -e
 # set directory source
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+#Export windows accessable Base path
+export WSL_BASE_PATH="/mnt/c/wsl"
+export LOGS_BASE_PATH="$WSL_BASE_PATH/tmp/logs"
+export CONFIG_BASE_PATH="$WSL_BASE_PATH/config"
+export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 # Source Directory setup
 source "$SCRIPT_DIR/lib/set_dirs.sh"
@@ -43,6 +48,7 @@ source "$SCRIPT_DIR/lib/install.sh" || exit 1
 
 # Export Repo 
 export REPO_ROOT="$(dirname "$SCRIPT_DIR")" # Define and export REPO_ROOT
+
 
 # Initialize logging
 init_logging || exit 1

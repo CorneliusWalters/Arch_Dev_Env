@@ -12,6 +12,9 @@ mkdir -p \
   ~/.config/tmux \
   ~/.local/{bin,share,opt,logs} \
   ~/.cache
+  
+mkdir -p "$LOGS_BASE_PATH"
+mkdir -p "$CONFIG_BASE_PATH"
 
 # Make all scripts executable
 chmod +x "$SCRIPT_DIR/lib/"*.sh "$SCRIPT_DIR/lib/config/"*.sh
