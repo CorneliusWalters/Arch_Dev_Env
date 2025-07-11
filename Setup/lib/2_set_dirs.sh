@@ -14,7 +14,7 @@ mkdir -p \
   ~/.cache
 
 # Make all scripts executable
-chmod +x sys_init.sh lib/*.sh lib/config/*.sh
+chmod +x "$SCRIPT_DIR/lib/"*.sh "$SCRIPT_DIR/lib/config/"*.sh
 
 # Set directory permissions (700 for config dirs, 755 for others)
 find ~/.config -type d -exec chmod 700 {} \;  # All config directories

@@ -11,8 +11,12 @@ setup_zsh() {
     mkdir -p "$HOME/.config/zsh"
 
     # 2. Create .zshenv to set ZDOTDIR. This is critical and must happen first.
-    echo 'export ZDOTDIR="$HOME/.config/zsh"' > "$HOME/.zshenv"
-
+    if ! grep -q "export ZDOTDIR=\"\$HOME/.config/zsh\"" "$HOME/.zshenv" 2>/dev/null; then
+        print_status "ZSH_CONF" "Adding ZDOTDIR export to ~/.zshenv (if not present)."
+        echo 'export ZDOTDIR="$HOME/.config/zsh"' >> "$HOME/.zshenv"
+    else
+        print_status "ZSH_CONF" "ZDOTDIR export already present in ~/.zshenv. Skipping."
+    fi
     # 3. For safety, remove any old .zshrc from the home directory to avoid conflicts.
     rm -f "$HOME/.zshrc"
 

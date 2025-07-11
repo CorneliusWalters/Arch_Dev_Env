@@ -8,7 +8,7 @@ command_exists() {
 # Check Dependencies
 
 check_dependencies() {
-    local deps=("git" "curl" "sudo" "wsl.exe")
+    local deps=("git" "curl" "sudo")
     for dep in "${deps[@]}"; do
         if ! command -v "$dep" >/dev/null 2>&1; then
             print_error "Required dependency not found: $dep"
@@ -16,17 +16,17 @@ check_dependencies() {
         fi
     done
 }
-mount_with_retry() {
-    local attempts=0
-    until mount -t drvfs C: /mnt/c; do
-        ((attempts++))
-        if [ $attempts -ge 5 ]; then
-            echo "Failed to mount C: drive after 5 attempts"
-            return 1
-        fi
-        sleep 2
-    done
-}
+##mount_with_retry() {
+##    local attempts=0
+##    until mount -t drvfs C: /mnt/c; do
+##        ((attempts++))
+##        if [ $attempts -ge 5 ]; then
+##            echo "Failed to mount C: drive after 5 attempts"
+##            return 1
+##        fi
+##        sleep 2
+##    done
+##}
 
 test_caller_logging() {
     print_status "TEST" "Starting logging system test"
@@ -359,8 +359,8 @@ setup_winyank() {
 setup_pacman_git_hook() {
     print_status "HOOK_SETUP" "Setting up pacman hook for Git repository synchronization..."
 
-    local sync_script_source="$SCRIPT_DIR/lib/sync_installed_packages.sh"
-    local sync_script_target="/usr/local/bin/sync_installed_packages.sh"
+    local sync_script_source="$SCRIPT_DIR/lib/config/sync_packs.sh"
+    local sync_script_target="/usr/local/bin/config/sync_packs.sh"
     local hook_file="/etc/pacman.d/hooks/auto-git-sync.hook"
 
     # Copy the sync script and make it executable
