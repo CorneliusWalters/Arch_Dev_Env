@@ -1,10 +1,10 @@
-# Arch_Dev_Env: WSL Arch Linux Development Environment Setup
+# Arch Dev Enviroment: WSL Arch Linux Development Environment Setup
 
 This repository provides a fully automated and opinionated setup for a powerful Arch Linux development environment running inside Windows Subsystem for Linux (WSL). The goal is a "ready-as-is" configuration, allowing for quick and consistent deployment across multiple machines.
 
 ## Table of Contents
 
-- [Structure](#Structure)
+- [File Structure](#Structure)
 - [Features](#features)
 - [Prerequisites](#prerequisites)
 - [Managing WSL Images (Import/Export)](#managing-wsl-images-importexport)
@@ -21,7 +21,7 @@ This repository provides a fully automated and opinionated setup for a powerful 
 - [Troubleshooting](#troubleshooting)
 - [License](#license)
 
-## Structure
+## File Structure
 ```
 Arch_Dev_Env/
 ├── Setup/                       # Main setup directory
