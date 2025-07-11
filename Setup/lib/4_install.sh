@@ -359,8 +359,8 @@ setup_winyank() {
 setup_pacman_git_hook() {
     print_status "HOOK_SETUP" "Setting up pacman hook for Git repository synchronization..."
 
-    local sync_script_source="$SCRIPT_DIR/lib/sync_packs.sh"
-    local sync_script_target="/usr/local/bin/sync_packs.sh"
+    local sync_script_source="$SCRIPT_DIR/lib/5_sync_packs.sh"
+    local sync_script_target="/usr/local/bin/5_sync_packs.sh"
     local hook_file="/etc/pacman.d/hooks/auto-git-sync.hook"
 
     # Copy the sync script and make it executable

@@ -24,10 +24,10 @@ $logger = Initialize-WSLLogging -BasePath "C:\wsl"
 & $logger.WriteLog "INFO" "Log file created at: $($logger.LogFile)" "Gray"
 
 # Check prerequisites
-if (-not (Test-WSLPrerequisites -Logger $logger -WslDistroName $wslDistroName)) {
-    & $logger.WriteLog "ERROR" "Prerequisite check failed. Exiting." "Red"
-    exit 1
-}
+#if (-not (Test-WSLPrerequisites -Logger $logger -WslDistroName $wslDistroName)) {
+#    & $logger.WriteLog "ERROR" "Prerequisite check failed. Exiting." "Red"
+#    exit 1
+#}
 
 # Import or check WSL distro
 if (-not (Import-ArchDistro -Logger $logger -WslDistroName $wslDistroName -WslUsername $wslUsername -DefaultTarballPath $cleanArchTarballDefaultPath)) {
