@@ -20,6 +20,54 @@ function Write-Header {
 Write-Header "Starting WSL Arch Linux Configuration"
 
 # 1. Prerequisite Checks
+
+Write-Host "Checking WSL version..." -ForegroundColor Cyan
+$wslVersionInfo = wsl --version | Select-String "WSL version:"
+if ($wslVersionInfo -match "WSL version: (\d+\.\d+\.\d+\.\d+)") {
+    $wslVersion = $matches[1]
+    Write-Host "WSL Version: $wslVersion" -ForegroundColor Green
+    
+    # Convert version string to version object for comparison
+    $wslVersionObj = [System.Version]$wslVersion
+    $minRequiredVersion = [System.Version]"1.0.0.0"  # Set your minimum required version
+    
+    if ($wslVersionObj -lt $minRequiredVersion) {
+        Write-Host "ERROR: WSL version $wslVersion is below the minimum required version $minRequiredVersion" -ForegroundColor Red
+        Write-Host "Please update WSL by running 'wsl --update' in an elevated PowerShell prompt." -ForegroundColor Red
+        exit 1
+    }
+} else {
+    Write-Host "WARNING: Could not determine WSL version using 'wsl --version'. Checking alternative method..." -ForegroundColor Yellow
+    
+    # Alternative check for older WSL installations
+    $wslStatus = wsl --status 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "ERROR: WSL appears to be outdated or not properly installed." -ForegroundColor Red
+        Write-Host "Please run 'wsl --update' or reinstall WSL." -ForegroundColor Red
+        exit 1
+    }
+}
+
+# Check if WSL 2 is being used
+$wslDefaultVersion = wsl --status | Select-String "Default Version"
+if ($wslDefaultVersion -match "Default Version: (\d+)") {
+    $defaultVersion = $matches[1]
+    if ($defaultVersion -ne "2") {
+        Write-Host "WARNING: WSL default version is not set to 2. This setup works best with WSL 2." -ForegroundColor Yellow
+        Write-Host "It's strongly recommended to run 'wsl --set-default-version 2' in an elevated PowerShell prompt before continuing." -ForegroundColor Yellow
+        
+        $continueAnyway = Read-Host "Do you want to continue anyway? (Y/N)"
+        if ($continueAnyway -ne "Y") {
+            exit 1
+        }
+    } else {
+        Write-Host "WSL 2 is correctly set as default. Good!" -ForegroundColor Green
+    }
+} else {
+    Write-Host "WARNING: Could not determine default WSL version. Assuming it's properly configured." -ForegroundColor Yellow
+}
+
+
 Write-Host "Checking for prerequisites (git, wsl)..."
 $gitExists = Get-Command git -ErrorAction SilentlyContinue
 if (-not $gitExists) {
