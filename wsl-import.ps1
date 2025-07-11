@@ -17,8 +17,8 @@ wsl --import $distroName $installDir $tarPath
 robocopy "$PSScriptRoot\scripts" $scriptDir /MIR /NP /NFL /NDL
 
 # Configure first launch
-wsl -d $distroName -u root bash -c "echo 'source /mnt/c/WSL/scripts/sys_init.sh' >> /etc/bash.bashrc"
-wsl -d $distroName -u root bash -c "echo 'source /mnt/c/WSL/scripts/sys_init.sh' >> /etc/zsh/zshenv"
+#wsl -d $distroName -u root bash -c "echo 'source /mnt/c/WSL/scripts/sys_init.sh' >> /etc/bash.bashrc"
+#wsl -d $distroName -u root bash -c "echo 'source /mnt/c/WSL/scripts/sys_init.sh' >> /etc/zsh/zshenv"
 
 # Launch the instance
 wsl -d $distroName

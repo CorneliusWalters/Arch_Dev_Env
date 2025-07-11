@@ -6,7 +6,6 @@ This repository provides a fully automated and opinionated setup for a powerful 
 
 - [Features](#features)
 - [Prerequisites](#prerequisites)
-<<<<<<< HEAD
 - [Managing WSL Images (Import/Export)](#managing-wsl-images-importexport)
 - [Installation Guide](#installation-guide)
   - [1. Windows Host Setup](#1-windows-host-setup)
@@ -16,15 +15,6 @@ This repository provides a fully automated and opinionated setup for a powerful 
   - [5. Post-Installation Steps](#5-post-installation-steps)
 - [Configuration Management (Dotfiles)](#configuration-management-dotfiles)
 - [Customizing Your Environment (Forking & Modifying)](#customizing-your-environment-forking--modifying)
-=======
-- [Installation Guide](#installation-guide)
-  - [1. Windows Host Setup](#1-windows-host-setup)
-  - [2. Initial WSL Arch Linux Setup](#2-initial-wsl-arch-linux-setup)
-  - [3. Configure the Dev Environment](#3-configure-the-dev-environment)
-  - [4. Locale Configuration](#4-locale-configuration)
-  - [5. Post-Installation Steps](#5-post-installation-steps)
-- [Configuration Management (Dotfiles)](#configuration-management-dotfiles)
->>>>>>> 37ac91ec346e591572c78b78d58f750b6b1a75c7
 - [Pacman Package Synchronization Hook](#pacman-package-synchronization-hook)
 - [Usage](#usage)
 - [Troubleshooting](#troubleshooting)
@@ -50,7 +40,6 @@ Before you begin, ensure you have the following set up on your **Windows host**:
 
 *   **Windows 10/11 (version 2004 or higher)** with WSL enabled.
 *   **WSL 2 installed and configured.** You can install it by running `wsl --install` in an elevated PowerShell/CMD.
-<<<<<<< HEAD
 *   **Git for Windows:** Download and install from [https://git-scm.com/download/win](https://git-scm.com/download/win).
 *   **PowerShell:** The `Install.ps1` script requires PowerShell.
 
@@ -85,19 +74,12 @@ This setup leverages WSL's import/export functionality to provide consistent sta
             wsl -d Arch config --default-user YourUsername
             ```
 
-=======
-*   **Arch Linux WSL distribution installed.** You can install it via the Microsoft Store or manually using `wsl --import`. Ensure you've completed the initial user setup within Arch Linux.
-*   **Git for Windows:** Download and install from [https://git-scm.com/download/win](https://git-scm.com/download/win).
-*   **PowerShell:** The `Install.ps1` script requires PowerShell.
-
->>>>>>> 37ac91ec346e591572c78b78d58f750b6b1a75c7
 ## Installation Guide
 
 Follow these steps to set up your Arch Linux development environment in WSL.
 
 ### 1. Windows Host Setup
 
-<<<<<<< HEAD
 1.  **Download and Configure the Setup Script:**
     Download the `Install.ps1` script from your repository (e.g., from the GitHub raw file link or a release asset). Save it to a convenient location, for example, `C:\wsl\scripts\Install.ps1`.
 
@@ -152,50 +134,6 @@ The `pacman` hook will automatically track your installed packages. For this to 
     *   Execute `Setup/1_sys_init.sh` from the newly cloned repository inside your WSL Arch Linux instance as the specified `$wslUsername`.
     *   You will be prompted for your `sudo` password within the WSL terminal during this process.
     *   **Upon successful completion, it will prompt you if you want to export a `arch_configured.tar` snapshot.**
-=======
-1.  **Clone this Repository:**
-    Open a **PowerShell** terminal (not WSL Bash) on your Windows machine.
-    ```powershell
-    $githubRepoUrl = "https://github.com/CorneliusWalters/Arch_Dev_Env.git" # Your repository URL
-    $localClonePath = "C:\wsl\wsl-dev-setup"                               # Recommended clone location
-
-    # If the directory exists, it will be removed for a clean clone.
-    # WARNING: This will delete any existing contents in $localClonePath!
-    if (Test-Path $localClonePath) {
-        Write-Host "Setup directory already exists at '$localClonePath'. Removing for a clean clone."
-        Remove-Item -Recurse -Force $localClonePath
-    }
-    git clone $githubRepoUrl $localClonePath
-    ```
-    *Adjust `$githubRepoUrl` if you are using a fork.*
-
-2.  **Verify WSL Arch Linux Instance:**
-    Ensure your Arch Linux WSL distribution is installed and running.
-    ```powershell
-    wsl -l -v
-    # You should see your "Arch" distribution listed. If not, install it:
-    # wsl --install -d ArchLinux # (If you have a direct Arch Linux installer)
-    # OR follow official Arch WSL installation guides.
-    ```
-
-### 3. Configure the Dev Environment
-
-1.  **Execute the Main Setup Script:**
-    Return to your **PowerShell** terminal.
-    ```powershell
-    # --- CONFIGURATION: EDIT THESE VARIABLES ---
-    $wslDistroName = "Arch"           # Your WSL distribution name (e.g., "Arch", "Ubuntu")
-    $wslUsername = "CHW"              # VERY IMPORTANT: EDIT THIS to your default WSL username
-    # -------------------------------------------
-
-    # This will clone the repository and execute the main setup script inside WSL.
-    # You will be prompted for your sudo password within the WSL terminal.
-    & "$localClonePath\Setup\Install.ps1"
-    ```
-    This script will:
-    *   Clone this repository (if not already done, overwriting existing `$localClonePath` if it exists).
-    *   Execute `Setup/1_sys_init.sh` inside your WSL Arch Linux instance as the specified `$wslUsername`.
->>>>>>> 37ac91ec346e591572c78b78d58f750b6b1a75c7
 
 ### 4. Locale Configuration
 
@@ -254,7 +192,6 @@ If you intend to make permanent, personal customizations to these files, you hav
 1.  **Fork this repository:** Make your changes directly in your fork and use your fork for future deployments.
 2.  **Manual Merging/Management:** Be aware that rerunning the setup will overwrite changes. You would need to manually back up your customizations and re-apply them, or use a separate dotfile management tool like `GNU Stow` to overlay your custom changes.
 
-<<<<<<< HEAD
 ## Customizing Your Environment (Forking & Modifying)
 
 This setup is designed to be easily customizable via forking. By creating your own fork, you can tailor every aspect of the environment to your specific needs and have your changes persist across new installations and updates.
@@ -297,8 +234,6 @@ This setup is designed to be easily customizable via forking. By creating your o
 
 By following this process, your personal Arch Linux WSL environment will always reflect the latest state of your customized fork.
 
-=======
->>>>>>> 37ac91ec346e591572c78b78d58f750b6b1a75c7
 ## Pacman Package Synchronization Hook
 
 To keep track of all explicitly installed Arch Linux packages across your development environments, a `pacman` hook is installed.
@@ -357,8 +292,4 @@ Once the setup is complete and you've logged back into your WSL Arch terminal:
 
 ## License
 
-<<<<<<< HEAD
 This software is released into the public domain under the [Unlicense](LICENSE).
-=======
-This software is released into the public domain under the [Unlicense](LICENSE).
->>>>>>> 37ac91ec346e591572c78b78d58f750b6b1a75c7
