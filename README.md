@@ -23,33 +23,36 @@ This repository provides a fully automated and opinionated setup for a powerful 
 
 ## Structure
 
+Arch_Dev_Env/
+├── Setup/                       # Main setup directory
+│   ├── 1_sys_init.sh            # Main Bash setup script 
+│   ├── Install.ps1              # Main PowerShell installation script ⚠️ **MODIFY THIS FIRST**
+│   ├── PowerShell/              # Modular PowerShell components
+│   │   ├── Export-Image.ps1     # Exports WSL distro image after install
+│   │   ├── Import-Distro.ps1    # Imports and configures WSL distro
+│   │   ├── Logging.ps1          # PowerShell logging functionality
+│   │   └── Test.ps1             # WSL version and prerequisite tests
+│   └── lib/                     # Bash library functions
+│       ├── 2_set_dirs.sh        # Directory creation and permissions
+│       ├── 3_logging.sh         # Bash logging functions
+│       ├── 4_install.sh         # Package installation functions
+│       ├── 5_sync_packs.sh      # Package list synchronization
+│       ├── snapshots.sh         # WSL snapshot functions (currently disabled)
+│       └── config/              # Configuration templates
+│           ├── nvim.sh          # Neovim setup functions
+│           ├── tmux.sh          # Tmux setup functions
+│           ├── zsh.sh           # Zsh setup functions
+│           ├── p10k.sh          # Powerlevel10k setup functions
+│           ├── zxc_nvim.sh      # Neovim configuration content
+│           ├── zxc_tmux.sh      # Tmux configuration content
+│           ├── zxc_zsh.sh       # Zsh configuration content
+│           └── zxc_p10k.sh      # Powerlevel10k configuration content
+├── export_repo.py               # Python utility to export repository contents
+├── export_repo.sh               # Bash utility to export repository contents
+├── LICENSE                      # Public domain license (Unlicense)
+└── README.md                    # This documentation file
 
-The repository is organized as follows:
 
-    Arch_Dev_Env/
-    ├── Setup/                       # Main setup directory
-        ├── 1_sys_init.sh            # Main Bash setup script
-        ├── Install.ps1              # Main PowerShell installation script **[MODIFY THIS FIRST]**
-        ├── PowerShell/              # Modular PowerShell components
-            ├── Export-Image.ps1     # Exports WSL distro image after install
-            ├── Import-Distro.ps1    # Imports and configures WSL distro
-            ├── Logging.ps1          # PowerShell logging functionality
-            └── Test.ps1             # WSL version and prerequisite tests
-        └── lib/                     # Bash library functions
-            ├── 2_set_dirs.sh        # Directory creation and permissions
-            ├── 3_logging.sh         # Bash logging functions
-            ├── 4_install.sh         # Package installation functions
-            ├── 5_sync_packs.sh      # Package list synchronization
-            ├── snapshots.sh         # WSL snapshot functions (currently disabled)
-            └── config/              # Configuration templates
-                ├── nvim.sh          # Neovim setup functions
-                ├── tmux.sh          # Tmux setup functions
-                ├── zsh.sh           # Zsh setup functions
-                ├── p10k.sh          # Powerlevel10k setup functions
-                ├── zxc_nvim.sh      # Neovim configuration content
-                ├── zxc_tmux.sh      # Tmux configuration content
-                ├── zxc_zsh.sh       # Zsh configuration content
-                └── zxc_p10k.sh      # Powerlevel10k configuration content
 ## Features
 
 *   **Automated Installation:** Bootstrap script handles most of the heavy lifting.
