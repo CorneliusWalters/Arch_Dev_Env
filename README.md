@@ -23,30 +23,30 @@ This repository provides a fully automated and opinionated setup for a powerful 
 
 ## Structure
 
-Git/Setup/
-├── 1_sys_init.sh           # Main Bash script
-├── Install.ps1             # Power Shell Install Script ##MODIFY THIS
-├── PowerShell
-│   ├── Export-Image.ps1    # Exports WSL distro image after install for easy redo
-│   ├── Import-Distro.ps1   # Import the distro image
-│   ├── Export-Image.ps1    # Exports WSL distro image after install for easy redo
-│   ├── Logging.ps1         # Logging functions
-│   └── Test.ps1            # Checks your WSL version
-├── lib
-│   ├── 2_set_dirs.sh       # create directories and set scripts as executable
-│   ├── 3_logging.sh        # Logging functions
-│   ├── #snapshots.sh       # WSL snapshot functions -- requirement to check  --- Currently Disabled
-│   ├── 4_install.sh        # Package/Main installation functions
-│   ├── config
-│   │   ├── nvim.sh         # Neovim configurations
-│   │   ├── tmux.sh         # Tmux configurations
-│   │   ├── zsh.sh          # Zsh configurations
-│   │   ├── p10k.sh         # P10k configurations
-│   │   ├── zxc_nvim.sh     #cat configuration files for NVIM
-│   │   ├── zxc_tmux.sh     #cat configuration files for TMUX
-│   │   ├── zxc_zsh.sh      #cat configuration files for ZSH
-└   └   └── zxc_p10k.sh     #cat configuration files for ZSH p10K  
-
+Arch_Dev_Env/
+├── Setup/                       # Main setup directory
+│   ├── 1_sys_init.sh            # Main Bash setup script
+│   ├── Install.ps1              # Main PowerShell installation script
+│   ├── PowerShell/              # Modular PowerShell components
+│   │   ├── Export-Image.ps1     # Exports WSL distro image after install
+│   │   ├── Import-Distro.ps1    # Imports and configures WSL distro
+│   │   ├── Logging.ps1          # PowerShell logging functionality
+│   │   └── Test.ps1             # WSL version and prerequisite tests
+│   └── lib/                     # Bash library functions
+│       ├── 2_set_dirs.sh        # Directory creation and permissions
+│       ├── 3_logging.sh         # Bash logging functions
+│       ├── 4_install.sh         # Package installation functions
+│       ├── 5_sync_packs.sh      # Package list synchronization
+│       ├── snapshots.sh         # WSL snapshot functions (currently disabled)
+│       └── config/              # Configuration templates
+│           ├── nvim.sh          # Neovim setup functions
+│           ├── tmux.sh          # Tmux setup functions
+│           ├── zsh.sh           # Zsh setup functions
+│           ├── p10k.sh          # Powerlevel10k setup functions
+│           ├── zxc_nvim.sh      # Neovim configuration content
+│           ├── zxc_tmux.sh      # Tmux configuration content
+│           ├── zxc_zsh.sh       # Zsh configuration content
+│           └── zxc_p10k.sh      # Powerlevel10k configuration content
 
 ## Features
 
