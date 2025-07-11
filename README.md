@@ -29,7 +29,7 @@ The repository is organized as follows:
     Arch_Dev_Env/
     ├── Setup/                       # Main setup directory
         ├── 1_sys_init.sh            # Main Bash setup script
-        ├── Install.ps1              # Main PowerShell installation script
+        ├── Install.ps1              # Main PowerShell installation script **[MODIFY THIS FIRST]**
         ├── PowerShell/              # Modular PowerShell components
             ├── Export-Image.ps1     # Exports WSL distro image after install
             ├── Import-Distro.ps1    # Imports and configures WSL distro
