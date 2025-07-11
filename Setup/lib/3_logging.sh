@@ -9,7 +9,7 @@
 #!/bin/bash
 
 # Setup logging with detailed timestamps and categories
-LOG_DIR= "$LOGS_BASE_PATH/$TIMESTAMP"
+LOG_DIR="$LOGS_BASE_PATH/$TIMESTAMP"
 mkdir -p "$LOG_DIR"
 LOGFILE="$LOG_DIR/sys_init.log"
 
