@@ -4,7 +4,6 @@
 # It should perform Git operations as the user who invoked sudo pacman.
 
 # Define paths
-REPO_ROOT="/mnt/c/wsl/wsl-dev-setup" # IMPORTANT: Adjust if your localClonePath changes
 PACKAGE_LIST_FILE="$REPO_ROOT/installed_packages.txt" # This will be in the main repo root
 LOG_DIR="/mnt/c/wsl/tmp/logs"
 LOGFILE="$LOG_DIR/pacman_git_sync.log"

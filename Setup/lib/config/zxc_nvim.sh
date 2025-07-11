@@ -1,6 +1,7 @@
 #!/bin/bash
 ###     file name: zxc_nvim.sh
 ###     dir: /mnt/c/wsl/scripts/lib/config/zxc_nvim.sh
+if [ ! -f ~/.config/nvim/init.lua ]; then
 
 cat > ~/.config/nvim/init.lua << 'EOL'
 -- ##--init.lua (Corrected)
@@ -36,8 +37,15 @@ require('lazy').setup('plugins', {
 -- Set colorscheme (can also be done in the theme's config)
 vim.cmd([[colorscheme kanagawa]])
 EOL
+else
+    print_warning "NVIM_CONF" "Neovim init.lua already exists. Skipping overwrite to preserve user settings."
+    print_status "NVIM_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/nvim/init.lua and rerun."
+fi
 
-cat > ~/.config/nvim/preferences.lua << 'EOL'
+
+if [ ! -f ~/.config/nvim/preferences.lua ]; then
+
+> ~/.config/nvim/preferences.lua << 'EOL'
 
 -- This file is required by init.lua before plugins are loaded.
 -- It's for settings that don't depend on any plugins.
@@ -58,6 +66,14 @@ vim.opt.showcmd = true
 vim.opt.showmatch = true
 vim.opt.wrap = false
 EOL
+
+else
+    print_warning "NVIM_CONF" "Neovim preferences.lua already exists. Skipping overwrite to preserve user settings."
+    print_status "NVIM_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/nvim/preferences.lua and rerun."
+fi
+
+
+if [ ! -f ~/.config/nvim/plugins.lua ]; then
 
 cat > ~/.config/nvim/plugins.lua << 'EOF'
 return {
@@ -183,6 +199,12 @@ return {
   { "nvim-lua/plenary.nvim" }, -- Explicit dependency
 
 EOF
+else
+    print_warning "NVIM_CONF" "Neovim plugins.lua already exists. Skipping overwrite to preserve user settings."
+    print_status "NVIM_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/nvim/plugins.lua and rerun."
+fi
+
+if [ ! -f ~/.config/nvim/keymaps.lua ]; then
 
 cat > ~/.config/nvim/keymaps.lua << 'EOL'
 -- Core keymaps that do not depend on any plugins
@@ -203,3 +225,7 @@ vim.keymap.set('n', '<C-l>', '<C-w>l', { desc = "Move to right window" })
 vim.keymap.set('n', '<Tab>', ':bnext<CR>', { desc = "Next buffer" })
 vim.keymap.set('n', '<S-Tab>', ':bprevious<CR>', { desc = "Previous buffer" })
 EOL
+else
+    print_warning "NVIM_CONF" "Neovim plugins.lua already exists. Skipping overwrite to preserve user settings."
+    print_status "NVIM_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/nvim/keymaps.lua and rerun."
+fi

@@ -33,12 +33,16 @@ set -e
 # set directory source
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+
 # Source Directory setup
 source "$SCRIPT_DIR/lib/set_dirs.sh"
 
 # Source all library functions
 source "$SCRIPT_DIR/lib/logging.sh" || exit 1
 source "$SCRIPT_DIR/lib/install.sh" || exit 1
+
+# Export Repo 
+export REPO_ROOT="$(dirname "$SCRIPT_DIR")" # Define and export REPO_ROOT
 
 # Initialize logging
 init_logging || exit 1
@@ -88,6 +92,7 @@ fi
     setup_p10k || exit 1
     setup_tmux || exit 1
     setup_neovim || exit 1
+    setup_pacman_git_hook || exit 1
     
     print_success "MAIN" "Installation complete!"
     print_status "MAIN" "Please log out and log back in for all changes to take effect."
