@@ -5,8 +5,9 @@ $githubRepoUrl = "https://github.com/CorneliusWalters/Arch_Dev_Env.git"
 $localClonePath = "C:\wsl\wsl-dev-setup"
 $wslDistroName = "Arch"
 $wslUsername = "CHW"
-$cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar" # Default for importing a clean distro
+$cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar"          # Default for importing a clean distro
 $configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar" # Default for exporting configured distro
+$ForceOverwrite = $true                                             # Overwrite current settings / Set to false to keep config files
 # -------------------------------------------
 
 # Import the module files (adjust paths if needed)
@@ -24,10 +25,10 @@ $logger = Initialize-WSLLogging -BasePath "C:\wsl"
 & $logger.WriteLog "INFO" "Log file created at: $($logger.LogFile)" "Gray"
 
 # Check prerequisites
-#if (-not (Test-WSLPrerequisites -Logger $logger -WslDistroName $wslDistroName)) {
-#    & $logger.WriteLog "ERROR" "Prerequisite check failed. Exiting." "Red"
-#    exit 1
-#}
+if (-not (Test-WSLPrerequisites -Logger $logger -WslDistroName $wslDistroName)) {
+    & $logger.WriteLog "ERROR" "Prerequisite check failed. Exiting." "Red"
+    exit 1
+}
 
 # Import or check WSL distro
 if (-not (Import-ArchDistro -Logger $logger -WslDistroName $wslDistroName -WslUsername $wslUsername -DefaultTarballPath $cleanArchTarballDefaultPath)) {
@@ -53,6 +54,10 @@ if ($LASTEXITCODE -ne 0) {
 & $logger.WriteHeader "Executing Main Setup Script inside WSL"
 & $logger.WriteLog "INFO" "This will run '1_sys_init.sh' as user '$wslUsername' in the '$wslDistroName' distro." "White"
 & $logger.WriteLog "INFO" "You will see output from the script and may be prompted for your sudo password." "White"
+
+# Add our variable to WSLENV. The "/u" flag makes it available when invoking WSL as a user.
+$env:WSLENV = "FORCE_OVERWRITE/u"
+$env:FORCE_OVERWRITE = if ($ForceOverwrite) { "true" } else { "false" }
 
 # Convert Windows path to WSL path
 $wslScriptPath = "/mnt/" + ($localClonePath -replace ':', '').Replace('\', '/') + "/Setup/1_sys_init.sh"

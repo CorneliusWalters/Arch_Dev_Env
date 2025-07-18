@@ -6,11 +6,15 @@
 
 #######--- START OF FILE ---#######
 # Setup tmux configuration
+# Define Patch paths
+TMUX_PRISTINE="$PRISTINE_DIR/tmux"
+TMUX_WORKING="$WORKING_FILE/tmux.conf"
+TMUX_PATC="$TMUX_WORKING.patch"
 
+#1 - Setup Pristine tmux config  
 print_status "Setting up tmux configuration..."
-if [ ! -f ~/.config/tmux/tmux.conf ]; then
 
-cat > ~/.config/tmux/tmux.conf << 'EOL'
+cat > "$TMUX_PRISTINE/tmux.conf" << 'EOL'
 
 # Change prefix from 'Ctrl+b' to 'Ctrl+a' 
 unbind C-b 
@@ -58,9 +62,25 @@ set -g history-limit 50000
 # Enable focus events
 set -g focus-events on
 EOL
+
+
+# 2. Copy the pristine file to the working location.
+cp "$TMUX_PRISTINE/tmux.conf" "$TMUX_WORKING"
+
+# 3. Check if a user patch exists and apply it.
+if [ -f "$PATCH_FILE" ]; then
+    print_status "TMUX_CONF" "Found existing patch file. Applying user modifications..."
+    # The 'patch' command applies the diff.
+    # -p1 strips the first path component from the diff file (e.g., 'a/path/to/file')
+    # --forward ensures we don't accidentally un-patch.
+    if patch --forward -p1 "$WORKING_FILE" < "$PATCH_FILE"; then
+        print_success "TMUX_CONF" "Successfully applied user patch to tmux.conf."
+    else
+        print_error "TMUX_CONF" "Failed to apply patch to tmux.conf. The base file may have changed too much. Please resolve manually."
+        # A .rej (reject) file is often created with the failed parts of the patch.
+    fi
 else
-    print_warning "TMUX_CONF" "TMux config (~/.config/tmux/tmux.conf) already exists. Skipping overwrite to preserve user settings."
-    print_status "TMUX_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/tmux/tmux.conf and rerun."
+    print_status "TMUX_CONF" "No user patch found for tmux.conf. Using pristine version."
 fi
 
 #######--- END OF FILE ---#######

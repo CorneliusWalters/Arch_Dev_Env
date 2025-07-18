@@ -1,26 +1,29 @@
 #!/bin/bash
-###     file name: sys_init.sh
-###     dir: /mnt/c/wsl/scripts/sys_init.sh
 
-
-######------Structure
-######      Git/Setup/
-######      ├── 1_sys_init.sh           # Main script
-######      ├── Install.ps              # Power Shell Install Script
-######      ├── lib
-######      │   ├── 2_set_dirs.sh       # create directories and set scripts as executable
-######      │   ├── 3_logging.sh        # Logging functions
-######      │   ├── #snapshots.sh       # WSL snapshot functions -- Functionality to check
-######      │   ├── 4_install.sh        # Package/Main installation functions
-######      │   ├── config
-######      │   │   ├── nvim.sh      # Neovim configurations
-######      │   │   ├── tmux.sh      # Tmux configurations
-######      │   │   ├── zsh.sh       # Zsh configurations
-######      │   │   ├── p10k.sh      # P10k configurations
-######      │   │   ├── zxc_nvim.sh  #cat configuration files for NVIM
-######      │   │   ├── zxc_tmux.sh  #cat configuration files for TMUX
-######      │   │   ├── zxc_zsh.sh   #cat configuration files for ZSH
-######      └   └   └── zxc_p10k.sh  #cat configuration files for ZSH p10K  
+##------Structure
+##      Git/Setup/
+##      ├── 1_sys_init.sh           # Main script
+##      ├── Install.ps1             # Power Shell Install Script
+##      ├── PowerShell
+##      │   ├── Export-Image.ps1    # Exports WSL distro image after install for easy redo
+##      │   ├── Import-Distro.ps1   # Import the distro image
+##      │   ├── Export-Image.ps1    # Exports WSL distro image after install for easy redo
+##      │   ├── Logging.ps1         # Logging functions
+##      │   └── Test.ps1            # Checks your WSL version
+##      ├── lib
+##      │   ├── 2_set_dirs.sh       # create directories and set scripts as executable
+##      │   ├── 3_logging.sh        # Logging functions
+##      │   ├── #snapshots.sh       # WSL snapshot functions -- Functionality to check  --- Currently Disabled
+##      │   ├── 4_install.sh        # Package/Main installation functions
+##      │   ├── config
+##      │   │   ├── nvim.sh         # Neovim configurations
+##      │   │   ├── tmux.sh         # Tmux configurations
+##      │   │   ├── zsh.sh          # Zsh configurations
+##      │   │   ├── p10k.sh         # P10k configurations
+##      │   │   ├── zxc_nvim.sh     #cat configuration files for NVIM
+##      │   │   ├── zxc_tmux.sh     #cat configuration files for TMUX
+##      │   │   ├── zxc_zsh.sh      #cat configuration files for ZSH
+##      └   └   └── zxc_p10k.sh     #cat configuration files for ZSH p10K  
 
 
 

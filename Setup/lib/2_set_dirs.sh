@@ -3,7 +3,9 @@
 ###     dir: /mnt/c/wsl/scripts/lib/config/set_dirs.sh
 
 #######--- START OF FILE ---#######
-# Create project structure
+# Define Patch paths
+export PRISTINE_DIR="$HOME/.config/dotfiles-pristine/"
+export WORKING_FILES="$HOME/.config/"
 
 # Create project structure
 mkdir -p \
@@ -11,8 +13,10 @@ mkdir -p \
   ~/.config/zsh \
   ~/.config/tmux \
   ~/.local/{bin,share,opt,logs} \
-  ~/.cache
-  
+  ~/.cache \
+  "$PRISTINE_DIR" \
+  "$(dirname "$WORKING_FILE")"
+
 mkdir -p "$LOGS_BASE_PATH"
 mkdir -p "$CONFIG_BASE_PATH"
 

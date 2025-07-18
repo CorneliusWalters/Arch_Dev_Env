@@ -1,7 +1,7 @@
 #!/bin/bash
 ###     file name: zxc_nvim.sh
 ###     dir: /mnt/c/wsl/scripts/lib/config/zxc_nvim.sh
-if [ ! -f ~/.config/nvim/init.lua ]; then
+if [ ! -f ~/.config/nvim/init.lua ] || [ "$FORCE_OVERWRITE" == "true" ]; then
 
 cat > ~/.config/nvim/init.lua << 'EOL'
 -- ##--init.lua (Corrected)
@@ -43,7 +43,7 @@ else
 fi
 
 
-if [ ! -f ~/.config/nvim/preferences.lua ]; then
+if [ ! -f ~/.config/nvim/preferences.lua ] || [ "$FORCE_OVERWRITE" == "true" ]; then
 
 > ~/.config/nvim/preferences.lua << 'EOL'
 
@@ -73,7 +73,7 @@ else
 fi
 
 
-if [ ! -f ~/.config/nvim/plugins.lua ]; then
+if [ ! -f ~/.config/nvim/plugins.lua ] || [ "$FORCE_OVERWRITE" == "true" ]; then
 
 cat > ~/.config/nvim/plugins.lua << 'EOF'
 return {
@@ -204,7 +204,7 @@ else
     print_status "NVIM_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/nvim/plugins.lua and rerun."
 fi
 
-if [ ! -f ~/.config/nvim/keymaps.lua ]; then
+if [ ! -f ~/.config/nvim/keymaps.lua ] || [ "$FORCE_OVERWRITE" == "true" ]; then
 
 cat > ~/.config/nvim/keymaps.lua << 'EOL'
 -- Core keymaps that do not depend on any plugins

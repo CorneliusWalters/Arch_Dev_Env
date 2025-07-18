@@ -1,4 +1,4 @@
-# Import-ArchDistro.ps1
+# Import-Distro.ps1
 function Import-ArchDistro {
     param (
         [PSCustomObject]$Logger,

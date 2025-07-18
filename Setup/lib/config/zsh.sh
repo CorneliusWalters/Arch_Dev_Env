@@ -4,11 +4,22 @@
 
 
 #######--- START OF FILE ---#######
+    #Paths Definition
+    PRISTINE_DIR="$HOME/.config/dotfiles-pristine/tmux"
+    WORKING_FILE="$HOME/.config/tmux/tmux.conf"
+    PATCH_FILE="$WORKING_FILE.patch"
+
+    mkdir -p "$PRISTINE_DIR"
+    mkdir -p "$(dirname "$WORKING_FILE")"
+
+
 setup_zsh() {
+
     print_status "ZSH_CONF" "Setting up ZSH configuration..."
 
     # 1. Ensure the ZDOTDIR exists before we do anything else.
     mkdir -p "$HOME/.config/zsh"
+
 
     # 2. Create .zshenv to set ZDOTDIR. This is critical and must happen first.
     if ! grep -q "export ZDOTDIR=\"\$HOME/.config/zsh\"" "$HOME/.zshenv" 2>/dev/null; then
@@ -32,8 +43,11 @@ setup_zsh() {
     fi
 
     # 5. Now that ZDOTDIR is set and plugins are installed, write the .zshrc.
-    source "$SCRIPT_DIR/lib/config/zxc_zsh.sh"
-
+    if [ ! -f ~/.config/zsh/.zshrc ] || [ "$FORCE_OVERWRITE" == "true" ]; then 
+        source "$SCRIPT_DIR/lib/config/zxc_zsh.sh"
+    else
+        print_warning "ZSH_CONF" "ZSH config (~/.config/zsh/.zshrc) already exists. and Force Overwrite is disabled. Skipping.".""
+    fi
     print_success "ZSH_CONF" "ZSH configuration complete."
 }
 

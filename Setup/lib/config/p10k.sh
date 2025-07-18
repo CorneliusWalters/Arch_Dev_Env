@@ -16,7 +16,4 @@ setup_p10k() {
     print_success "Powerlevel10k configuration complete"
 }
 
-
 #######--- END OF FILE ---#######
-
-
