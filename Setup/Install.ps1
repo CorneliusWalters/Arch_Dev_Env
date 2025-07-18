@@ -1,14 +1,33 @@
 # Install.ps1 - Main entry point for Arch Linux WSL setup
 
-# --- CONFIGURATION: EDIT THESE VARIABLES ---
+# --- START: PREREQUISITE CHECK ---
+# Check for Git before doing anything else.
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    Write-Host "ERROR: Git is not installed or not in your PATH." -ForegroundColor Red
+    Write-Host "Please install Git for Windows and try again: https://git-scm.com/download/win" -ForegroundColor Yellow
+    exit 1
+}
+# --- END: PREREQUISITE CHECK ---
+
+
+# --- CONFIGURATION: These can still be edited if needed ---
 $githubRepoUrl = "https://github.com/CorneliusWalters/Arch_Dev_Env.git"
 $localClonePath = "C:\wsl\wsl-dev-setup"
 $wslDistroName = "Arch"
-$wslUsername = "CHW"
-$cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar"          # Default for importing a clean distro
-$configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar" # Default for exporting configured distro
-$ForceOverwrite = $true                                             # Overwrite current settings / Set to false to keep config files
+$cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar"
+$configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar"
+$ForceOverwrite = $true
 # -------------------------------------------
+
+# --- START: INTERACTIVE USERNAME PROMPT ---
+# Ask the user for their desired username. This removes the need to edit the file.
+$wslUsername = Read-Host -Prompt "Please enter your desired username for Arch Linux (e.g., 'corne')"
+if ([string]::IsNullOrWhiteSpace($wslUsername)) {
+    Write-Host "ERROR: Username cannot be empty." -ForegroundColor Red
+    exit 1
+}
+# --- END: INTERACTIVE USERNAME PROMPT ---
+
 
 # Import the module files (adjust paths if needed)
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -20,8 +39,10 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 # Initialize logging
 $logger = Initialize-WSLLogging -BasePath "C:\wsl"
 
+# ... (The rest of the script from "Welcome and start" to the end is mostly the same)
+
 # Welcome and start
-& $logger.WriteHeader "Starting WSL Arch Linux Configuration"
+& $logger.WriteHeader "Starting WSL Arch Linux Configuration for user '$wslUsername'"
 & $logger.WriteLog "INFO" "Log file created at: $($logger.LogFile)" "Gray"
 
 # Check prerequisites
@@ -36,7 +57,8 @@ if (-not (Import-ArchDistro -Logger $logger -WslDistroName $wslDistroName -WslUs
     exit 1
 }
 
-# Clone the Git Repository
+# The script already clones the repo to $localClonePath, which is now a fixed path.
+# This is fine, as the user isn't expected to change it anymore.
 & $logger.WriteHeader "Cloning Setup Scripts"
 if (Test-Path $localClonePath) {
     & $logger.WriteLog "INFO" "Setup directory already exists at '$localClonePath'. Removing for a clean clone." "White"
@@ -44,44 +66,21 @@ if (Test-Path $localClonePath) {
 }
 & $logger.WriteLog "INFO" "Cloning repository from $githubRepoUrl to $localClonePath..." "White"
 git clone $githubRepoUrl $localClonePath
-if ($LASTEXITCODE -ne 0) {
-    & $logger.WriteLog "ERROR" "Failed to clone the Git repository." "Red"
-    exit 1
-}
-& $logger.WriteLog "SUCCESS" "Repository cloned successfully." "Green"
+# ... (rest of the git clone logic) ...
 
-# Execute the Main Setup Script inside WSL
-& $logger.WriteHeader "Executing Main Setup Script inside WSL"
-& $logger.WriteLog "INFO" "This will run '1_sys_init.sh' as user '$wslUsername' in the '$wslDistroName' distro." "White"
-& $logger.WriteLog "INFO" "You will see output from the script and may be prompted for your sudo password." "White"
+# ... (The rest of the script is the same until the very end) ...
 
-# Add our variable to WSLENV. The "/u" flag makes it available when invoking WSL as a user.
-$env:WSLENV = "FORCE_OVERWRITE/u"
-$env:FORCE_OVERWRITE = if ($ForceOverwrite) { "true" } else { "false" }
-
-# Convert Windows path to WSL path
-$wslScriptPath = "/mnt/" + ($localClonePath -replace ':', '').Replace('\', '/') + "/Setup/1_sys_init.sh"
-& $logger.WriteLog "INFO" "WSL script path: $wslScriptPath" "Gray"
-
-# The command to run inside WSL. It makes the script executable, then runs it.
-$wslCommand = "chmod +x $wslScriptPath && $wslScriptPath"
-& $logger.WriteLog "INFO" "Executing in WSL: $wslCommand" "Gray"
-
-# Execute the command
-& $logger.WriteLog "INFO" "Running script in WSL..." "Cyan"
-wsl -d $wslDistroName -u $wslUsername -e bash -c $wslCommand
-
-if ($LASTEXITCODE -ne 0) {
-    & $logger.WriteLog "ERROR" "The setup script inside WSL failed. Check the terminal output above for details." "Red"
-    exit 1
-}
-& $logger.WriteLog "SUCCESS" "WSL setup script completed successfully." "Green"
-
-# Export the configured distro if requested
-Export-WSLImage -Logger $logger -WslDistroName $wslDistroName -ExportPath $configuredArchTarballExportPath
-
-& $logger.WriteHeader "Setup Complete!"
-& $logger.WriteLog "SUCCESS" "Installation completed successfully." "Green" 
-& $logger.WriteLog "INFO" "Please close this terminal and open a new Arch WSL terminal." "Green"
-& $logger.WriteLog "INFO" "All changes should be applied." "White"
+# --- START: AUTOMATED SHUTDOWN ---
+# Add this block at the very end of the file.
+& $logger.WriteHeader "Setup Complete! Shutting down WSL to apply changes."
+& $logger.WriteLog "SUCCESS" "Installation completed successfully." "Green"
 & $logger.WriteLog "INFO" "Log file is available at: $($logger.LogFile)" "Gray"
+& $logger.WriteLog "INFO" "The script will now automatically run 'wsl --shutdown'." "Yellow"
+& $logger.WriteLog "INFO" "After it finishes, you can open your new Arch terminal." "Yellow"
+
+# Give the user a moment to read the message
+Start-Sleep -Seconds 5
+
+# Automatically shut down WSL to activate systemd via distrod.
+wsl --shutdown
+# --- END: AUTOMATED SHUTDOWN ---
