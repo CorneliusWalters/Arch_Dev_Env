@@ -29,7 +29,7 @@
 	done
 	
 	# The Git action script
-	PATCH_GENERATOR_SCRIPT="$REPO_ROOT/Setup/lib/generate_and_commit_patch.sh"
+	PATCH_GENERATOR_SCRIPT="$REPO_ROOT/Setup/lib/6_commit_config.sh"
 
 # The inotifywait loop
 inotifywait -m -q -e close_write --format '%w' "${ABSOLUTE_PATHS[@]}" | while read -r CHANGED_FILE; do

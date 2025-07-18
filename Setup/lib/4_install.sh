@@ -249,7 +249,48 @@ install_base_packages() {
         "Installing core and custom dependencies" \
         "Packages" || return 1
 }
+setup_systemd_enabler() {
+    print_status "SYSTEMD" "Installing distrod to enable systemd..."
 
+    if command -v distrod >/dev/null 2>&1; then
+        print_success "SYSTEMD" "distrod is already installed."
+        return 0
+    fi
+
+    # Fetch the latest distrod release URL for linux-x86_64
+    local distrod_url
+    distrod_url=$(curl -s https://api.github.com/repos/null-dev/distrod/releases/latest | grep "browser_download_url.*linux-x86_64.tar.gz" | cut -d '"' -f 4)
+
+    if [ -z "$distrod_url" ]; then
+        print_error "SYSTEMD" "Could not find the latest distrod release URL."
+        return 1
+    fi
+
+    print_status "SYSTEMD" "Downloading distrod from $distrod_url"
+    execute_and_log "curl -L -o /tmp/distrod.tar.gz \"$distrod_url\"" \
+        "Downloading distrod" "SYSTEMD" || return 1
+
+    execute_and_log "tar -xzf /tmp/distrod.tar.gz -C /tmp" \
+        "Extracting distrod" "SYSTEMD" || return 1
+
+    # The extracted folder name might vary, find it
+    local distrod_dir
+    distrod_dir=$(find /tmp -maxdepth 1 -type d -name "distrod-*")
+
+    if [ -z "$distrod_dir" ]; then
+        print_error "SYSTEMD" "Could not find extracted distrod directory in /tmp."
+        return 1
+    fi
+
+    execute_and_log "sudo \"$distrod_dir/install\"" \
+        "Running distrod installer" "SYSTEMD" || return 1
+
+    execute_and_log "rm -rf /tmp/distrod.tar.gz \"$distrod_dir\"" \
+        "Cleaning up distrod installer files" "SYSTEMD"
+
+    print_success "SYSTEMD" "distrod installed successfully."
+    print_warning "SYSTEMD" "A one-time 'wsl --shutdown' is required to activate systemd."
+}
 install_db_tools() {
     print_status "DB" "Installing database tools..."
     # Add clients for databases you use
@@ -324,12 +365,15 @@ setup_shell() {
 }
 
 #Create Config Watcher 
-setup_config_watcher_service() {
+setup_watcher_service() {
     print_status "WATCHER" "Setting up config file watcher service..."
 
     local watcher_script="$REPO_ROOT/Setup/lib/config/watcher.sh"
-    local commit_script="$REPO_ROOT/Setup/lib/6_commit_config.sh"
+    # This assumes you've renamed the script as I recommended earlier.
+    # If not, change generate_and_commit_patch.sh to 6_commit_config.sh
+    local commit_script="$REPO_ROOT/Setup/lib/generate_and_commit_patch.sh"
     local service_file_path="$HOME/.config/systemd/user/config-watcher.service"
+    local zshrc_file="$HOME/.config/zsh/.zshrc"
 
     # Make scripts executable
     chmod +x "$watcher_script" "$commit_script"
@@ -338,6 +382,7 @@ setup_config_watcher_service() {
     mkdir -p "$HOME/.config/systemd/user/"
 
     # Create the service file
+    # This part is unchanged
     cat > "$service_file_path" << EOL
 [Unit]
 Description=Watches for user config file changes and commits them to Git.
@@ -353,13 +398,24 @@ RestartSec=10
 WantedBy=default.target
 EOL
 
-    # Enable and start the service as the user
-    # We need to run this as the user, not root
-    execute_and_log "systemctl --user daemon-reload" "Reloading systemd user daemon" "WATCHER"
-    execute_and_log "systemctl --user enable config-watcher.service" "Enabling watcher service" "WATCHER"
-    execute_and_log "systemctl --user start config-watcher.service" "Starting watcher service" "WATCHER"
+    # --- NEW LOGIC: Add a one-shot enabler to .zshrc ---
+    print_status "WATCHER" "Adding one-shot service enabler to .zshrc"
 
-    print_success "WATCHER" "Config watcher service has been set up and started."
+    # This block of code will be added to the end of the user's .zshrc.
+    # It runs once, enables the service, and then does nothing on subsequent shell starts.
+    cat >> "$zshrc_file" << 'EOL'
+
+# --- One-shot service enabler for config-watcher ---
+# This block will run only once after the initial setup.
+if ! systemctl --user is-enabled -q config-watcher.service; then
+    echo "First-time setup: Enabling and starting config-watcher service..."
+    systemctl --user enable --now config-watcher.service
+    echo "Config watcher is now active."
+fi
+# --- End one-shot enabler ---
+EOL
+
+    print_success "WATCHER" "Config watcher service file created. It will be enabled automatically on the next shell start."
 }
 
 setup_winyank() {

@@ -102,6 +102,7 @@ fi
     setup_tmux || exit 1
     setup_neovim || exit 1
     setup_pacman_git_hook || exit 1
+    setup_systemd_enabler || exit 1
     setup_config_watcher_service || exit 1 
 
     print_success "MAIN" "Installation complete!"
