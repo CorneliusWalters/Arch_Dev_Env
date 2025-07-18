@@ -14,5 +14,4 @@ setup_p10k() {
       print_warning "P10K" "P10k config already exists and Force Overwrite is disabled. Skipping."
   fi
 }
-
 #######--- END OF FILE ---#######
