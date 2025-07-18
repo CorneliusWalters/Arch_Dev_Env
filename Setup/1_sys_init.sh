@@ -103,7 +103,7 @@ fi
     setup_neovim || exit 1
     setup_pacman_git_hook || exit 1
     setup_systemd_enabler || exit 1
-    setup_config_watcher_service || exit 1 
+    setup_watcher_service || exit 1 
 
     print_success "MAIN" "Installation complete!"
     print_status "MAIN" "Please log out and log back in for all changes to take effect."

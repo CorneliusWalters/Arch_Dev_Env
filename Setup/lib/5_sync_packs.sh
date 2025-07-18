@@ -7,7 +7,7 @@
 
 # Hardcode the repository path. This is the path *inside WSL*.
 # It must match the $localClonePath from your Install.ps1 script.
-REPO_ROOT="/mnt/c/wsl/wsl-dev-setup"
+source /etc/arch-dev-env.conf
 
 # Defined paths
 PACKAGE_LIST_FILE="$REPO_ROOT/installed_packages.txt" # This will be in the main repo root
