@@ -323,6 +323,45 @@ setup_shell() {
     fi
 }
 
+#Create Config Watcher 
+setup_config_watcher_service() {
+    print_status "WATCHER" "Setting up config file watcher service..."
+
+    local watcher_script="$REPO_ROOT/Setup/lib/config/watcher.sh"
+    local commit_script="$REPO_ROOT/Setup/lib/6_commit_config.sh"
+    local service_file_path="$HOME/.config/systemd/user/config-watcher.service"
+
+    # Make scripts executable
+    chmod +x "$watcher_script" "$commit_script"
+
+    # Create systemd user directory
+    mkdir -p "$HOME/.config/systemd/user/"
+
+    # Create the service file
+    cat > "$service_file_path" << EOL
+[Unit]
+Description=Watches for user config file changes and commits them to Git.
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bash $watcher_script
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+EOL
+
+    # Enable and start the service as the user
+    # We need to run this as the user, not root
+    execute_and_log "systemctl --user daemon-reload" "Reloading systemd user daemon" "WATCHER"
+    execute_and_log "systemctl --user enable config-watcher.service" "Enabling watcher service" "WATCHER"
+    execute_and_log "systemctl --user start config-watcher.service" "Starting watcher service" "WATCHER"
+
+    print_success "WATCHER" "Config watcher service has been set up and started."
+}
+
 setup_winyank() {
     print_status "CLIPBOARD" "Setting up win32yank for Neovim clipboard..."
     

@@ -4,6 +4,15 @@
 
 
 #######--- START OF FILE ---#######
+# --- START: Define all paths locally. This makes the script self-contained. ---
+# Directory Creation is done in 2_set_dirs.sh 
+local PRISTINE_FILE="$HOME/.config/dotfiles-pristine/zsh/.zshrc"
+local WORKING_FILE="$HOME/.config/zsh/.zshrc"
+local PATCH_FILE="$WORKING_FILE.patch"
+# --- END: Path definitions ---
+
+print_status "TMUX_CONF" "Deploying pristine tmux configuration..."
+
 print_status "Setting up zsh configuration..."
 
 cat > ~/.config/zsh/.zshrc << 'EOL'
@@ -85,6 +94,23 @@ alias nvimconf='${EDITOR:-nvim} ~/.config/nvim/init.lua'
 
 
 EOL
+
+# 2. Copy the pristine file to the working location.
+cp "$PRISTINE_FILE" "$WORKING_FILE"
+
+# 3. Check if a user patch exists in the repo and apply it.
+if [ -f "$PATCH_FILE" ]; then
+    print_status "TMUX_CONF" "Found existing patch file. Applying user modifications..."
+    # The 'patch' command applies the diff.
+    if patch "$WORKING_FILE" < "$PATCH_FILE"; then
+        print_success "TMUX_CONF" "Successfully applied user patch to tmux.conf."
+    else
+        print_error "TMUX_CONF" "Failed to apply patch to tmux.conf. The base file may have changed too much. Please resolve manually."
+    fi
+else
+    print_status "TMUX_CONF" "No user patch found for tmux.conf. Using pristine version."
+fi
+#######--- END OF FILE ---#######
 
 #######--- END OF FILE ---#######
 

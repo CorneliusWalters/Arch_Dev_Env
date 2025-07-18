@@ -5,33 +5,27 @@
 
 #######--- START OF FILE ---#######
     #Paths Definition
-    PRISTINE_DIR="$HOME/.config/dotfiles-pristine/tmux"
-    WORKING_FILE="$HOME/.config/tmux/tmux.conf"
-    PATCH_FILE="$WORKING_FILE.patch"
-
-    mkdir -p "$PRISTINE_DIR"
-    mkdir -p "$(dirname "$WORKING_FILE")"
+PRISTINE_DIR="$HOME/.config/dotfiles-pristine/zsh"
+WORKING_FILE="$HOME/.config/zsh/.zshrc"
+PATCH_FILE="$WORKING_FILE.patch"
+mkdir -p "$PRISTINE_DIR"
+mkdir -p "$(dirname "$WORKING_FILE")"
 
 
 setup_zsh() {
 
     print_status "ZSH_CONF" "Setting up ZSH configuration..."
-
-    # 1. Ensure the ZDOTDIR exists before we do anything else.
-    mkdir -p "$HOME/.config/zsh"
-
-
-    # 2. Create .zshenv to set ZDOTDIR. This is critical and must happen first.
+    # 1. Create .zshenv to set ZDOTDIR. This is critical and must happen first.
     if ! grep -q "export ZDOTDIR=\"\$HOME/.config/zsh\"" "$HOME/.zshenv" 2>/dev/null; then
         print_status "ZSH_CONF" "Adding ZDOTDIR export to ~/.zshenv (if not present)."
         echo 'export ZDOTDIR="$HOME/.config/zsh"' >> "$HOME/.zshenv"
     else
         print_status "ZSH_CONF" "ZDOTDIR export already present in ~/.zshenv. Skipping."
     fi
-    # 3. For safety, remove any old .zshrc from the home directory to avoid conflicts.
+    # 2. For safety, remove any old .zshrc from the home directory to avoid conflicts.
     rm -f "$HOME/.zshrc"
 
-    # 4. Install oh-my-zsh and plugins if they don't exist.
+    # 3. Install oh-my-zsh and plugins if they don't exist.
     if [ ! -d "$HOME/.local/share/zsh/oh-my-zsh" ]; then
         print_status "OMZ_START" "Installing Oh My Zsh and plugins..."
         export ZSH="$HOME/.local/share/zsh/oh-my-zsh"
@@ -42,7 +36,7 @@ setup_zsh() {
         execute_and_log "install_p10k" "Installing powerlevel10k" "P10K" || return 1
     fi
 
-    # 5. Now that ZDOTDIR is set and plugins are installed, write the .zshrc.
+    # 5. Now that ZDOTDIR is set and plugins are installed, write the .zshrc
     if [ ! -f ~/.config/zsh/.zshrc ] || [ "$FORCE_OVERWRITE" == "true" ]; then 
         source "$SCRIPT_DIR/lib/config/zxc_zsh.sh"
     else

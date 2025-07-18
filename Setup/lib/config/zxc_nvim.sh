@@ -1,10 +1,27 @@
 #!/bin/bash
 ###     file name: zxc_nvim.sh
 ###     dir: /mnt/c/wsl/scripts/lib/config/zxc_nvim.sh
-if [ ! -f ~/.config/nvim/init.lua ] || [ "$FORCE_OVERWRITE" == "true" ]; then
 
-cat > ~/.config/nvim/init.lua << 'EOL'
--- ##--init.lua (Corrected)
+# --- START: Define all paths locally. This makes the script self-contained. ---
+# Directory Creation is done in 2_set_dirs.sh 
+local PRISTINE_DIR="$HOME/.config/dotfiles-pristine/nvim"
+local WORKING_DIR="$HOME/.config/nvim"
+
+# --- Define the list of files to manage ---
+local NVIM_CONFIG_FILES=(
+    "init.lua"
+    "preferences.lua"
+    "plugins.lua"
+    "keymaps.lua"
+)
+# --- END: Path definitions ---
+
+print_status "NVIM" "Deploying pristine NeoVIM configuration..."
+
+# 1. Always write the pristine config from the repo to our pristine location.
+
+cat > "$PRISTINE_DIR/init.lua" << 'EOF'
+-- ##--init.lua 
 
 -- Set leader key early, as many plugins might use it during setup
 vim.g.mapleader = " "
@@ -36,16 +53,11 @@ require('lazy').setup('plugins', {
 
 -- Set colorscheme (can also be done in the theme's config)
 vim.cmd([[colorscheme kanagawa]])
-EOL
-else
-    print_warning "NVIM_CONF" "Neovim init.lua already exists. Skipping overwrite to preserve user settings."
-    print_status "NVIM_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/nvim/init.lua and rerun."
-fi
+
+EOF
 
 
-if [ ! -f ~/.config/nvim/preferences.lua ] || [ "$FORCE_OVERWRITE" == "true" ]; then
-
-> ~/.config/nvim/preferences.lua << 'EOL'
+cat >"$PRISTINE_DIR/preferences.lua" << 'EOF'
 
 -- This file is required by init.lua before plugins are loaded.
 -- It's for settings that don't depend on any plugins.
@@ -65,17 +77,11 @@ vim.opt.autoindent = true
 vim.opt.showcmd = true
 vim.opt.showmatch = true
 vim.opt.wrap = false
-EOL
 
-else
-    print_warning "NVIM_CONF" "Neovim preferences.lua already exists. Skipping overwrite to preserve user settings."
-    print_status "NVIM_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/nvim/preferences.lua and rerun."
-fi
+EOF
 
 
-if [ ! -f ~/.config/nvim/plugins.lua ] || [ "$FORCE_OVERWRITE" == "true" ]; then
-
-cat > ~/.config/nvim/plugins.lua << 'EOF'
+cat > cat >"$PRISTINE_DIR/plugins.lua" << 'EOF'
 return {
   -- Appearance
   { "rebelot/kanagawa.nvim", priority = 1000 },
@@ -199,14 +205,9 @@ return {
   { "nvim-lua/plenary.nvim" }, -- Explicit dependency
 
 EOF
-else
-    print_warning "NVIM_CONF" "Neovim plugins.lua already exists. Skipping overwrite to preserve user settings."
-    print_status "NVIM_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/nvim/plugins.lua and rerun."
-fi
 
-if [ ! -f ~/.config/nvim/keymaps.lua ] || [ "$FORCE_OVERWRITE" == "true" ]; then
 
-cat > ~/.config/nvim/keymaps.lua << 'EOL'
+cat > cat >"$PRISTINE_DIR/keymaps.lua" << 'EOL'
 -- Core keymaps that do not depend on any plugins
 
 print("Loading core keymaps...")
@@ -225,7 +226,25 @@ vim.keymap.set('n', '<C-l>', '<C-w>l', { desc = "Move to right window" })
 vim.keymap.set('n', '<Tab>', ':bnext<CR>', { desc = "Next buffer" })
 vim.keymap.set('n', '<S-Tab>', ':bprevious<CR>', { desc = "Previous buffer" })
 EOL
-else
-    print_warning "NVIM_CONF" "Neovim plugins.lua already exists. Skipping overwrite to preserve user settings."
-    print_status "NVIM_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/nvim/keymaps.lua and rerun."
-fi
+
+
+# 2. Loop through the file list to copy pristine files and apply patches.
+print_status "NVIM" "Applying patches to working configuration files..."
+for file in "${NVIM_CONFIG_FILES[@]}"; do
+    local pristine_file="$PRISTINE_DIR/$file"
+    local working_file="$WORKING_DIR/$file"
+    local patch_file="$working_file.patch"
+
+    # Copy the pristine file to the working location
+    cp "$pristine_file" "$working_file"
+
+    # Check if a user patch exists and apply it
+    if [ -f "$patch_file" ]; then
+        print_status "NVIM_PATCH" "Found patch for $file. Applying..."
+        if patch "$working_file" < "$patch_file"; then
+            print_success "NVIM_PATCH" "Successfully applied patch to $file."
+        else
+            print_error "NVIM_PATCH" "Failed to apply patch to $file. Please resolve manually."
+        fi
+    fi
+done
