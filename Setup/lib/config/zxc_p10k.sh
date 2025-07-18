@@ -7,7 +7,7 @@
 # --- START: Define all paths locally. This makes the script self-contained. ---
 # Directory Creation is done in 2_set_dirs.sh 
 local PRISTINE_FILE="$HOME/.config/dotfiles-pristine/zsh/.p10k.zsh"
-local WORKING_FILE="$HOME/.config/ZSH/.p10k.zsh"
+local WORKING_FILE="$HOME/.config/zsh/.p10k.zsh"
 local PATCH_FILE="$WORKING_FILE.patch"
 # --- END: Path definitions ---
 
@@ -54,27 +54,27 @@ cat > ~/.config/zsh/.p10k.zsh << 'EOL'
 
   # Right prompt segments
   typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
-    status                  # exit code of the last command
-    background_jobs        # presence of background jobs
-    direnv                 # direnv status
-    asdf                   # asdf version manager
-    virtualenv            # python virtual environment
-    anaconda              # conda environment
-    pyenv                 # python environment
-    nodenv                # node.js version
-    nvm                   # node.js version
-    nodeenv               # node.js environment
-    node_version          # node.js version
-    go_version            # go version
-    rust_version          # rustc version
-    dotnet_version        # .net version
-    php_version           # php version
-    laravel_version       # laravel php framework version
-    java_version          # java version
-    package               # name@version from package.json
-    rbenv                 # ruby version
-    rvm                   # ruby version
-    fvm                   # flutter version
+    status               # exit code of the last command
+    background_jobs      # presence of background jobs
+    direnv               # direnv status
+    asdf                 # asdf version manager
+    virtualenv           # python virtual environment
+    anaconda             # conda environment
+    pyenv                # python environment
+    nodenv               # node.js version
+    nvm                  # node.js version
+    nodeenv              # node.js environment
+    node_version         # node.js version
+    go_version           # go version
+    rust_version         # rustc version
+    dotnet_version       # .net version
+    php_version          # php version
+    laravel_version      # laravel php framework version
+    java_version         # java version
+    package              # name@version from package.json
+    rbenv                # ruby version
+    rvm                  # ruby version
+    fvm                  # flutter version
     luaenv               # lua version
     jenv                 # java version
     plenv                # perl version
@@ -88,7 +88,6 @@ cat > ~/.config/zsh/.p10k.zsh << 'EOL'
     gcloud               # google cloud profile
     google_app_cred      # google application credentials
     context              # user@hostname
-    nordvpn              # nordvpn connection status
     ranger               # ranger shell
     nnn                  # nnn shell
     vim_shell            # vim shell indicator

@@ -25,3 +25,11 @@ repo_contents_*.txt
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Ignore user-modified dotfiles that are managed by patches
+/Setup/lib/config/dotfiles-pristine/
+/home/*/.config/zsh/.zshrc
+/home/*/.config/zsh/.p10k.zsh
+/home/*/.config/tmux/tmux.conf
+/home/*/.config/nvim/init.lua
+# etc. for all managed files

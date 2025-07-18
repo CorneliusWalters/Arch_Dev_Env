@@ -5,17 +5,17 @@
 
 
 #######--- START OF FILE ---#######
-# Setup tmux configuration
-# Define Patch paths
-TMUX_PRISTINE="$PRISTINE_DIR/tmux"
-TMUX_WORKING="$WORKING_FILE/tmux.conf"
-TMUX_PATC="$TMUX_WORKING.patch"
+# --- START: Define all paths locally. This makes the script self-contained. ---
+# Directory Creation is done in 2_set_dirs.sh 
+local PRISTINE_FILE="$HOME/.config/dotfiles-pristine/tmux/tmux.conf"
+local WORKING_FILE="$HOME/.config/tmux/tmux.conf"
+local PATCH_FILE="$WORKING_FILE.patch"
+# --- END: Path definitions ---
 
-#1 - Setup Pristine tmux config  
-print_status "Setting up tmux configuration..."
+print_status "TMUX_CONF" "Deploying pristine tmux configuration..."
 
-cat > "$TMUX_PRISTINE/tmux.conf" << 'EOL'
-
+# 1. Always write the pristine config from the repo to our pristine location.
+cat > "$PRISTINE_FILE" << 'EOL'
 # Change prefix from 'Ctrl+b' to 'Ctrl+a' 
 unbind C-b 
 set-option -g prefix C-a 
@@ -63,24 +63,19 @@ set -g history-limit 50000
 set -g focus-events on
 EOL
 
-
 # 2. Copy the pristine file to the working location.
-cp "$TMUX_PRISTINE/tmux.conf" "$TMUX_WORKING"
+cp "$PRISTINE_FILE" "$WORKING_FILE"
 
-# 3. Check if a user patch exists and apply it.
+# 3. Check if a user patch exists in the repo and apply it.
 if [ -f "$PATCH_FILE" ]; then
     print_status "TMUX_CONF" "Found existing patch file. Applying user modifications..."
     # The 'patch' command applies the diff.
-    # -p1 strips the first path component from the diff file (e.g., 'a/path/to/file')
-    # --forward ensures we don't accidentally un-patch.
-    if patch --forward -p1 "$WORKING_FILE" < "$PATCH_FILE"; then
+    if patch "$WORKING_FILE" < "$PATCH_FILE"; then
         print_success "TMUX_CONF" "Successfully applied user patch to tmux.conf."
     else
         print_error "TMUX_CONF" "Failed to apply patch to tmux.conf. The base file may have changed too much. Please resolve manually."
-        # A .rej (reject) file is often created with the failed parts of the patch.
     fi
 else
     print_status "TMUX_CONF" "No user patch found for tmux.conf. Using pristine version."
 fi
-
 #######--- END OF FILE ---#######
