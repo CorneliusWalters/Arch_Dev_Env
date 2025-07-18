@@ -19,6 +19,7 @@ This repository provides a fully automated and opinionated setup for a powerful 
 - [Pacman Package Synchronization Hook](#pacman-package-synchronization-hook)
 - [Usage](#usage)
 - [Troubleshooting](#troubleshooting)
+- [Config Management](#configuration-management-dotfiles)
 - [License](#license)
 
 ## File Structure
@@ -312,6 +313,26 @@ Once the setup is complete and you've logged back into your WSL Arch terminal:
     *   `v`: Alias for `nvim`.
     *   `update`: Runs `sudo pacman -Syu`.
     *   `zshconf`, `tmuxconf`, `nvimconf`: Quick edit your shell, tmux, and Neovim configs.
+
+## Configuration Management (Dotfiles)
+
+This setup uses a powerful pristine/patch system to manage your configuration files (dotfiles), giving you the best of both worlds: a consistent base configuration and the ability to safely preserve your personal customizations.
+
+### Config Managment - How It Works
+
+For each configuration (like `tmux.conf`), the system maintains three files:
+1.  **Pristine File:** A clean copy of the base configuration from this repository, stored in `~/.config/dotfiles-pristine/`. This is the system's "source of truth."
+2.  **Working File:** The actual file used by the application (e.g., `~/.config/tmux/tmux.conf`). **This is the file you should edit.**
+3.  **Patch File:** A file containing only your changes (e.g., `~/.config/tmux/tmux.conf.patch`). This is what gets automatically committed to your Git repository.
+
+When the setup script runs, it lays down the pristine files and then applies your saved `.patch` files to generate the final working configuration.
+
+### Making and Saving Your Customizations
+
+1.  **Edit the working file directly.** For example, to change a tmux setting, simply run `nvim ~/.config/tmux/tmux.conf` and make your changes.
+2.  **Save the file.** A background service will automatically detect the change, compare it to the pristine file, generate a new `.patch` file, and commit it to your Git repository.
+
+This means your personal modifications are safely version-controlled as small, manageable patches, separate from the base configuration. You can pull updates from this repository in the future, and your patches will be reapplied on top of the new base files.
 
 ## Troubleshooting
 
