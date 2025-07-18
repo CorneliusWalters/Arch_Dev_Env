@@ -102,7 +102,8 @@ fi
     setup_tmux || exit 1
     setup_neovim || exit 1
     setup_pacman_git_hook || exit 1
-    
+    setup_config_watcher_service || exit 1 
+
     print_success "MAIN" "Installation complete!"
     print_status "MAIN" "Please log out and log back in for all changes to take effect."
     print_status "MAIN" "After logging back in, run 'nvim' and wait for plugins to install."

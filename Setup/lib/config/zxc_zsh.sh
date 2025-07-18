@@ -15,7 +15,7 @@ print_status "TMUX_CONF" "Deploying pristine tmux configuration..."
 
 print_status "Setting up zsh configuration..."
 
-cat > ~/.config/zsh/.zshrc << 'EOL'
+cat > "$PRISTINE_FILE" << 'EOL'
 # p10k instant prompt
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"

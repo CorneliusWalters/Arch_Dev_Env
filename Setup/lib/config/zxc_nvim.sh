@@ -81,7 +81,7 @@ vim.opt.wrap = false
 EOF
 
 
-cat > cat >"$PRISTINE_DIR/plugins.lua" << 'EOF'
+cat > "$PRISTINE_DIR/plugins.lua" << 'EOF'
 return {
   -- Appearance
   { "rebelot/kanagawa.nvim", priority = 1000 },
