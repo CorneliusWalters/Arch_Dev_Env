@@ -17,9 +17,9 @@ This repository provides a fully automated and opinionated setup for a powerful 
 - [Configuration Management (Dotfiles)](#configuration-management-dotfiles)
 - [Customizing Your Environment (Forking & Modifying)](#customizing-your-environment-forking--modifying)
 - [Pacman Package Synchronization Hook](#pacman-package-synchronization-hook)
+- [Config Management](#configuration-management-dotfiles)
 - [Usage](#usage)
 - [Troubleshooting](#troubleshooting)
-- [Config Management](#configuration-management-dotfiles)
 - [License](#license)
 
 ## File Structure
@@ -283,6 +283,35 @@ To keep track of all explicitly installed Arch Linux packages across your develo
     *   Logs for the hook are written to `/mnt/c/wsl/tmp/logs/pacman_git_sync.log`.
 *   **Git Credentials:** For the `git push` to succeed, your WSL user needs Git credentials configured (e.g., SSH key added to GitHub, or Git Credential Manager set up).
 
+## Configuration Management (Dotfiles)
+
+This setup uses a powerful pristine/patch system to manage your configuration files (dotfiles), giving you the best of both worlds: a consistent base configuration and the ability to safely preserve your personal customizations.
+
+### Config Managment - How It Works
+
+For each configuration (like `tmux.conf`), the system maintains three files:
+1.  **Pristine File:** A clean copy of the base configuration from this repository, stored in `~/.config/dotfiles-pristine/`. This is the system's "source of truth."
+2.  **Working File:** The actual file used by the application (e.g., `~/.config/tmux/tmux.conf`). **This is the file you should edit.**
+3.  **Patch File:** A file containing only your changes (e.g., `~/.config/tmux/tmux.conf.patch`). This is what gets automatically committed to your Git repository.
+
+When the setup script runs, it lays down the pristine files and then applies your saved `.patch` files to generate the final working configuration.
+
+### Making and Saving Your Customizations
+
+1.  **Edit the working file directly.** For example, to change a tmux setting, simply run `nvim ~/.config/tmux/tmux.conf` and make your changes.
+2.  **Save the file.** A background service will automatically detect the change, compare it to the pristine file, generate a new `.patch` file, and commit it to your Git repository.
+
+This means your personal modifications are safely version-controlled as small, manageable patches, separate from the base configuration. You can pull updates from this repository in the future, and your patches will be reapplied on top of the new base files.
+
+## Troubleshooting
+
+*   **Installation Failure:** Check the main log file for `1_sys_init.sh` at:
+    `C:\wsl\tmp\logs\YYYYMMDD_HHMMSS\sys_init.log` (timestamp will vary).
+*   **Pacman Hook Failures:** Check the dedicated log for the hook at:
+    `C:\wsl\tmp\logs\pacman_git_sync.log`
+*   **Git Push Failures in Hook:** Ensure your Git credentials (SSH key, Git Credential Manager) are correctly set up for your WSL user. Try a manual `git push` from your repository root (`/mnt/c/wsl/wsl-dev-setup`) in your WSL terminal to diagnose.
+*   **Zsh or Neovim Not Working as Expected:** Verify that the configuration files in `~/.config/zsh` and `~/.config/nvim` exist and contain the expected content. If they were accidentally overwritten, you may need to re-clone the repository and re-run the setup, or manually restore them from your Git history.
+
 ## Usage
 
 Once the setup is complete and you've logged back into your WSL Arch terminal:
@@ -313,35 +342,6 @@ Once the setup is complete and you've logged back into your WSL Arch terminal:
     *   `v`: Alias for `nvim`.
     *   `update`: Runs `sudo pacman -Syu`.
     *   `zshconf`, `tmuxconf`, `nvimconf`: Quick edit your shell, tmux, and Neovim configs.
-
-## Configuration Management (Dotfiles)
-
-This setup uses a powerful pristine/patch system to manage your configuration files (dotfiles), giving you the best of both worlds: a consistent base configuration and the ability to safely preserve your personal customizations.
-
-### Config Managment - How It Works
-
-For each configuration (like `tmux.conf`), the system maintains three files:
-1.  **Pristine File:** A clean copy of the base configuration from this repository, stored in `~/.config/dotfiles-pristine/`. This is the system's "source of truth."
-2.  **Working File:** The actual file used by the application (e.g., `~/.config/tmux/tmux.conf`). **This is the file you should edit.**
-3.  **Patch File:** A file containing only your changes (e.g., `~/.config/tmux/tmux.conf.patch`). This is what gets automatically committed to your Git repository.
-
-When the setup script runs, it lays down the pristine files and then applies your saved `.patch` files to generate the final working configuration.
-
-### Making and Saving Your Customizations
-
-1.  **Edit the working file directly.** For example, to change a tmux setting, simply run `nvim ~/.config/tmux/tmux.conf` and make your changes.
-2.  **Save the file.** A background service will automatically detect the change, compare it to the pristine file, generate a new `.patch` file, and commit it to your Git repository.
-
-This means your personal modifications are safely version-controlled as small, manageable patches, separate from the base configuration. You can pull updates from this repository in the future, and your patches will be reapplied on top of the new base files.
-
-## Troubleshooting
-
-*   **Installation Failure:** Check the main log file for `1_sys_init.sh` at:
-    `C:\wsl\tmp\logs\YYYYMMDD_HHMMSS\sys_init.log` (timestamp will vary).
-*   **Pacman Hook Failures:** Check the dedicated log for the hook at:
-    `C:\wsl\tmp\logs\pacman_git_sync.log`
-*   **Git Push Failures in Hook:** Ensure your Git credentials (SSH key, Git Credential Manager) are correctly set up for your WSL user. Try a manual `git push` from your repository root (`/mnt/c/wsl/wsl-dev-setup`) in your WSL terminal to diagnose.
-*   **Zsh or Neovim Not Working as Expected:** Verify that the configuration files in `~/.config/zsh` and `~/.config/nvim` exist and contain the expected content. If they were accidentally overwritten, you may need to re-clone the repository and re-run the setup, or manually restore them from your Git history.
 
 ## License
 
