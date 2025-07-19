@@ -8,10 +8,15 @@ class WslLogger {
     # --- Constructor ---
     WslLogger([string]$BasePath = "C:\wsl") {
         $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        $logDir = "$BasePath\tmp\logs\$timestamp"
-        $this.LogDir = $logDir
-        $this.LogFile = "$logDir\powershell_install.log"
 
+        # --- THE FIX IS HERE ---
+        # We assign directly to the object's properties ($this) instead of creating
+        # temporary variables like $logDir or $logFile first. This satisfies the
+        # stricter parser in older PowerShell versions.
+        $this.LogDir = "$BasePath\tmp\logs\$timestamp"
+        $this.LogFile = "$($this.LogDir)\powershell_install.log"
+
+        # Create log directories
         $directoriesToCreate = @("$BasePath", "$BasePath\tmp", "$BasePath\tmp\logs", $this.LogDir)
         foreach ($dir in $directoriesToCreate) {
             if (-not (Test-Path $dir)) {
@@ -19,6 +24,7 @@ class WslLogger {
             }
         }
 
+        # Initialize the log file with a header, using the object's property directly.
         "=== PowerShell Installation Log Started at $(Get-Date) ===" | Out-File -FilePath $this.LogFile
         "=== System Information ===" | Out-File -FilePath $this.LogFile -Append
         "User: $env:USERNAME" | Out-File -FilePath $this.LogFile -Append
