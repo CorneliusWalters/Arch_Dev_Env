@@ -39,25 +39,18 @@ try {
 
     # --- START: CORRECTED PHASE 1 - ENVIRONMENT PREPARATION ---
     $logger.WriteHeader("Preparing pristine environment as root...")
-    # This command now does everything needed to prepare the system for a new user:
-    # 1. Updates package databases silently.
-    # 2. Installs the 'sudo' package.
-    # 3. Creates the /etc/sudoers.d directory.
-    # 4. Creates the user, adds them to 'wheel', and unlocks their account.
-    # 5. Creates the sudoers file to grant passwordless privileges.
+    # This command now includes '--noconfirm' to prevent pacman from hanging.
     $prepCommand = "pacman -Sy --noconfirm sudo && mkdir -p /etc/sudoers.d && useradd -m -G wheel -s /bin/bash $wslUsername && passwd -d $wslUsername && echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel"
     wsl -d $wslDistroName -u root -e bash -c $prepCommand
     $logger.WriteLog("SUCCESS", "Pristine environment prepared and user '$wslUsername' created.", "Green")
     # --- END: CORRECTED PHASE 1 ---
 
     # --- CORRECTED PATH CALCULATION ---
-    # This now correctly identifies the repository root by only going up one level from the 'Setup' directory.
     $repoRootPath = (Get-Item $scriptPath).Parent.FullName
     $logger.WriteHeader("Creating WSL Configuration File for repo at '$repoRootPath'")
     
     $wslRepoPath = "/mnt/" + ($repoRootPath -replace ':', '').Replace('\', '/')
     $wslCommandForConfig = "echo 'REPO_ROOT=`"$wslRepoPath`"' | sudo tee /etc/arch-dev-env.conf"
-    # This command is now run as the NEW user, who now has sudo rights.
     wsl -d $wslDistroName -u $wslUsername -e bash -c $wslCommandForConfig
     $logger.WriteLog("SUCCESS", "WSL configuration file created.", "Green")
 
