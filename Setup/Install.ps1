@@ -10,8 +10,8 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 # --- CONFIGURATION ---
 $githubRepoUrl = "https://github.com/CorneliusWalters/Arch_Dev_Env.git"
 $wslDistroName = "Arch"
-$cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar"
-$configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar"
+$cleanArchTarballDefaultPath = "C_wsl\tmp\arch_clean.tar"
+$configuredArchTarballExportPath = "C_wsl\tmp\arch_configured.tar"
 $ForceOverwrite = $true
 
 # --- INTERACTIVE USERNAME PROMPT ---
@@ -37,13 +37,31 @@ try {
     Test-WSLPrerequisites -Logger $logger -WslDistroName $wslDistroName
     Import-ArchDistro -Logger $logger -WslDistroName $wslDistroName -WslUsername $wslUsername -DefaultTarballPath $cleanArchTarballDefaultPath
 
-    # --- START: CORRECTED PHASE 1 - ENVIRONMENT PREPARATION ---
+    # --- START: ROBUST PHASE 1 - ENVIRONMENT PREPARATION ---
     $logger.WriteHeader("Preparing pristine environment as root...")
-    # This command now includes '--noconfirm' to prevent pacman from hanging.
-    $prepCommand = "pacman -Sy --noconfirm sudo && mkdir -p /etc/sudoers.d && useradd -m -G wheel -s /bin/bash $wslUsername && passwd -d $wslUsername && echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel"
+    
+    # This is a multi-line bash script that is much more robust.
+    # It ensures each step happens correctly.
+    $prepCommand = @"
+set -e
+echo "--> Updating package databases..."
+pacman -Sy --noconfirm
+echo "--> Installing sudo..."
+pacman -S --noconfirm sudo
+echo "--> Creating sudoers directory..."
+mkdir -p /etc/sudoers.d
+echo "--> Creating user '$wslUsername' with home directory..."
+useradd -m -G wheel -s /bin/bash '$wslUsername'
+echo "--> Unlocking user account..."
+passwd -d '$wslUsername'
+echo "--> Granting passwordless sudo..."
+echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel
+echo "--> Preparation complete."
+"@
+    
     wsl -d $wslDistroName -u root -e bash -c $prepCommand
     $logger.WriteLog("SUCCESS", "Pristine environment prepared and user '$wslUsername' created.", "Green")
-    # --- END: CORRECTED PHASE 1 ---
+    # --- END: ROBUST PHASE 1 ---
 
     # --- CORRECTED PATH CALCULATION ---
     $repoRootPath = (Get-Item $scriptPath).Parent.FullName
