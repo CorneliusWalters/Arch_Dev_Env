@@ -8,55 +8,39 @@ function Import-ArchDistro {
         [string]$DefaultTarballPath
     )
 
+    # --- PHASE 1: CREATE PRISTINE IMAGE IF NEEDED ---
     $Logger.WriteHeader("Checking for Pristine Arch Image")
-
-    # If the pristine tarball doesn't exist, we create it.
     if (-not (Test-Path $DefaultTarballPath)) {
-        
-        # Check if a base distro is already installed (from a previous failed run)
-        $baseDistroName = "ArchLinux" # The name from the Microsoft Store
+        $baseDistroName = "ArchLinux"
         if (-not (wsl -l -v | Select-String -Quiet $baseDistroName)) {
-            $Logger.WriteLog("WARNING", "No pristine image or base WSL distro found.", "Yellow")
             $Logger.WriteLog("INFO", "Attempting to install '$baseDistroName' from the Microsoft Store...", "Cyan")
-            $Logger.WriteLog("IMPORTANT", "An Arch Linux window will now open. Please complete the setup (create a user, set a password).", "Yellow")
-            $Logger.WriteLog("IMPORTANT", "This script will wait for you to finish.", "Yellow")
-            
-            try {
-                wsl --install -d $baseDistroName
-            } catch {
-                $Logger.WriteLog("ERROR", "Failed to install Arch Linux via 'wsl --install'.", "Red")
-                throw "Failed to create a base image."
-            }
+            wsl --install -d $baseDistroName
         }
-
-        # --- THE WATCHER LOOP ---
         $Logger.WriteLog("INFO", "Now waiting for you to complete the initial setup in the '$baseDistroName' window...", "Cyan")
         while (wsl -l -v | Select-String -Quiet "$baseDistroName\s+Running") {
             Write-Host -NoNewline "."
             Start-Sleep -Seconds 5
         }
-        Write-Host "" # Newline after the dots.
-
+        Write-Host ""
         $Logger.WriteLog("SUCCESS", "Initial setup complete. Now creating the pristine image...", "Green")
-        
         $tmpDir = Split-Path $DefaultTarballPath -Parent
-        if (-not (Test-Path $tmpDir)) {
-            New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
-        }
-
+        if (-not (Test-Path $tmpDir)) { New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null }
         wsl --export $baseDistroName $DefaultTarballPath
         $Logger.WriteLog("SUCCESS", "Successfully created pristine image at '$DefaultTarballPath'.", "Green")
-        
-        # We are done with the base image, unregister it to keep things clean.
         wsl --unregister $baseDistroName
     }
 
-    # --- The Original Import Logic ---
+    # --- PHASE 2: IMPORT DISTRO FOR AUTOMATED SETUP ---
     $Logger.WriteHeader("Importing '$WslDistroName' for Automated Setup")
-
-    if (wsl -l -v | Select-String -Quiet $WslDistroName) {
-        $Logger.WriteLog("INFO", "Unregistering existing '$WslDistroName' to ensure a clean import.", "Yellow")
+    
+    # Aggressive Cleanup: Forcefully unregister any old distro with the same name.
+    try {
+        $Logger.WriteLog("INFO", "Attempting to unregister any existing '$WslDistroName' distro to ensure a clean slate...", "Yellow")
         wsl --unregister $WslDistroName
+        $Logger.WriteLog("INFO", "Cleanup successful.", "Gray")
+    } catch {
+        # This is expected if the distro doesn't exist. We can ignore this error.
+        $Logger.WriteLog("INFO", "No pre-existing distro to clean up.", "Gray")
     }
 
     $archInstallDir = "C:\WSL\$WslDistroName"
@@ -67,6 +51,13 @@ function Import-ArchDistro {
     $Logger.WriteLog("INFO", "Importing '$WslDistroName' from '$DefaultTarballPath'...", "Cyan")
     wsl --import $WslDistroName $archInstallDir $DefaultTarballPath
     
+    # Definitive Verification: Check if the virtual disk was actually created.
+    $vhdxPath = "$archInstallDir\ext4.vhdx"
+    if (-not (Test-Path $vhdxPath)) {
+        throw "FATAL: 'wsl --import' failed to create the virtual disk at '$vhdxPath'. Cannot continue."
+    }
+    $Logger.WriteLog("SUCCESS", "Virtual disk verified. Import was successful.", "Green")
+
     $Logger.WriteLog("INFO", "Setting default user to '$WslUsername'...", "Cyan")
     wsl -d $WslDistroName -u root -- bash -c "echo '[user]' | tee /etc/wsl.conf > /dev/null && echo 'default=$WslUsername' | tee -a /etc/wsl.conf > /dev/null"
     
