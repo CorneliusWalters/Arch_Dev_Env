@@ -10,6 +10,12 @@ $configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar" # Default fo
 $ForceOverwrite = $true                                             # Overwrite current settings / Set to false to keep config files
 # -------------------------------------------
 
+$wslUsername = Read-Host -Prompt "Please enter your desired username for Arch Linux (e.g., 'corne')"
+if ([string]::IsNullOrWhiteSpace($wslUsername)) {
+    Write-Host "ERROR: Username cannot be empty." -ForegroundColor Red
+    exit 1
+}
+
 # Import the module files (adjust paths if needed)
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$scriptPath\PowerShell\Logging.ps1"
