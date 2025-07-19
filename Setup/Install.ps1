@@ -38,10 +38,16 @@ try {
     Test-WSLPrerequisites -Logger $logger -WslDistroName $wslDistroName
     Import-ArchDistro -Logger $logger -WslDistroName $wslDistroName -WslUsername $wslUsername -DefaultTarballPath $cleanArchTarballDefaultPath
 
-    $logger.WriteHeader("Creating user '$wslUsername' inside WSL")
-    $createUserCommand = "useradd -m -G wheel -s /bin/bash $wslUsername && echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel"
+    # --- START: CORRECTED PHASE 1 - USER CREATION AND UNLOCKING ---
+    $logger.WriteHeader("Creating and unlocking user '$wslUsername' inside WSL")
+    # This command now does three things:
+    # 1. useradd: Creates the user account.
+    # 2. passwd -d: Deletes the user's password, unlocking the account for passwordless login.
+    # 3. echo: Configures passwordless sudo for the 'wheel' group.
+    $createUserCommand = "useradd -m -G wheel -s /bin/bash $wslUsername && passwd -d $wslUsername && echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel"
     wsl -d $wslDistroName -u root -e bash -c $createUserCommand
-    $logger.WriteLog("SUCCESS", "User '$wslUsername' created and granted sudo privileges.", "Green")
+    $logger.WriteLog("SUCCESS", "User '$wslUsername' created, unlocked, and granted sudo privileges.", "Green")
+    # --- END: CORRECTED PHASE 1 ---
 
     $logger.WriteHeader("Cloning Setup Scripts")
     if (Test-Path $localClonePath) { Remove-Item -Recurse -Force $localClonePath }
@@ -54,22 +60,16 @@ try {
     wsl -d $wslDistroName -u $wslUsername -e bash -c $wslCommandForConfig
     $logger.WriteLog("SUCCESS", "WSL configuration file created.", "Green")
 
-    # --- PHASE 2 - MAIN SETUP (with live output) ---
+    # --- PHASE 2 - MAIN SETUP (as the new user) ---
     $logger.WriteHeader("Executing Main Setup Script inside WSL as '$wslUsername'")
     $env:WSLENV = "FORCE_OVERWRITE/u"
     $env:FORCE_OVERWRITE = if ($ForceOverwrite) { "true" } else { "false" }
     $wslScriptPath = $wslRepoPath + "/Setup/1_sys_init.sh"
     $wslCommandForSetup = "chmod +x $wslScriptPath && $wslScriptPath"
-    
-    $logger.WriteLog("INFO", "Starting setup inside WSL. You will now see the live output from the script.", "Cyan")
-    
-    # This new block runs the command and streams its output to this window.
     $process = Start-Process wsl -ArgumentList "-d $wslDistroName -u $wslUsername -e bash -c $wslCommandForSetup" -Wait -PassThru -NoNewWindow
-    
     if ($process.ExitCode -ne 0) {
         throw "The setup script inside WSL failed with exit code $($process.ExitCode)."
     }
-
     $logger.WriteLog("SUCCESS", "WSL setup script completed successfully.", "Green")
 
     Export-WSLImage -Logger $logger -WslDistroName $wslDistroName -ExportPath $configuredArchTarballExportPath
