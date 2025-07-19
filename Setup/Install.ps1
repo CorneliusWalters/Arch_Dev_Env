@@ -8,8 +8,8 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 }
 
 # --- CONFIGURATION ---
+# These variables are now used by the WSL-side scripts, but not for cloning here.
 $githubRepoUrl = "https://github.com/CorneliusWalters/Arch_Dev_Env.git"
-$localClonePath = "C:\wsl\wsl-dev-setup"
 $wslDistroName = "Arch"
 $cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar"
 $configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar"
@@ -38,27 +38,22 @@ try {
     Test-WSLPrerequisites -Logger $logger -WslDistroName $wslDistroName
     Import-ArchDistro -Logger $logger -WslDistroName $wslDistroName -WslUsername $wslUsername -DefaultTarballPath $cleanArchTarballDefaultPath
 
-    # --- START: CORRECTED PHASE 1 - USER CREATION AND UNLOCKING ---
-    $logger.WriteHeader("Creating and unlocking user '$wslUsername' inside WSL")
-    # This command now does three things:
-    # 1. useradd: Creates the user account.
-    # 2. passwd -d: Deletes the user's password, unlocking the account for passwordless login.
-    # 3. echo: Configures passwordless sudo for the 'wheel' group.
+    $logger.WriteHeader("Creating user '$wslUsername' inside WSL")
     $createUserCommand = "useradd -m -G wheel -s /bin/bash $wslUsername && passwd -d $wslUsername && echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel"
     wsl -d $wslDistroName -u root -e bash -c $createUserCommand
     $logger.WriteLog("SUCCESS", "User '$wslUsername' created, unlocked, and granted sudo privileges.", "Green")
-    # --- END: CORRECTED PHASE 1 ---
 
-    $logger.WriteHeader("Cloning Setup Scripts")
-    if (Test-Path $localClonePath) { Remove-Item -Recurse -Force $localClonePath }
-    git clone $githubRepoUrl $localClonePath
-    $logger.WriteLog("SUCCESS", "Repository cloned successfully.", "Green")
-
-    $logger.WriteHeader("Creating WSL Configuration File")
-    $wslRepoPath = "/mnt/" + ($localClonePath -replace ':', '').Replace('\', '/')
+    # --- START: NEW SIMPLIFIED LOGIC ---
+    # The script intelligently finds the root of the repository it is running from.
+    $repoRootPath = (Get-Item $scriptPath).Parent.Parent.FullName
+    $logger.WriteHeader("Creating WSL Configuration File for repo at '$repoRootPath'")
+    
+    # Convert this dynamic path for WSL.
+    $wslRepoPath = "/mnt/" + ($repoRootPath -replace ':', '').Replace('\', '/')
     $wslCommandForConfig = "echo 'REPO_ROOT=`"$wslRepoPath`"' | sudo tee /etc/arch-dev-env.conf"
     wsl -d $wslDistroName -u $wslUsername -e bash -c $wslCommandForConfig
     $logger.WriteLog("SUCCESS", "WSL configuration file created.", "Green")
+    # --- END: NEW SIMPLIFIED LOGIC ---
 
     # --- PHASE 2 - MAIN SETUP (as the new user) ---
     $logger.WriteHeader("Executing Main Setup Script inside WSL as '$wslUsername'")
