@@ -42,13 +42,25 @@ try {
     }
     $logger.WriteLog("SUCCESS", "Pristine environment prepared and user '$wslUsername' created.", "Green")
 
-    # --- START: NEW CRITICAL RESTART BLOCK ---
+    # --- START: NEW ROBUST RESTART BLOCK WITH CHECK LOOP ---
     $logger.WriteHeader("Applying critical WSL settings...")
     $logger.WriteLog("INFO", "Shutting down '$wslDistroName' to apply new mount options from wsl.conf...", "Yellow")
     wsl --terminate $wslDistroName
-    Start-Sleep -Seconds 3 # Give WSL time to fully shut down.
-    $logger.WriteLog("SUCCESS", "WSL settings applied.", "Green")
-    # --- END: NEW CRITICAL RESTART BLOCK ---
+
+    $timeoutSeconds = 30
+    $elapsedSeconds = 0
+    Write-Host "Verifying shutdown" -NoNewline
+    while (wsl -l -v | Select-String $wslDistroName | Select-String -Quiet "Running") {
+        if ($elapsedSeconds -ge $timeoutSeconds) {
+            throw "Timed out waiting for '$wslDistroName' to shut down."
+        }
+        Write-Host -NoNewline "."
+        Start-Sleep -Seconds 2
+        $elapsedSeconds += 2
+    }
+    Write-Host "" # Adds a newline after the dots.
+    $logger.WriteLog("SUCCESS", "WSL instance terminated successfully. Settings applied.", "Green")
+    # --- END: NEW ROBUST RESTART BLOCK ---
 
     # --- PHASE 2: CREATE CONFIG FILE (as the new user) ---
     $logger.WriteHeader("Creating WSL Configuration File")
