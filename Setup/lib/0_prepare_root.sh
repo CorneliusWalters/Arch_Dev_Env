@@ -18,10 +18,19 @@ pacman-key --init
 pacman-key --populate archlinux
 
 echo "--> Updating package databases..."
-pacman -Sy --noconfirm
+pacman -Sy 
 
 echo "--> Installing essential packages: sudo..."
 pacman -S --noconfirm sudo
+
+echo "--> Configuring WSL mount options for executable permissions..."
+
+cat > /etc/wsl.conf << EOL
+[automount]
+enabled = true
+options = "metadata,umask=22,fmask=11"
+mountFsTab = false
+EOL
 
 echo "--> Creating sudoers directory..."
 mkdir -p /etc/sudoers.d
