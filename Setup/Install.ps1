@@ -35,7 +35,7 @@ try {
     $logger.WriteHeader("Preparing pristine environment as root...")
     $repoRootPath = (Get-Item $scriptPath).Parent.FullName
     $wslRepoPath = "/mnt/" + ($repoRootPath -replace ':', '').Replace('\', '/')
-    $prepScriptPath = "$wslRepoPath/Setup/0_prepare_root.sh"
+    $prepScriptPath = "$wslRepoPath/Setup/lib/0_prepare_root.sh"
     
     # This command runs the new preparation script as root, passing the username as an argument.
     $prepProcess = Start-Process wsl -ArgumentList "-d $wslDistroName -u root -e bash $prepScriptPath $wslUsername" -Wait -PassThru -NoNewWindow
