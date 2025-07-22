@@ -43,7 +43,7 @@ function Import-ArchDistro {
         $Logger.WriteLog("INFO", "No pre-existing distro to clean up.", "Gray")
     }
 
-    $archInstallDir = "C:\WSL\$WslDistroName"
+    $archInstallDir = "c:\WSL\$WslDistroName"
     if (-not (Test-Path $archInstallDir)) {
         New-Item -ItemType Directory -Path $archInstallDir -Force | Out-Null
     }

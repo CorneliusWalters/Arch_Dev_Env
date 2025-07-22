@@ -6,7 +6,7 @@ class WslLogger {
     [string]$LogDir
 
     # --- Constructor ---
-    WslLogger([string]$BasePath = "C:\wsl") {
+    WslLogger([string]$BasePath = "c:\wsl") {
         $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
         $this.LogDir = "$BasePath\tmp\logs\$timestamp"
         $this.LogFile = "$($this.LogDir)\powershell_install.log"
