@@ -4,8 +4,8 @@ $ErrorActionPreference = "Stop"
 
 # --- CONFIGURATION ---
 $wslDistroName = "Arch"
-$cleanArchTarballDefaultPath = "c:\wsl\tmp\arch_clean.tar"
-$configuredArchTarballExportPath = "c:\wsl\tmp\arch_configured.tar"
+$cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar"
+$configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar"
 $ForceOverwrite = $true
 
 # --- INTERACTIVE USERNAME PROMPT ---
@@ -20,7 +20,7 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$scriptPath\PowerShell\Test.ps1"
 . "$scriptPath\PowerShell\Import-Distro.ps1"
 . "$scriptPath\PowerShell\Export-Image.ps1"
-$logger = [WslLogger]::new("c:\wsl")
+$logger = [WslLogger]::new("C:\wsl")
 
 try {
     # Write the log header
@@ -36,13 +36,19 @@ try {
     $repoRootPath = (Get-Item $scriptPath).Parent.FullName
     $wslRepoPath = ("/mnt/" + ($repoRootPath -replace ':', '').Replace('\', '/')).ToLower()
     $prepScriptPath = "$wslRepoPath/setup/lib/0_prepare_root.sh"
-    
-    # This command runs the new preparation script as root, passing the username as an argument.
     $prepProcess = Start-Process wsl -ArgumentList "-d $wslDistroName -u root -e bash $prepScriptPath $wslUsername" -Wait -PassThru -NoNewWindow
     if ($prepProcess.ExitCode -ne 0) {
         throw "The root preparation script failed with exit code $($prepProcess.ExitCode)."
     }
     $logger.WriteLog("SUCCESS", "Pristine environment prepared and user '$wslUsername' created.", "Green")
+
+    # --- START: NEW CRITICAL RESTART BLOCK ---
+    $logger.WriteHeader("Applying critical WSL settings...")
+    $logger.WriteLog("INFO", "Shutting down '$wslDistroName' to apply new mount options from wsl.conf...", "Yellow")
+    wsl --terminate $wslDistroName
+    Start-Sleep -Seconds 3 # Give WSL time to fully shut down.
+    $logger.WriteLog("SUCCESS", "WSL settings applied.", "Green")
+    # --- END: NEW CRITICAL RESTART BLOCK ---
 
     # --- PHASE 2: CREATE CONFIG FILE (as the new user) ---
     $logger.WriteHeader("Creating WSL Configuration File")
