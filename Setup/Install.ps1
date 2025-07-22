@@ -42,25 +42,35 @@ try {
     }
     $logger.WriteLog("SUCCESS", "Pristine environment prepared and user '$wslUsername' created.", "Green")
 
-    # --- START: NEW ROBUST RESTART BLOCK WITH CHECK LOOP ---
+    # --- START: NEW COMMUNICATIVE RESTART BLOCK ---
     $logger.WriteHeader("Applying critical WSL settings...")
     $logger.WriteLog("INFO", "Shutting down '$wslDistroName' to apply new mount options from wsl.conf...", "Yellow")
     wsl --terminate $wslDistroName
 
     $timeoutSeconds = 30
     $elapsedSeconds = 0
+    $logger.WriteLog("INFO", "Verifying that the WSL instance has stopped. This may take a few moments.", "Cyan")
     Write-Host "Verifying shutdown" -NoNewline
-    while (wsl -l -v | Select-String $wslDistroName | Select-String -Quiet "Running") {
+    
+    while ($true) {
+        $distroStatus = wsl -l -v | Where-Object { $_ -match $wslDistroName }
+        if (-not ($distroStatus -match "Running")) {
+            # The distro is stopped, break the loop.
+            break
+        }
+
         if ($elapsedSeconds -ge $timeoutSeconds) {
             throw "Timed out waiting for '$wslDistroName' to shut down."
         }
+        
         Write-Host -NoNewline "."
         Start-Sleep -Seconds 2
         $elapsedSeconds += 2
     }
+    
     Write-Host "" # Adds a newline after the dots.
-    $logger.WriteLog("SUCCESS", "WSL instance terminated successfully. Settings applied.", "Green")
-    # --- END: NEW ROBUST RESTART BLOCK ---
+    $logger.WriteLog("SUCCESS", "WSL instance terminated successfully. Settings applied. Continuing installation...", "Green")
+    # --- END: NEW COMMUNICATIVE RESTART BLOCK ---
 
     # --- PHASE 2: CREATE CONFIG FILE (as the new user) ---
     $logger.WriteHeader("Creating WSL Configuration File")
