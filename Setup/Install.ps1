@@ -4,8 +4,8 @@ $ErrorActionPreference = "Stop"
 
 # --- CONFIGURATION ---
 $wslDistroName = "Arch"
-$cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar"
-$configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar"
+$cleanArchTarballDefaultPath = "c:\wsl\tmp\arch_clean.tar"
+$configuredArchTarballExportPath = "c:\wsl\tmp\arch_configured.tar"
 $ForceOverwrite = $true
 
 # --- INTERACTIVE USERNAME PROMPT ---
@@ -20,7 +20,7 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$scriptPath\PowerShell\Test.ps1"
 . "$scriptPath\PowerShell\Import-Distro.ps1"
 . "$scriptPath\PowerShell\Export-Image.ps1"
-$logger = [WslLogger]::new("C:\wsl")
+$logger = [WslLogger]::new("c:\wsl")
 
 try {
     # Write the log header
