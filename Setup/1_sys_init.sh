@@ -43,11 +43,11 @@ export CONFIG_BASE_PATH="$WSL_BASE_PATH/config"
 export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 # Source Directory setup
-source "$SCRIPT_DIR/lib/set_dirs.sh"
+source "$SCRIPT_DIR/lib/2_set_dirs.sh"
 
 # Source all library functions
-source "$SCRIPT_DIR/lib/logging.sh" || exit 1
-source "$SCRIPT_DIR/lib/install.sh" || exit 1
+source "$SCRIPT_DIR/lib/3_logging.sh" || exit 1
+source "$SCRIPT_DIR/lib/4_install.sh" || exit 1
 
 # Export Repo 
 export REPO_ROOT="$(dirname "$SCRIPT_DIR")" # Define and export REPO_ROOT
