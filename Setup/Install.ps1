@@ -35,7 +35,7 @@ try {
     $logger.WriteHeader("Preparing pristine environment as root...")
     $repoRootPath = (Get-Item $scriptPath).Parent.FullName
     $wslRepoPath = "/mnt/" + ($repoRootPath -replace ':', '').Replace('\', '/')
-    $prepScriptPath = "$wslRepoPath/Setup/lib/0_prepare_root.sh"
+    $prepScriptPath = "$wslRepoPath/setup/lib/0_prepare_root.sh"
     
     # This command runs the new preparation script as root, passing the username as an argument.
     $prepProcess = Start-Process wsl -ArgumentList "-d $wslDistroName -u root -e bash $prepScriptPath $wslUsername" -Wait -PassThru -NoNewWindow
@@ -54,7 +54,7 @@ try {
     $logger.WriteHeader("Executing Main Setup Script inside WSL as '$wslUsername'")
     $env:WSLENV = "FORCE_OVERWRITE/u"
     $env:FORCE_OVERWRITE = if ($ForceOverwrite) { "true" } else { "false" }
-    $wslScriptPath = $wslRepoPath + "/Setup/1_sys_init.sh"
+    $wslScriptPath = $wslRepoPath + "/setup/1_sys_init.sh"
     $wslCommandForSetup = "chmod +x $wslScriptPath && $wslScriptPath"
     $setupProcess = Start-Process wsl -ArgumentList "-d $wslDistroName -u $wslUsername -e bash -c $wslCommandForSetup" -Wait -PassThru -NoNewWindow
     if ($setupProcess.ExitCode -ne 0) {
