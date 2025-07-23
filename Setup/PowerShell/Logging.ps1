@@ -7,8 +7,6 @@ class WSLProcessCapture {
     [string]$Username
     [string]$OutputLogFile
     [System.Diagnostics.Process]$Process
-    [System.Collections.ArrayList]$OutputLines
-    [System.Collections.ArrayList]$ErrorLines
     
     # --- Constructor ---
     WSLProcessCapture([PSCustomObject]$Logger, [string]$DistroName, [string]$Username) {
@@ -16,90 +14,76 @@ class WSLProcessCapture {
         $this.DistroName = $DistroName
         $this.Username = $Username
         $this.OutputLogFile = "$($Logger.LogDir)\wsl_output.log"
-        $this.OutputLines = New-Object System.Collections.ArrayList
-        $this.ErrorLines = New-Object System.Collections.ArrayList
     }
     
     # --- Methods ---
     [bool] ExecuteCommand([string]$Command, [string]$Description) {
         $this.Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
         
-        # Clear previous output
-        $this.OutputLines.Clear()
-        $this.ErrorLines.Clear()
-        
         try {
-            # Add verbose error capturing
+            # Use a simpler synchronous approach
             $enhancedCommand = "set -euo pipefail; $Command; echo 'WSL_COMMAND_SUCCESS'"
-        
-            $psi = New-Object System.Diagnostics.ProcessStartInfo
-            $psi.FileName = "wsl"
-            $psi.Arguments = "-d $($this.DistroName) -u $($this.Username) -e bash -c `"$enhancedCommand`""
-            $psi.RedirectStandardOutput = $true
-            $psi.RedirectStandardError = $true
-            $psi.UseShellExecute = $false
-            $psi.CreateNoWindow = $true
             
-            $this.Process = New-Object System.Diagnostics.Process
-            $this.Process.StartInfo = $psi
+            # Execute and capture output directly
+            $wslArgs = @("-d", $this.DistroName, "-u", $this.Username, "-e", "bash", "-c", $enhancedCommand)
+            $wslProcess = Start-Process -FilePath "wsl" -ArgumentList $wslArgs -RedirectStandardOutput $this.OutputLogFile -RedirectStandardError "$($this.OutputLogFile).err" -Wait -PassThru -NoNewWindow
             
-            # Create output handlers with proper variable capture
-            $outputHandler = {
-                $line = $Event.SourceEventArgs.Data
-                if ($line) {
-                    $this.OutputLines.Add($line) | Out-Null
-                    Add-Content -Path $this.OutputLogFile -Value "STDOUT: $line"
-                    $this.DisplayLine($line)
-                }
-            }.GetNewClosure()
+            # Read the output files
+            Start-Sleep -Milliseconds 100  # Ensure files are written
             
-            $errorHandler = {
-                $line = $Event.SourceEventArgs.Data
-                if ($line) {
-                    $this.ErrorLines.Add($line) | Out-Null
-                    Add-Content -Path $this.OutputLogFile -Value "STDERR: $line"
-                    $this.DisplayLine($line)
-                }
-            }.GetNewClosure()
-
-            # Register separate handlers for stdout and stderr
-            Register-ObjectEvent -InputObject $this.Process -EventName OutputDataReceived -Action $outputHandler | Out-Null
-            Register-ObjectEvent -InputObject $this.Process -EventName ErrorDataReceived -Action $errorHandler | Out-Null
+            $stdout = @()
+            $stderr = @()
             
-            # Start process
-            $this.Process.Start() | Out-Null
-            $this.Process.BeginOutputReadLine()
-            $this.Process.BeginErrorReadLine()
-            $this.Process.WaitForExit()
+            if (Test-Path $this.OutputLogFile) {
+                $stdout = Get-Content $this.OutputLogFile -ErrorAction SilentlyContinue
+            }
             
-            $exitCode = $this.Process.ExitCode
+            if (Test-Path "$($this.OutputLogFile).err") {
+                $stderr = Get-Content "$($this.OutputLogFile).err" -ErrorAction SilentlyContinue
+            }
             
-            # Give event handlers time to process remaining output
-            Start-Sleep -Milliseconds 100
+            # Display output in real-time style
+            foreach ($line in $stdout) {
+                $this.DisplayLine($line)
+            }
+            foreach ($line in $stderr) {
+                $this.DisplayLine($line)
+            }
             
-            if ($exitCode -eq 0 -and ($this.OutputLines -contains "WSL_COMMAND_SUCCESS")) {
+            $exitCode = $wslProcess.ExitCode
+            
+            # Debug output
+            $this.Logger.WriteLog("DEBUG", "Exit code: $exitCode", "Gray")
+            $this.Logger.WriteLog("DEBUG", "Output lines count: $($stdout.Count)", "Gray")
+            $this.Logger.WriteLog("DEBUG", "Error lines count: $($stderr.Count)", "Gray")
+            
+            if ($exitCode -eq 0 -and ($stdout -contains "WSL_COMMAND_SUCCESS")) {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
                 return $true
             } else {
                 $errorMsg = "$Description - Exit code: $exitCode"
                 
                 # Add recent error lines to the message
-                if ($this.ErrorLines.Count -gt 0) {
-                    $recentErrors = $this.ErrorLines | Select-Object -Last 3
+                if ($stderr.Count -gt 0) {
+                    $recentErrors = $stderr | Select-Object -Last 3
                     $errorMsg += " - Recent errors: $($recentErrors -join '; ')"
                 }
                 
                 # Also add last few output lines for context
-                if ($this.OutputLines.Count -gt 0) {
-                    $recentOutput = $this.OutputLines | Select-Object -Last 2
+                if ($stdout.Count -gt 0) {
+                    $recentOutput = $stdout | Select-Object -Last 2
                     $errorMsg += " - Last output: $($recentOutput -join '; ')"
                 }
                 
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", $errorMsg)
                 
                 # Log full output for debugging
-                $this.Logger.WriteLog("DEBUG", "Full stdout: $($this.OutputLines -join '`n')", "Gray")
-                $this.Logger.WriteLog("DEBUG", "Full stderr: $($this.ErrorLines -join '`n')", "Gray")
+                if ($stdout.Count -gt 0) {
+                    $this.Logger.WriteLog("DEBUG", "Full stdout: $($stdout -join '`n')", "Gray")
+                }
+                if ($stderr.Count -gt 0) {
+                    $this.Logger.WriteLog("DEBUG", "Full stderr: $($stderr -join '`n')", "Gray")
+                }
                 
                 return $false
             }
@@ -107,7 +91,10 @@ class WSLProcessCapture {
             $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
             return $false
         } finally {
-            $this.Cleanup()
+            # Clean up temp files
+            if (Test-Path "$($this.OutputLogFile).err") {
+                Remove-Item "$($this.OutputLogFile).err" -ErrorAction SilentlyContinue
+            }
         }
     }
     
@@ -126,19 +113,7 @@ class WSLProcessCapture {
     }
     
     [void] Cleanup() {
-        if ($this.Process) {
-            try {
-                if (-not $this.Process.HasExited) {
-                    $this.Process.Kill()
-                }
-                $this.Process.Close()
-            } catch {
-                # Ignore cleanup errors
-            }
-        }
-        
-        # Unregister event handlers
-        Get-EventSubscriber | Where-Object SourceObject -eq $this.Process | Unregister-Event
+        # Nothing to clean up in this simpler approach
     }
 }
 class WslLogger {
