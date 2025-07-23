@@ -4,12 +4,14 @@ class WslLogger {
     # --- Properties ---
     [string]$LogFile
     [string]$LogDir
+    [string]$WslLogDir
 
     # --- Constructor ---
     WslLogger([string]$BasePath = "c:\wsl") {
         $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
         $this.LogDir = "$BasePath\tmp\logs\$timestamp"
         $this.LogFile = "$($this.LogDir)\powershell_install.log"
+        $this.WslLogDir = $this.LogDir -replace '^C:', '/mnt/c' -replace '\\', '/'
 
         $directoriesToCreate = @("$BasePath", "$BasePath\tmp", "$BasePath\tmp\logs", $this.LogDir)
         foreach ($dir in $directoriesToCreate) {
