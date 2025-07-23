@@ -1,18 +1,118 @@
 # Setup/PowerShell/Logging.ps1
 
+class WSLProcessCapture {
+    # --- Properties ---
+    [PSCustomObject]$Logger
+    [string]$DistroName
+    [string]$Username
+    [string]$OutputLogFile
+    [System.Diagnostics.Process]$Process
+    
+    # --- Constructor ---
+    WSLProcessCapture([PSCustomObject]$Logger, [string]$DistroName, [string]$Username) {
+        $this.Logger = $Logger
+        $this.DistroName = $DistroName
+        $this.Username = $Username
+        $this.OutputLogFile = "$($Logger.LogDir)\wsl_output.log"
+    }
+    
+    # --- Methods ---
+    [bool] ExecuteCommand([string]$Command, [string]$Description) {
+        $this.Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
+        
+        try {
+            # Setup process
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = "wsl"
+            $psi.Arguments = "-d $($this.DistroName) -u $($this.Username) -e bash -c `"$Command`""
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $psi.UseShellExecute = $false
+            $psi.CreateNoWindow = $true
+            
+            $this.Process = New-Object System.Diagnostics.Process
+            $this.Process.StartInfo = $psi
+            
+            # Create output handler
+            $outputHandler = {
+                $line = $Event.SourceEventArgs.Data
+                if ($line) {
+                    # Write to log file
+                    Add-Content -Path $this.OutputLogFile -Value $line
+                    
+                    # Display with colors
+                    $this.DisplayLine($line)
+                }
+            }.GetNewClosure()
+            
+            # Register event handlers
+            Register-ObjectEvent -InputObject $this.Process -EventName OutputDataReceived -Action $outputHandler | Out-Null
+            Register-ObjectEvent -InputObject $this.Process -EventName ErrorDataReceived -Action $outputHandler | Out-Null
+            
+            # Start process
+            $this.Process.Start() | Out-Null
+            $this.Process.BeginOutputReadLine()
+            $this.Process.BeginErrorReadLine()
+            $this.Process.WaitForExit()
+            
+            $exitCode = $this.Process.ExitCode
+            
+            if ($exitCode -eq 0) {
+                $this.Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
+                return $true
+            } else {
+                $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exit code: $exitCode")
+                return $false
+            }
+            
+        } catch {
+            $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
+            return $false
+        } finally {
+            $this.Cleanup()
+        }
+    }
+    
+    [void] DisplayLine([string]$Line) {
+        if ($Line -match '\[ERROR\]') {
+            Write-Host "WSL: $Line" -ForegroundColor Red
+        } elseif ($Line -match '\[SUCCESS\]') {
+            Write-Host "WSL: $Line" -ForegroundColor Green
+        } elseif ($Line -match '\[STATUS\]') {
+            Write-Host "WSL: $Line" -ForegroundColor Cyan
+        } elseif ($Line -match '\[WARNING\]') {
+            Write-Host "WSL: $Line" -ForegroundColor Yellow
+        } else {
+            Write-Host "WSL: $Line" -ForegroundColor White
+        }
+    }
+    
+    [void] Cleanup() {
+        if ($this.Process) {
+            try {
+                if (-not $this.Process.HasExited) {
+                    $this.Process.Kill()
+                }
+                $this.Process.Close()
+            } catch {
+                # Ignore cleanup errors
+            }
+        }
+        
+        # Unregister event handlers
+        Get-EventSubscriber | Where-Object SourceObject -eq $this.Process | Unregister-Event
+    }
+}
 class WslLogger {
     # --- Properties ---
     [string]$LogFile
     [string]$LogDir
-    [string]$WslLogDir
 
     # --- Constructor ---
     WslLogger([string]$BasePath = "c:\wsl") {
         $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
         $this.LogDir = "$BasePath\tmp\logs\$timestamp"
         $this.LogFile = "$($this.LogDir)\powershell_install.log"
-        $this.WslLogDir = $this.LogDir -replace '^C:', '/mnt/c' -replace '\\', '/'
-
         $directoriesToCreate = @("$BasePath", "$BasePath\tmp", "$BasePath\tmp\logs", $this.LogDir)
         foreach ($dir in $directoriesToCreate) {
             if (-not (Test-Path $dir)) {

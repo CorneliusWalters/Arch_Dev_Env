@@ -9,7 +9,7 @@ $configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar"
 $ForceOverwrite = $true
 
 # --- INTERACTIVE USERNAME PROMPT ---
-$wslUsername = Read-Host -Prompt "Please enter your desired username for Arch Linux (e.g., 'corne')"
+$wslUsername = Read-Host -Prompt "Please enter your desired username for Arch Linux (e.g., 'UNAME')"
 if ([string]::IsNullOrWhiteSpace($wslUsername)) {
     Write-Host "ERROR: Username cannot be empty." -ForegroundColor Red; exit 1
 }
@@ -79,10 +79,11 @@ $logger = [WslLogger]::new("C:\wsl")
 	    
 	    # Phase 6: Main Setup 
 	    $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script")
-	    $setupCommand = "export FORCE_OVERWRITE='true' && export EXISTING_LOG_DIR='$($logger.WslLogDir)' && cd '$wslRepoPath' &&  bash Setup/1_sys_init.sh"
-	    if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $setupCommand -Description "Main setup script" -Logger $logger)) {
-	        throw "Main setup script failed"
-	    }
+			$wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
+	    $setupCommand = "export FORCE_OVERWRITE='true' && cd '$wslRepoPath' &&  bash Setup/1_sys_init.sh"
+	    if (-not $wslCapture.ExecuteCommand($setupCommand, "Main setup script")) {
+    		throw "Main setup script failed"
+			}
 	    $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed")
 	    
 	    # Phase 7: Export (optional)

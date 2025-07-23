@@ -5,9 +5,9 @@
 
 
 # Setup logging with detailed timestamps and categories
-LOG_DIR="$LOGS_BASE_PATH"
+LOG_DIR="$HOME/.local/logs/$TIMESTAMP"
+mkdir -p "$LOG_DIR"
 LOGFILE="$LOG_DIR/sys_init.log"
-
 
 # Colors for output
 RED='\033[0;31m'
@@ -41,14 +41,19 @@ log_message() {
     local message=$3
     local func="${FUNCNAME[2]:-main}"  # Get the calling function, default to 'main'
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    echo "[$timestamp] [$level] [$category] [$func] $message" >> "$LOGFILE"
+    local log_entry="[$timestamp] [$level] [$category] [$func] $message"
+    
+    # Write to WSL log file
+    echo "$log_entry" >> "$LOGFILE"
+    echo "$log_entry"
+
 }
 
 print_status() {
     local category=$1
     local message=$2
     local func="${FUNCNAME[1]:-main}"
-    echo -e "${BLUE}[STATUS]${NC} [$category] [$func] $message"
+    echo -e "${BLUE}[STATUS]${NC} [$category] [$func] $message" >&2
     log_message "STATUS" "$category" "$message"
 }
 
@@ -56,7 +61,7 @@ print_success() {
     local category=$1
     local message=$2
     local func="${FUNCNAME[1]:-main}"
-    echo -e "${GREEN}[SUCCESS]${NC} [$category] [$func] $message"
+    echo -e "${GREEN}[SUCCESS]${NC} [$category] [$func] $message" >&2
     log_message "SUCCESS" "$category" "$message"
 }
 
@@ -64,7 +69,7 @@ print_warning() {
     local category=$1
     local message=$2
     local func="${FUNCNAME[1]:-main}"
-    echo -e "${YELLOW}[WARNING]${NC} [$category] [$func] $message"
+    echo -e "${YELLOW}[WARNING]${NC} [$category] [$func] $message" >&2
     log_message "WARNING" "$category" "$message"
 }
 
@@ -72,7 +77,7 @@ print_error() {
     local category=$1
     local message=$2
     local func="${FUNCNAME[1]:-main}"
-    echo -e "${RED}[ERROR]${NC} [$category] [$func] $message"
+    echo -e "${RED}[ERROR]${NC} [$category] [$func] $message" >&2
     log_message "ERROR" "$category" "$message"
 }
 
