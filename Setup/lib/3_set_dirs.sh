@@ -25,10 +25,6 @@ mkdir -p "$HOME/.config/dotfiles-pristine/zsh"
 mkdir -p "$HOME/.config/nvim/lua/config"
 mkdir -p "$HOME/.config/dotfiles-pristine/nvim"
 
-# Create Windows-accessible log/config directories
-mkdir -p "$LOGS_BASE_PATH"
-mkdir -p "$CONFIG_BASE_PATH"
-
 print_status "PERMS" "Setting directory permissions..."
 
 # Make all library scripts executable

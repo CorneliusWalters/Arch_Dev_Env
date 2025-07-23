@@ -17,7 +17,8 @@ YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
 init_logging() {
-    local header_info=$(cat << 'EOF'
+    # Create the header directly with command substitution
+    cat >> "$LOGFILE" << EOF
 === Installation Log Started at $(date) ===
 === System Information ===
 User: $(whoami)
@@ -34,22 +35,15 @@ Working Directory: $(pwd)
 Script Directory: $SCRIPT_DIR
 ==========================
 EOF
-)
 
-    # Evaluate the variables in the header
-    local evaluated_header=$(eval "echo \"$header_info\"")
-    
-    # Write to WSL log file
-    echo "$evaluated_header" >> "$LOGFILE"
-    
-    # Send to stdout line by line to avoid buffering issues
-    echo "$evaluated_header" | while IFS= read -r line; do
-        echo "$line"
-        sleep 0.1  # Small delay to ensure PowerShell captures each line
-    done
-    
-    # Force flush
-    exec 1>&1  # Force stdout flush
+    # Also output to stdout for PowerShell capture
+    echo "=== Installation Log Started at $(date) ==="
+    echo "=== System Information ==="
+    echo "User: $(whoami)"
+    echo "Hostname: $(hostname)"
+    echo "Working Directory: $(pwd)"
+    echo "Script Directory: $SCRIPT_DIR"
+    echo "=========================="
 }
 
 log_message() {
