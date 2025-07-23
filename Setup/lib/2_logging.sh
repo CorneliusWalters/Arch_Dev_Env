@@ -1,12 +1,8 @@
 #!/bin/bash
-###     file name: logging.sh
-###     dir: /mnt/c/wsl/scripts/lib/config/
-
-
 #######--- START OF FILE ---#######
 # Create logs directory
 # logging.sh
-#!/bin/bash
+
 
 # Setup logging with detailed timestamps and categories
 LOG_DIR="$LOGS_BASE_PATH/$TIMESTAMP"
