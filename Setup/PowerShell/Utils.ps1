@@ -14,7 +14,10 @@ function Invoke-WSLCommand {
         # Use cmd /c to get proper exit codes
         $result = cmd /c "wsl -d $DistroName -u $Username -e bash -c `"$Command`" 2>&1 && echo WSL_SUCCESS || echo WSL_FAILED"
         
-        if ($result -contains "WSL_SUCCESS") {
+        # Convert to string and check for success marker
+        $resultString = $result -join "`n"
+        
+        if ($resultString -match "WSL_SUCCESS") {
             $Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
             return $true
         } else {
@@ -58,13 +61,13 @@ function Wait-WSLShutdown {
     return $false
 }
 
-function Test-WSLDistroExists {
-    param([string]$DistroName)
-    
-    try {
-        $distros = wsl -l -v
-        return ($null -ne ($distros | Where-Object { $_ -match $DistroName })) 
-    } catch {
-        return $false
-    }
-}
+#function Test-WSLDistroExists {
+#    param([string]$DistroName)
+#    
+#    try {
+#        $distros = wsl -l -v
+#        return ($null -ne ($distros | Where-Object { $_ -match $DistroName })) 
+#    } catch {
+#        return $false
+#    }
+#}
