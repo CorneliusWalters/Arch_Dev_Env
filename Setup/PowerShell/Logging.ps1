@@ -22,7 +22,7 @@ class WSLProcessCapture {
         
         try {
             # Use a simpler synchronous approach
-            $enhancedCommand = "set -euo pipefail; $Command; echo 'WSL_COMMAND_SUCCESS'"
+            $enhancedCommand = "bash -c 'set -euo pipefail; $Command; echo WSL_COMMAND_SUCCESS'"
             
             # Execute and capture output directly
             $wslArgs = @("-d", $this.DistroName, "-u", $this.Username, "-e", "bash", "-c", $enhancedCommand)

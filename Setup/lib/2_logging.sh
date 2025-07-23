@@ -56,8 +56,9 @@ log_message() {
     
     # Write to WSL log file
     echo "$log_entry" >> "$LOGFILE"
-    echo "$log_entry"
-
+    if [[ -z "$POWERSHELL_EXECUTION" ]]; then
+        echo "$log_entry"
+    fi
 }
 
 print_status() {
