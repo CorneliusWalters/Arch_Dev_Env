@@ -42,8 +42,14 @@ EOF
     # Write to WSL log file
     echo "$evaluated_header" >> "$LOGFILE"
     
-    # Also send to stdout for PowerShell to capture
-    echo "$evaluated_header"
+    # Send to stdout line by line to avoid buffering issues
+    echo "$evaluated_header" | while IFS= read -r line; do
+        echo "$line"
+        sleep 0.1  # Small delay to ensure PowerShell captures each line
+    done
+    
+    # Force flush
+    exec 1>&1  # Force stdout flush
 }
 
 log_message() {

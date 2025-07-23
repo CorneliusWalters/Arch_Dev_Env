@@ -76,8 +76,27 @@ $logger = [WslLogger]::new("C:\wsl")
 	        throw "Config file creation failed"
 	    }
 	    $logger.WritePhaseStatus("CONFIG", "SUCCESS", "Config file created")
+			
+########################################################################################			
+########################################################################################			
+########################################################################################			
+			$logger.WritePhaseStatus("DEBUG", "STARTING", "Testing WSL capture")
+
+			# Test with a simple command first
+			$testCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
+			$testResult = $testCapture.ExecuteCommand("echo 'Hello from WSL'; whoami; pwd", "WSL Capture Test")
+
+			if ($testResult) {
+			    $logger.WritePhaseStatus("DEBUG", "SUCCESS", "WSL capture is working")
+			} else {
+			    $logger.WritePhaseStatus("DEBUG", "ERROR", "WSL capture failed")
+			}
 	    
-	    # Phase 6: Main Setup 
+########################################################################################			
+########################################################################################			
+########################################################################################			
+			
+			# Phase 6: Main Setup 
 	    $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script")
 			$wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
 	    $setupCommand = "export FORCE_OVERWRITE='true' && cd '$wslRepoPath' &&  bash Setup/1_sys_init.sh"
