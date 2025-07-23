@@ -7,6 +7,8 @@ class WSLProcessCapture {
     [string]$Username
     [string]$OutputLogFile
     [System.Diagnostics.Process]$Process
+    [System.Collections.ArrayList]$OutputLines
+    [System.Collections.ArrayList]$ErrorLines
     
     # --- Constructor ---
     WSLProcessCapture([PSCustomObject]$Logger, [string]$DistroName, [string]$Username) {
@@ -14,17 +16,25 @@ class WSLProcessCapture {
         $this.DistroName = $DistroName
         $this.Username = $Username
         $this.OutputLogFile = "$($Logger.LogDir)\wsl_output.log"
+        $this.OutputLines = New-Object System.Collections.ArrayList
+        $this.ErrorLines = New-Object System.Collections.ArrayList
     }
     
     # --- Methods ---
     [bool] ExecuteCommand([string]$Command, [string]$Description) {
         $this.Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
         
+        # Clear previous output
+        $this.OutputLines.Clear()
+        $this.ErrorLines.Clear()
+        
         try {
-            # Setup process
+            # Add verbose error capturing
+            $enhancedCommand = "set -euo pipefail; $Command; echo 'WSL_COMMAND_SUCCESS'"
+        
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName = "wsl"
-            $psi.Arguments = "-d $($this.DistroName) -u $($this.Username) -e bash -c `"$Command`""
+            $psi.Arguments = "-d $($this.DistroName) -u $($this.Username) -e bash -c `"$enhancedCommand`""
             $psi.RedirectStandardOutput = $true
             $psi.RedirectStandardError = $true
             $psi.UseShellExecute = $false
@@ -33,21 +43,28 @@ class WSLProcessCapture {
             $this.Process = New-Object System.Diagnostics.Process
             $this.Process.StartInfo = $psi
             
-            # Create output handler
+            # Create output handlers with proper variable capture
             $outputHandler = {
                 $line = $Event.SourceEventArgs.Data
                 if ($line) {
-                    # Write to log file
-                    Add-Content -Path $this.OutputLogFile -Value $line
-                    
-                    # Display with colors
+                    $this.OutputLines.Add($line) | Out-Null
+                    Add-Content -Path $this.OutputLogFile -Value "STDOUT: $line"
                     $this.DisplayLine($line)
                 }
             }.GetNewClosure()
             
-            # Register event handlers
+            $errorHandler = {
+                $line = $Event.SourceEventArgs.Data
+                if ($line) {
+                    $this.ErrorLines.Add($line) | Out-Null
+                    Add-Content -Path $this.OutputLogFile -Value "STDERR: $line"
+                    $this.DisplayLine($line)
+                }
+            }.GetNewClosure()
+
+            # Register separate handlers for stdout and stderr
             Register-ObjectEvent -InputObject $this.Process -EventName OutputDataReceived -Action $outputHandler | Out-Null
-            Register-ObjectEvent -InputObject $this.Process -EventName ErrorDataReceived -Action $outputHandler | Out-Null
+            Register-ObjectEvent -InputObject $this.Process -EventName ErrorDataReceived -Action $errorHandler | Out-Null
             
             # Start process
             $this.Process.Start() | Out-Null
@@ -57,14 +74,35 @@ class WSLProcessCapture {
             
             $exitCode = $this.Process.ExitCode
             
-            if ($exitCode -eq 0) {
+            # Give event handlers time to process remaining output
+            Start-Sleep -Milliseconds 100
+            
+            if ($exitCode -eq 0 -and ($this.OutputLines -contains "WSL_COMMAND_SUCCESS")) {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
                 return $true
             } else {
-                $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exit code: $exitCode")
+                $errorMsg = "$Description - Exit code: $exitCode"
+                
+                # Add recent error lines to the message
+                if ($this.ErrorLines.Count -gt 0) {
+                    $recentErrors = $this.ErrorLines | Select-Object -Last 3
+                    $errorMsg += " - Recent errors: $($recentErrors -join '; ')"
+                }
+                
+                # Also add last few output lines for context
+                if ($this.OutputLines.Count -gt 0) {
+                    $recentOutput = $this.OutputLines | Select-Object -Last 2
+                    $errorMsg += " - Last output: $($recentOutput -join '; ')"
+                }
+                
+                $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", $errorMsg)
+                
+                # Log full output for debugging
+                $this.Logger.WriteLog("DEBUG", "Full stdout: $($this.OutputLines -join '`n')", "Gray")
+                $this.Logger.WriteLog("DEBUG", "Full stderr: $($this.ErrorLines -join '`n')", "Gray")
+                
                 return $false
             }
-            
         } catch {
             $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
             return $false
