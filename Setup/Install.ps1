@@ -53,7 +53,7 @@ $logger = [WslLogger]::new("C:\wsl")
 	    $wslRepoPath = "/mnt/c/wsl/wsl_dev_setup"
 	    $logger.WritePhaseStatus("CLONE", "SUCCESS", "Repository cloned")
 	    
-	    # Phase 3: Root Preparation (using new reliable method)
+	    # Phase 3: Root Preparation 
 	    $logger.WritePhaseStatus("ROOT_PREP", "STARTING", "Preparing pristine environment as root")
 	    $prepCommand = "$wslRepoPath/Setup/lib/0_prepare_root.sh $wslUsername"
 	    if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username "root" -Command $prepCommand -Description "Root preparation" -Logger $logger)) {
@@ -61,7 +61,7 @@ $logger = [WslLogger]::new("C:\wsl")
 	    }
 	    $logger.WritePhaseStatus("ROOT_PREP", "SUCCESS", "Root preparation completed")
 	    
-	    # Phase 4: WSL Restart (using new reliable method)
+	    # Phase 4: WSL Restart(using new reliable method)
 	    $logger.WritePhaseStatus("WSL_RESTART", "STARTING", "Applying WSL settings")
 	    wsl --terminate $wslDistroName
 	    if (-not (Wait-WSLShutdown -DistroName $wslDistroName -Logger $logger)) {
@@ -69,7 +69,7 @@ $logger = [WslLogger]::new("C:\wsl")
 	    }
 	    $logger.WritePhaseStatus("WSL_RESTART", "SUCCESS", "WSL restarted successfully")
 	    
-	    # Phase 5: Config File Creation (using new reliable method)
+	    # Phase 5: Config File Creation 
 	    $logger.WritePhaseStatus("CONFIG", "STARTING", "Creating WSL configuration file")
 	    $configCommand = "echo 'REPO_ROOT=`"$wslRepoPath`"' | sudo tee /etc/arch-dev-env.conf > /dev/null"
 	    if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $configCommand -Description "Config file creation" -Logger $logger)) {
@@ -77,9 +77,9 @@ $logger = [WslLogger]::new("C:\wsl")
 	    }
 	    $logger.WritePhaseStatus("CONFIG", "SUCCESS", "Config file created")
 	    
-	    # Phase 6: Main Setup (using new reliable method)
+	    # Phase 6: Main Setup 
 	    $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script")
-	    $setupCommand = "export FORCE_OVERWRITE='true' && cd '$wslRepoPath' && bash Setup/1_sys_init.sh"
+	    $setupCommand = "export FORCE_OVERWRITE='true' && export EXISTING_LOG_DIR='$($logger.WslLogDir)' && cd '$wslRepoPath' &&  bash Setup/1_sys_init.sh"
 	    if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $setupCommand -Description "Main setup script" -Logger $logger)) {
 	        throw "Main setup script failed"
 	    }

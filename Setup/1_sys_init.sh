@@ -39,7 +39,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 #Export windows accessable Base path
 export WSL_BASE_PATH="/mnt/c/wsl"
-export LOGS_BASE_PATH="$WSL_BASE_PATH/tmp/logs"
+export LOGS_BASE_PATH="${EXISTING_LOG_DIR%/*}"
 export CONFIG_BASE_PATH="$WSL_BASE_PATH/config"
 export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
