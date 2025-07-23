@@ -17,24 +17,35 @@ YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
 init_logging() {
-    {
-        echo "=== Installation Log Started at $(date) ==="
-        echo "=== System Information ==="
-        echo "User: $(whoami)"
-        echo "Hostname: $(hostname)"
-        echo "WSL Version: $(wsl.exe --version 2>/dev/null || echo 'WSL version not available')"
-        echo "Kernel: $(uname -r)"
-        echo "Distribution: $(cat /etc/os-release | grep PRETTY_NAME)"
-        echo "Memory: $(free -h)"
-        echo "Disk Space: $(df -h /)"
-        echo "Network Status: $(ip addr show | grep 'inet ')"
-        echo "Current Shell: $SHELL"
-        echo "=== Environment Status ==="
-        echo "Working Directory: $(pwd)"
-        echo "Script Directory: $SCRIPT_DIR"
-        echo "=========================="
-    } >> "$LOGFILE"
+    local header_info=$(cat << 'EOF'
+=== Installation Log Started at $(date) ===
+=== System Information ===
+User: $(whoami)
+Hostname: $(hostname)
+WSL Version: $(wsl.exe --version 2>/dev/null || echo 'WSL version not available')
+Kernel: $(uname -r)
+Distribution: $(cat /etc/os-release | grep PRETTY_NAME)
+Memory: $(free -h)
+Disk Space: $(df -h /)
+Network Status: $(ip addr show | grep 'inet ')
+Current Shell: $SHELL
+=== Environment Status ===
+Working Directory: $(pwd)
+Script Directory: $SCRIPT_DIR
+==========================
+EOF
+)
+
+    # Evaluate the variables in the header
+    local evaluated_header=$(eval "echo \"$header_info\"")
+    
+    # Write to WSL log file
+    echo "$evaluated_header" >> "$LOGFILE"
+    
+    # Also send to stdout for PowerShell to capture
+    echo "$evaluated_header"
 }
+
 log_message() {
     local level=$1
     local category=$2
