@@ -79,7 +79,7 @@ $logger = [WslLogger]::new("C:\wsl")
 	    
 	    # Phase 6: Main Setup (using new reliable method)
 	    $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script")
-	    $setupCommand = "export FORCE_OVERWRITE='true' && chmod +x '$wslRepoPath/Setup/1_sys_init.sh' && '$wslRepoPath/Setup/1_sys_init.sh'"
+	    $setupCommand = "export FORCE_OVERWRITE='true' && cd '$wslRepoPath' && bash Setup/1_sys_init.sh"
 	    if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $setupCommand -Description "Main setup script" -Logger $logger)) {
 	        throw "Main setup script failed"
 	    }
