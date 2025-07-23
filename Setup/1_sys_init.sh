@@ -7,14 +7,15 @@
 ##      ├── PowerShell
 ##      │   ├── Export-Image.ps1    # Exports WSL distro image after install for easy redo
 ##      │   ├── Import-Distro.ps1   # Import the distro image
-##      │   ├── Export-Image.ps1    # Exports WSL distro image after install for easy redo
 ##      │   ├── Logging.ps1         # Logging functions
-##      │   └── Test.ps1            # Checks your WSL version
+##      │   ├── Test.ps1            # Checks your WSL version
+##      │   └── Utils.ps1           # Setup Utilities
 ##      ├── lib
-##      │   ├── 2_set_dirs.sh       # create directories and set scripts as executable
-##      │   ├── 3_logging.sh        # Logging functions
-##      │   ├── #snapshots.sh       # WSL snapshot functions -- Functionality to check  --- Currently Disabled
+##      │   ├── 2_logging.sh        # Logging functions
+##      │   ├── 3_set_dirs.sh       # create directories and set scripts as executable
 ##      │   ├── 4_install.sh        # Package/Main installation functions
+##      │   ├── 5_sync_packs.sh     # hooks and script patch functionality
+##      │   ├── 6_commit_config.sh  # git functionality to make changes to your repo
 ##      │   ├── config
 ##      │   │   ├── nvim.sh         # Neovim configurations
 ##      │   │   ├── tmux.sh         # Tmux configurations
@@ -42,11 +43,9 @@ export LOGS_BASE_PATH="$WSL_BASE_PATH/tmp/logs"
 export CONFIG_BASE_PATH="$WSL_BASE_PATH/config"
 export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
-# Source Directory setup
-source "$SCRIPT_DIR/lib/2_set_dirs.sh"
 
 # Source all library functions
-source "$SCRIPT_DIR/lib/3_logging.sh" || exit 1
+source "$SCRIPT_DIR/lib/2_logging.sh" || exit 1
 source "$SCRIPT_DIR/lib/4_install.sh" || exit 1
 
 # Export Repo 
@@ -56,6 +55,9 @@ export REPO_ROOT="$(dirname "$SCRIPT_DIR")" # Define and export REPO_ROOT
 # Initialize logging
 init_logging || exit 1
 
+
+# Source Directory setup
+source "$SCRIPT_DIR/lib/3_set_dirs.sh"
 
 #test_caller_logging
 #exit 

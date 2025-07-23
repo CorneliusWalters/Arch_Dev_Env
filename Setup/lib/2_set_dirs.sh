@@ -1,8 +1,6 @@
 #!/bin/bash
-###     file name: set_dirs.sh
-###     dir: /mnt/c/wsl/scripts/lib/config/set_dirs.sh
-
 #######--- START OF FILE ---#######
+
 print_status "DIRS" "Creating base directory structure..."
 
 # Create base XDG and local directories
