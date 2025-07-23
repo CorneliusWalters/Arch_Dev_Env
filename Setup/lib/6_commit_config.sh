@@ -3,7 +3,7 @@
 # generate_and_commit_patch.sh - Creates a .patch file from a modified config
 # and commits it to Git.
 
-REPO_ROOT="/mnt/c/wsl/wsl_dev_env"
+REPO_ROOT="/mnt/c/wsl/wsl_dev_setup"
 LOG_FILE="/mnt/c/wsl/tmp/logs/config_git_sync.log"
 # --- Do not edit below this line ---
 

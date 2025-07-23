@@ -40,7 +40,7 @@ $logger = [WslLogger]::new("C:\wsl")
 	    
 	    # Phase 2: Repository Clone
 	    $logger.WritePhaseStatus("CLONE", "STARTING", "Cloning repository")
-	    $gitCloneTarget = "C:\wsl\wsl-dev-setup"
+	    $gitCloneTarget = "C:\wsl\wsl_dev_setup"
 	    if ($ForceOverwrite -or -not (Test-Path $gitCloneTarget)) {
 	        if (Test-Path $gitCloneTarget) { 
 	            Remove-Item -Recurse -Force $gitCloneTarget 
@@ -50,7 +50,7 @@ $logger = [WslLogger]::new("C:\wsl")
 	            throw "Git clone failed: $result"
 	        }
 	    }
-	    $wslRepoPath = "/mnt/c/wsl/wsl-dev-setup"
+	    $wslRepoPath = "/mnt/c/wsl/wsl_dev_setup"
 	    $logger.WritePhaseStatus("CLONE", "SUCCESS", "Repository cloned")
 	    
 	    # Phase 3: Root Preparation (using new reliable method)
