@@ -34,4 +34,32 @@ class WslLogger {
         $this.WriteLog("HEADER", $Message, "Cyan")
         $this.WriteLog("HEADER", $separator, "Cyan")
     }
+    
+    WritePhaseStatus([string]$Phase, [string]$Status, [string]$Details = "") {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $message = "[$timestamp] [PHASE: $Phase] [$Status] $Details"
+        
+        $color = switch($Status) {
+            "SUCCESS" { "Green" }
+            "ERROR" { "Red" }
+            "STARTING" { "Cyan" }
+            "TIMEOUT" { "Yellow" }
+            default { "White" }
+        }
+        
+        $this.WriteLog("PHASE", $message, $color)
+        
+        # Also write to a separate phase log for debugging
+        $phaseLogPath = "$($this.LogDir)\phases.log"
+        Add-Content -Path $phaseLogPath -Value $message
+    }
+
+    # Enhanced error logging with recovery info
+    WriteRecoveryInfo([string]$DistroName, [string]$Username, [string]$RepoPath) {
+        $this.WriteLog("RECOVERY", "=== RECOVERY INSTRUCTIONS ===", "Yellow")
+        $this.WriteLog("RECOVERY", "To continue manually, run:", "Yellow")
+        $this.WriteLog("RECOVERY", "wsl -d $DistroName -u $Username", "Yellow")
+        $this.WriteLog("RECOVERY", "cd $RepoPath && export FORCE_OVERWRITE=true && ./Setup/1_sys_init.sh", "Yellow")
+        $this.WriteLog("RECOVERY", "=== END RECOVERY INSTRUCTIONS ===", "Yellow")
+    }    
 }

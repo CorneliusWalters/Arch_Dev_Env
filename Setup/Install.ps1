@@ -1,6 +1,6 @@
 # Install.ps1 - Main entry point for Arch Linux WSL setup
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 # --- CONFIGURATION ---
 $wslDistroName = "Arch"
@@ -18,89 +18,83 @@ if ([string]::IsNullOrWhiteSpace($wslUsername)) {
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$scriptPath\PowerShell\Logging.ps1"
 . "$scriptPath\PowerShell\Test.ps1"
+. "$scriptPath\PowerShell\Utils.ps1"
 . "$scriptPath\PowerShell\Import-Distro.ps1"
 . "$scriptPath\PowerShell\Export-Image.ps1"
 $logger = [WslLogger]::new("C:\wsl")
 
-try {
-    $logger.WriteHeader("Starting WSL Arch Linux Configuration for user '$wslUsername'")
-    Test-WSLPrerequisites -Logger $logger -WslDistroName $wslDistroName
-    Import-ArchDistro -Logger $logger -WslDistroName $wslDistroName -WslUsername $wslUsername -DefaultTarballPath $cleanArchTarballDefaultPath
 
-    #NEW: CLONE REPOSITORY ---
-    $logger.WriteHeader("Cloning Repository")
-    $gitCloneTarget = "C:\wsl\wsl-dev-setup"
-    if ($ForceOverwrite -or -not (Test-Path $gitCloneTarget)) {
-        $logger.WriteLog("INFO", "Cloning repository to $gitCloneTarget", "Cyan")
-        if (Test-Path $gitCloneTarget) { Remove-Item -Recurse -Force $gitCloneTarget }
-        git clone "https://github.com/CorneliusWalters/Arch_Dev_Env.git" $gitCloneTarget
-    }
-    $wslRepoPath = "/mnt/c/wsl/wsl-dev-setup"
-
-    # --- PHASE 1: PREPARE ENVIRONMENT (as root) ---
-    $logger.WriteHeader("Preparing pristine environment as root...")
-    $prepScriptPath = "$wslRepoPath/Setup/lib/0_prepare_root.sh"  # Note capital S
-    $prepProcess = Start-Process wsl -ArgumentList "-d $wslDistroName -u root -e bash $prepScriptPath $wslUsername" -Wait -PassThru -NoNewWindow
-    if ($prepProcess.ExitCode -ne 0) {
-        throw "The root preparation script failed with exit code $($prepProcess.ExitCode)."
-    }
-
-    # --- START: NEW COMMUNICATIVE RESTART BLOCK ---
-    $logger.WriteHeader("Applying critical WSL settings...")
-    $logger.WriteLog("INFO", "Shutting down '$wslDistroName' to apply new mount options from wsl.conf...", "Yellow")
-    wsl --terminate $wslDistroName
-
-    $timeoutSeconds = 30
-    $elapsedSeconds = 0
-    $logger.WriteLog("INFO", "Verifying that the WSL instance has stopped. This may take a few moments.", "Cyan")
-    Write-Host "Verifying shutdown" -NoNewline
-    
-    while ($true) {
-        $distroStatus = wsl -l -v | Where-Object { $_ -match $wslDistroName }
-        if (-not ($distroStatus -match "Running")) {
-            # The distro is stopped, break the loop.
-            break
-        }
-
-        if ($elapsedSeconds -ge $timeoutSeconds) {
-            throw "Timed out waiting for '$wslDistroName' to shut down."
-        }
-        
-        Write-Host -NoNewline "."
-        Start-Sleep -Seconds 2
-        $elapsedSeconds += 2
-    }
-    
-    Write-Host "" # Adds a newline after the dots.
-    $logger.WriteLog("SUCCESS", "WSL instance terminated successfully. Settings applied. Continuing installation...", "Green")
-    # --- END: NEW COMMUNICATIVE RESTART BLOCK ---
-
-    # --- PHASE 2: CREATE CONFIG FILE ---
-    $logger.WriteHeader("Creating WSL Configuration File")
-    $configContent = "REPO_ROOT=`"$wslRepoPath`""
-    $wslCommandForConfig = "echo '$configContent' | sudo tee /etc/arch-dev-env.conf > /dev/null"
-    wsl -d $wslDistroName -u $wslUsername -e bash -c $wslCommandForConfig
-    $logger.WriteLog("SUCCESS", "WSL configuration file created.", "Green")
-
-    # --- PHASE 3: MAIN SETUP ---
-    $logger.WriteHeader("Executing Main Setup Script inside WSL as '$wslUsername'")
-    $env:WSLENV = "FORCE_OVERWRITE/u"
-    $env:FORCE_OVERWRITE = if ($ForceOverwrite) { "true" } else { "false" }
-    $wslScriptPath = "$wslRepoPath/Setup/1_sys_init.sh"  # Note capital S
-    $wslCommandForSetup = "export FORCE_OVERWRITE='$($env:FORCE_OVERWRITE)' && chmod +x $wslScriptPath && $wslScriptPath"
-    $setupProcess = Start-Process wsl -ArgumentList "-d $wslDistroName -u $wslUsername -e bash -c `"$wslCommandForSetup`"" -Wait -PassThru -NoNewWindow
-    if ($setupProcess.ExitCode -ne 0) {
-        throw "The main setup script failed with exit code $($setupProcess.ExitCode)."
-    }
-    $logger.WriteLog("SUCCESS", "WSL setup script completed successfully.", "Green")
-
-    Export-WSLImage -Logger $logger -WslDistroName $wslDistroName -ExportPath $configuredArchTarballExportPath
-
-    $logger.WriteHeader("Setup Complete! Shutting down WSL to apply changes.")
-    Start-Sleep -Seconds 5
-    wsl --shutdown
-
-} catch {
-    $logger.WriteLog("FATAL", "The script encountered a critical error: $($_.Exception.Message)", "Red")
-    exit 1
-}
+	try {
+	    $logger.WritePhaseStatus("INIT", "STARTING", "WSL Arch Linux Configuration for user '$wslUsername'")
+	    
+	    # Phase 1: Prerequisites and Import
+	    if (-not (Test-WSLPrerequisites -Logger $logger -WslDistroName $wslDistroName)) {
+	        throw "Prerequisites check failed"
+	    }
+	    $logger.WritePhaseStatus("PREREQ", "SUCCESS", "Prerequisites validated")
+	    
+	    if (-not (Import-ArchDistro -Logger $logger -WslDistroName $wslDistroName -WslUsername $wslUsername -DefaultTarballPath $cleanArchTarballDefaultPath)) {
+	        throw "Distro import failed"
+	    }
+	    $logger.WritePhaseStatus("IMPORT", "SUCCESS", "Distro imported successfully")
+	    
+	    # Phase 2: Repository Clone
+	    $logger.WritePhaseStatus("CLONE", "STARTING", "Cloning repository")
+	    $gitCloneTarget = "C:\wsl\wsl-dev-setup"
+	    if ($ForceOverwrite -or -not (Test-Path $gitCloneTarget)) {
+	        if (Test-Path $gitCloneTarget) { 
+	            Remove-Item -Recurse -Force $gitCloneTarget 
+	        }
+	        $result = git clone "https://github.com/CorneliusWalters/Arch_Dev_Env.git" $gitCloneTarget 2>&1
+	        if ($LASTEXITCODE -ne 0) {
+	            throw "Git clone failed: $result"
+	        }
+	    }
+	    $wslRepoPath = "/mnt/c/wsl/wsl-dev-setup"
+	    $logger.WritePhaseStatus("CLONE", "SUCCESS", "Repository cloned")
+	    
+	    # Phase 3: Root Preparation (using new reliable method)
+	    $logger.WritePhaseStatus("ROOT_PREP", "STARTING", "Preparing pristine environment as root")
+	    $prepCommand = "$wslRepoPath/Setup/lib/0_prepare_root.sh $wslUsername"
+	    if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username "root" -Command $prepCommand -Description "Root preparation" -Logger $logger)) {
+	        throw "Root preparation failed"
+	    }
+	    $logger.WritePhaseStatus("ROOT_PREP", "SUCCESS", "Root preparation completed")
+	    
+	    # Phase 4: WSL Restart (using new reliable method)
+	    $logger.WritePhaseStatus("WSL_RESTART", "STARTING", "Applying WSL settings")
+	    wsl --terminate $wslDistroName
+	    if (-not (Wait-WSLShutdown -DistroName $wslDistroName -Logger $logger)) {
+	        throw "WSL shutdown timeout"
+	    }
+	    $logger.WritePhaseStatus("WSL_RESTART", "SUCCESS", "WSL restarted successfully")
+	    
+	    # Phase 5: Config File Creation (using new reliable method)
+	    $logger.WritePhaseStatus("CONFIG", "STARTING", "Creating WSL configuration file")
+	    $configCommand = "echo 'REPO_ROOT=`"$wslRepoPath`"' | sudo tee /etc/arch-dev-env.conf > /dev/null"
+	    if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $configCommand -Description "Config file creation" -Logger $logger)) {
+	        throw "Config file creation failed"
+	    }
+	    $logger.WritePhaseStatus("CONFIG", "SUCCESS", "Config file created")
+	    
+	    # Phase 6: Main Setup (using new reliable method)
+	    $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script")
+	    $setupCommand = "export FORCE_OVERWRITE='true' && chmod +x '$wslRepoPath/Setup/1_sys_init.sh' && '$wslRepoPath/Setup/1_sys_init.sh'"
+	    if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $setupCommand -Description "Main setup script" -Logger $logger)) {
+	        throw "Main setup script failed"
+	    }
+	    $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed")
+	    
+	    # Phase 7: Export (optional)
+	    Export-WSLImage -Logger $logger -WslDistroName $wslDistroName -ExportPath $configuredArchTarballExportPath
+	    
+	    $logger.WritePhaseStatus("COMPLETE", "SUCCESS", "Setup completed successfully")
+	    $logger.WriteHeader("Setup Complete! Shutting down WSL to apply changes.")
+	    Start-Sleep -Seconds 5
+	    wsl --shutdown
+	    
+	} catch {
+	    $logger.WritePhaseStatus("FATAL", "ERROR", "Script failed: $($_.Exception.Message)")
+	    $logger.WriteRecoveryInfo($wslDistroName, $wslUsername, $wslRepoPath)
+	    exit 1
+	}
