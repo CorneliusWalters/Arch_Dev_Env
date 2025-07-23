@@ -5,8 +5,7 @@
 
 
 # Setup logging with detailed timestamps and categories
-LOG_DIR="$LOGS_BASE_PATH/"
-mkdir -p "$LOG_DIR"
+LOG_DIR="$LOGS_BASE_PATH"
 LOGFILE="$LOG_DIR/sys_init.log"
 
 
