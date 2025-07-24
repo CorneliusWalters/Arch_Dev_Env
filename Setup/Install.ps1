@@ -109,6 +109,7 @@ try {
   try {
     # Create the script content as a here-document directly in WSL
     $setupCommand = @"
+cd ~
 cat > /tmp/setup_wrapper.sh << 'WRAPPER_EOF'
 #!/bin/bash
 export FORCE_OVERWRITE='true'
