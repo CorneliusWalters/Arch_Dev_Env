@@ -89,17 +89,13 @@ try {
   # Test with a simple command first
   $testCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
   $testResult = $testCapture.ExecuteCommand("echo 'Hello from WSL'; whoami; pwd", "WSL Capture Test")
-       
+     
   if ($testResult) {
     $logger.WritePhaseStatus("DEBUG", "SUCCESS", "WSL capture is working")
-		}
+  }
   else {
     $logger.WritePhaseStatus("DEBUG", "ERROR", "WSL capture failed")
-		}
-  #  $testCommand = "ls -la '$wslRepoPath/Setup/1_sys_init.sh'"
-  #		if (-not $wslCapture.ExecuteCommand($testCommand, "Check script exists")) {
-  #				throw "Setup script not found"
-  #		}
+  }
 
   $createScriptCommand = @"
 cat > /tmp/setup_wrapper.sh << 'WRAPPER_EOF'
@@ -108,20 +104,18 @@ echo "Hello from wrapper script"
 WRAPPER_EOF
 "@
 
-  if (-not $wslCapture.ExecuteCommand($createScriptCommand, "Create test script")) {
+  # Change this line - use $testCapture instead of $wslCapture:
+  if (-not $testCapture.ExecuteCommand($createScriptCommand, "Create test script")) {
     throw "Failed to create script"
   }
 
-  # Then check if it was created
-  $checkCommand = "ls -la /tmp/setup_wrapper.sh && cat /tmp/setup_wrapper.sh"
-  if (-not $wslCapture.ExecuteCommand($checkCommand, "Verify script created")) {
+  # And this line too:
+  $checkCommand = "ls -la /tmp/setup_wrapper.sh && cat /tmp/setup_wrapper.sh"  
+  if (-not $testCapture.ExecuteCommand($checkCommand, "Verify script created")) {
     throw "Script verification failed"
   }
   ########################################################################################			
   ########################################################################################			
-
-  # Debug: Check if variables exist
-
   # Phase 6: Main Setup 
   $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script")
   $wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
