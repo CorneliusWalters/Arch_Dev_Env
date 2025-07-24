@@ -84,38 +84,38 @@ try {
 			
   ########################################################################################			
   ########################################################################################			
-  $logger.WritePhaseStatus("DEBUG", "STARTING", "Testing WSL capture")
-
-  # Test with a simple command first
-  $testCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
-  $testResult = $testCapture.ExecuteCommand("echo 'Hello from WSL'; whoami; pwd", "WSL Capture Test")
-     
-  if ($testResult) {
-    $logger.WritePhaseStatus("DEBUG", "SUCCESS", "WSL capture is working")
-  }
-  else {
-    $logger.WritePhaseStatus("DEBUG", "ERROR", "WSL capture failed")
-  }
-
-  $createScriptCommand = @"
-cat > /tmp/setup_wrapper.sh << 'WRAPPER_EOF'
-#!/bin/bash
-echo "Hello from wrapper script"
-WRAPPER_EOF
-"@
-
-  # Change this line - use $testCapture instead of $wslCapture:
-  if (-not $testCapture.ExecuteCommand($createScriptCommand, "Create test script")) {
-    throw "Failed to create script"
-  }
-
-  # And this line too:
-  $checkCommand = "ls -la /tmp/setup_wrapper.sh && cat /tmp/setup_wrapper.sh"  
-  if (-not $testCapture.ExecuteCommand($checkCommand, "Verify script created")) {
-    throw "Script verification failed"
-  }
-  ########################################################################################			
-  ########################################################################################			
+  #  $logger.WritePhaseStatus("DEBUG", "STARTING", "Testing WSL capture")
+  #
+  #  # Test with a simple command first
+  #  $testCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
+  #  $testResult = $testCapture.ExecuteCommand("echo 'Hello from WSL'; whoami; pwd", "WSL Capture Test")
+  #     
+  #  if ($testResult) {
+  #    $logger.WritePhaseStatus("DEBUG", "SUCCESS", "WSL capture is working")
+  #  }
+  #  else {
+  #    $logger.WritePhaseStatus("DEBUG", "ERROR", "WSL capture failed")
+  #  }
+  #
+  #  $createScriptCommand = @"
+  #cat > /tmp/setup_wrapper.sh << 'WRAPPER_EOF'
+  ##!/bin/bash
+  #echo "Hello from wrapper script"
+  #WRAPPER_EOF
+  #"@
+  #
+  #  # Change this line - use $testCapture instead of $wslCapture:
+  #  if (-not $testCapture.ExecuteCommand($createScriptCommand, "Create test script")) {
+  #    throw "Failed to create script"
+  #  }
+  #
+  #  # And this line too:
+  #  $checkCommand = "ls -la /tmp/setup_wrapper.sh && cat /tmp/setup_wrapper.sh"  
+  #  if (-not $testCapture.ExecuteCommand($checkCommand, "Verify script created")) {
+  #    throw "Script verification failed"
+  #  }
+  #  ########################################################################################			
+  #  ########################################################################################			
   # Phase 6: Main Setup 
   $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script")
   $wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
@@ -125,25 +125,23 @@ WRAPPER_EOF
   $logger.WriteLog("DEBUG", "logger.LogDir: '$($logger.LogDir)'", "Gray")
   try {
     # Create the script content as a here-document directly in WSL
-    $setupCommand = @"
-cd ~
-cat > /tmp/setup_wrapper.sh << 'WRAPPER_EOF'
-#!/bin/bash
-export FORCE_OVERWRITE='true'
-export SYSTEM_LOCALE='en_US.UTF-8'  
-cd '$wslRepoPath'
-echo "Starting 1_sys_init.sh from: `$(pwd)"
-exec bash Setup/1_sys_init.sh
-WRAPPER_EOF
-chmod +x /tmp/setup_wrapper.sh && /tmp/setup_wrapper.sh
-"@
-
+    #    $setupCommand = @"
+    #cd ~
+    #cat > /tmp/setup_wrapper.sh << 'WRAPPER_EOF'
+    ##!/bin/bash
+    #export FORCE_OVERWRITE='true'
+    #export SYSTEM_LOCALE='en_US.UTF-8'  
+    #cd '$wslRepoPath'
+    #echo "Starting 1_sys_init.sh from: `$(pwd)"
+    #exec bash Setup/1_sys_init.sh
+    #WRAPPER_EOF
+    #chmod +x /tmp/setup_wrapper.sh && /tmp/setup_wrapper.sh
+    #"@
+    #
     # First, just test if we can see the file in WSL
-    $verifyCommand = "ls -la /tmp/"
-    if (-not $wslCapture.ExecuteCommand($verifyCommand, "List tmp directory")) {
-      throw "Cannot list tmp directory"
-    }
-    
+    $setupCommand = @"
+export FORCE_OVERWRITE='true' && export SYSTEM_LOCALE='en_US.UTF-8' && cd '$wslRepoPath' && echo "Starting from: `$(pwd)" && bash Setup/1_sys_init.sh
+"@
 
     if (-not $wslCapture.ExecuteCommand($setupCommand, "Main setup script")) {
       throw "Main setup script failed"
