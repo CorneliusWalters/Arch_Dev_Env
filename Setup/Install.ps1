@@ -90,10 +90,10 @@ try {
   else {
     $logger.WritePhaseStatus("DEBUG", "ERROR", "WSL capture failed")
 		}
-  $testCommand = "ls -la '$wslRepoPath/Setup/1_sys_init.sh'"
-		if (-not $wslCapture.ExecuteCommand($testCommand, "Check script exists")) {
-				throw "Setup script not found"
-		}
+  #  $testCommand = "ls -la '$wslRepoPath/Setup/1_sys_init.sh'"
+  #		if (-not $wslCapture.ExecuteCommand($testCommand, "Check script exists")) {
+  #				throw "Setup script not found"
+  #		}
   ########################################################################################			
   ########################################################################################			
 
