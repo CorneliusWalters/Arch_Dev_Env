@@ -96,32 +96,54 @@ try {
 		}
   ########################################################################################			
   ########################################################################################			
-			
+
+  # Debug: Check if variables exist
+
   # Phase 6: Main Setup 
   $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script")
   $wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
-  $wrapperScript = @"
+  
+  $logger.WriteLog("DEBUG", "wslCapture type: $($wslCapture.GetType().Name)", "Gray")
+  $logger.WriteLog("DEBUG", "wslRepoPath: '$wslRepoPath'", "Gray")
+  $logger.WriteLog("DEBUG", "logger.LogDir: '$($logger.LogDir)'", "Gray")
+  try {
+    # Create wrapper script content
+    $wrapperScript = @"
 #!/bin/bash
 export FORCE_OVERWRITE='true'
-export SYSTEM_LOCALE='en_US.UTF-8'
+export SYSTEM_LOCALE='en_US.UTF-8'  
 cd '$wslRepoPath'
+echo "Starting 1_sys_init.sh from: `$(pwd)"
 exec bash Setup/1_sys_init.sh
 "@
-  $wrapperPath = "$($logger.LogDir)\setup_wrapper.sh"
-  $wrapperScript | Out-File -FilePath $wrapperPath -Encoding UTF8
-  $copyCommand = "cp /mnt/c/wsl/tmp/logs/*/setup_wrapper.sh /tmp/ && chmod +x /tmp/setup_wrapper.sh"
-  if (-not $wslCapture.ExecuteCommand($copyCommand, "Copy wrapper script")) {
-    throw "Failed to copy wrapper script"
+
+    # Write directly to a simple Windows path
+    $windowsWrapperPath = "C:\wsl\tmp\setup_wrapper.sh"
+    $wslWrapperPath = "/mnt/c/wsl/tmp/setup_wrapper.sh"
+    
+    $logger.WriteLog("DEBUG", "Writing wrapper to: $windowsWrapperPath", "Gray")
+    $wrapperScript | Out-File -FilePath $windowsWrapperPath -Encoding UTF8
+    
+    # Make executable and run
+    $setupCommand = "chmod +x $wslWrapperPath && $wslWrapperPath"
+    $logger.WriteLog("DEBUG", "Setup command: $setupCommand", "Gray")
+    
+    if ($null -eq $wslCapture) {
+      throw "wslCapture is null"
+    }
+    
+    if (-not $wslCapture.ExecuteCommand($setupCommand, "Main setup script")) {
+      throw "Main setup script failed"
+    }
+    
+    $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed")
+    
   }
-  # Then execute the wrapper script
-  $setupCommand = "/tmp/setup_wrapper.sh"
-  if (-not $wslCapture.ExecuteCommand($setupCommand, "Main setup script")) {
-    throw "Main setup script failed"
-  }if (-not $wslCapture.ExecuteCommand($setupCommand, "Main setup script")) {
-    throw "Main setup script failed"
-  }
-  $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed")
-	
+  catch {
+    $logger.WriteLog("DEBUG", "Exception details: $($_.Exception)", "Red")
+    $logger.WriteLog("DEBUG", "Exception type: $($_.Exception.GetType().Name)", "Red")
+    throw "Main setup script failed: $($_.Exception.Message)"
+  }	
   # Phase 7: Export (optional)
   Export-WSLImage -Logger $logger -WslDistroName $wslDistroName -ExportPath $configuredArchTarballExportPath
 	
