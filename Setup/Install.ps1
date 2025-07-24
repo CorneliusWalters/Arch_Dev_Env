@@ -107,37 +107,31 @@ try {
   $logger.WriteLog("DEBUG", "wslRepoPath: '$wslRepoPath'", "Gray")
   $logger.WriteLog("DEBUG", "logger.LogDir: '$($logger.LogDir)'", "Gray")
   try {
-    # Create wrapper script content
-    $wrapperScript = @"
+    # Create the script content as a here-document directly in WSL
+    $setupCommand = @"
+cat > /tmp/setup_wrapper.sh << 'WRAPPER_EOF'
 #!/bin/bash
 export FORCE_OVERWRITE='true'
 export SYSTEM_LOCALE='en_US.UTF-8'  
 cd '$wslRepoPath'
 echo "Starting 1_sys_init.sh from: `$(pwd)"
 exec bash Setup/1_sys_init.sh
+WRAPPER_EOF
+chmod +x /tmp/setup_wrapper.sh && /tmp/setup_wrapper.sh
 "@
 
-    # Write directly to a simple Windows path
-    $windowsWrapperPath = "C:\wsl\tmp\setup_wrapper.sh"
-    $wslWrapperPath = "/mnt/c/wsl/tmp/setup_wrapper.sh"
-    
-    $logger.WriteLog("DEBUG", "Writing wrapper to: $windowsWrapperPath", "Gray")
-    $wrapperScript | Out-File -FilePath $windowsWrapperPath -Encoding UTF8
-    
-    # Make executable and run
-    $setupCommand = "chmod +x $wslWrapperPath && $wslWrapperPath"
-    $logger.WriteLog("DEBUG", "Setup command: $setupCommand", "Gray")
-    
-    if ($null -eq $wslCapture) {
-      throw "wslCapture is null"
+    # First, just test if we can see the file in WSL
+    $verifyCommand = "ls -la /tmp/"
+    if (-not $wslCapture.ExecuteCommand($verifyCommand, "List tmp directory")) {
+      throw "Cannot list tmp directory"
     }
     
+
     if (-not $wslCapture.ExecuteCommand($setupCommand, "Main setup script")) {
       throw "Main setup script failed"
     }
     
     $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed")
-    
   }
   catch {
     $logger.WriteLog("DEBUG", "Exception details: $($_.Exception)", "Red")
