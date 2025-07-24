@@ -75,6 +75,12 @@ try {
     throw "Config file creation failed"
   }
   $logger.WritePhaseStatus("CONFIG", "SUCCESS", "Config file created")
+
+  $setUserCommand = "echo '[user]' > /etc/wsl.conf && echo 'default=$wslUsername' >> /etc/wsl.conf"
+  $wslCaptureRoot = [WSLProcessCapture]::new($logger, $wslDistroName, "root")
+  if (-not $wslCaptureRoot.ExecuteCommand($setUserCommand, "Set default WSL user")) {
+    throw "Failed to set default user"
+  }
 			
   ########################################################################################			
   ########################################################################################			
@@ -94,6 +100,23 @@ try {
   #		if (-not $wslCapture.ExecuteCommand($testCommand, "Check script exists")) {
   #				throw "Setup script not found"
   #		}
+
+  $createScriptCommand = @"
+cat > /tmp/setup_wrapper.sh << 'WRAPPER_EOF'
+#!/bin/bash
+echo "Hello from wrapper script"
+WRAPPER_EOF
+"@
+
+  if (-not $wslCapture.ExecuteCommand($createScriptCommand, "Create test script")) {
+    throw "Failed to create script"
+  }
+
+  # Then check if it was created
+  $checkCommand = "ls -la /tmp/setup_wrapper.sh && cat /tmp/setup_wrapper.sh"
+  if (-not $wslCapture.ExecuteCommand($checkCommand, "Verify script created")) {
+    throw "Script verification failed"
+  }
   ########################################################################################			
   ########################################################################################			
 
