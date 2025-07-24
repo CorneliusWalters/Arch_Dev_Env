@@ -17,7 +17,7 @@ class WSLProcessCapture {
     }
     
     # --- Methods ---
-        [bool] ExecuteCommand([string]$Command, [string]$Description) {
+    [bool] ExecuteCommand([string]$Command, [string]$Description) {
         $this.Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
         
         try {
@@ -88,6 +88,25 @@ class WSLProcessCapture {
                 Remove-Item "$($this.OutputLogFile).err" -ErrorAction SilentlyContinue
             }
         }
+    }
+    
+    # --- ADD THIS METHOD BACK ---
+    [void] DisplayLine([string]$Line) {
+        if ($Line -match '\[ERROR\]') {
+            Write-Host "WSL: $Line" -ForegroundColor Red
+        } elseif ($Line -match '\[SUCCESS\]') {
+            Write-Host "WSL: $Line" -ForegroundColor Green
+        } elseif ($Line -match '\[STATUS\]') {
+            Write-Host "WSL: $Line" -ForegroundColor Cyan
+        } elseif ($Line -match '\[WARNING\]') {
+            Write-Host "WSL: $Line" -ForegroundColor Yellow
+        } else {
+            Write-Host "WSL: $Line" -ForegroundColor White
+        }
+    }
+    
+    [void] Cleanup() {
+        # Nothing to clean up in this simpler approach
     }
 }
 class WslLogger {
