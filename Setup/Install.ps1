@@ -75,13 +75,31 @@ try {
     throw "Config file creation failed"
   }
   $logger.WritePhaseStatus("CONFIG", "SUCCESS", "Config file created")
+  
+  $logger.WritePhaseStatus("USER_CONFIG", "STARTING", "Configuring default WSL user")
 
-  $setUserCommand = "echo '[user]' > /etc/wsl.conf && echo 'default=$wslUsername' >> /etc/wsl.conf"
+  # Create the wsl.conf file as root
   $wslCaptureRoot = [WSLProcessCapture]::new($logger, $wslDistroName, "root")
-  if (-not $wslCaptureRoot.ExecuteCommand($setUserCommand, "Set default WSL user")) {
-    throw "Failed to set default user"
+  $userConfigCommand = @"
+echo '[user]' > /etc/wsl.conf && echo 'default=$wslUsername' >> /etc/wsl.conf && cat /etc/wsl.conf
+"@
+
+  if (-not $wslCaptureRoot.ExecuteCommand($userConfigCommand, "Set WSL user config")) {
+    throw "Failed to set WSL user config"
   }
-			
+
+  # FULL WSL shutdown (not just terminate)
+  $logger.WritePhaseStatus("USER_CONFIG", "STARTING", "Shutting down WSL to apply user settings")
+  wsl --shutdown
+  Start-Sleep -Seconds 5
+
+  # Verify the user change worked
+  $logger.WritePhaseStatus("USER_CONFIG", "STARTING", "Verifying user context")
+  $verifyUserCommand = "whoami && pwd && echo 'User verification complete'"
+  $wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
+  if (-not $wslCapture.ExecuteCommand($verifyUserCommand, "Verify user context")) {
+    throw "User context verification failed - still running as wrong user"
+  }			
   ########################################################################################			
   ########################################################################################			
   #  $logger.WritePhaseStatus("DEBUG", "STARTING", "Testing WSL capture")
