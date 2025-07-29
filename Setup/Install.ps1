@@ -121,64 +121,15 @@ echo '[user]' > /etc/wsl.conf && echo 'default=$wslUsername' >> /etc/wsl.conf &&
   #  ########################################################################################			
   #  ########################################################################################			
   # Phase 6: Main Setup 
-  $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script")
+  $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup via repository wrapper script")
 
-  # First, verify the script exists
-  $testScriptCommand = "test -f '$wslRepoPath/Setup/1_sys_init.sh' && echo 'SCRIPT_EXISTS' || echo 'SCRIPT_MISSING'"
-  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $testScriptCommand -Description "Verify script exists" -Logger $logger)) {
-    throw "Setup script verification failed"
+  $wrapperPath = "$wslRepoPath/Setup/lib/99_wrapper.sh"
+  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command "bash '$wrapperPath'" -Description "Execute repository wrapper script" -Logger $logger)) {
+    throw "Repository wrapper script execution failed"
   }
 
-  # Create a wrapper script for better control
-  $wrapperScriptCommand = @"
-cat > /tmp/setup_runner.sh << 'WRAPPER_EOF'
-#!/bin/bash
-set -e
-export FORCE_OVERWRITE='true'
-export SYSTEM_LOCALE='en_US.UTF-8'
-export POWERSHELL_EXECUTION='true'
-
-echo "=== WSL Setup Starting at \$(date) ==="
-echo "Working directory: \$(pwd)"
-echo "User: \$(whoami)"
-echo "Repository path: $wslRepoPath"
-
-cd '$wslRepoPath' || { echo "ERROR: Cannot cd to $wslRepoPath"; exit 1; }
-echo "Changed to: \$(pwd)"
-
-if [ ! -f Setup/1_sys_init.sh ]; then
-    echo "ERROR: Setup/1_sys_init.sh not found"
-    exit 1
-fi
-
-echo "Starting 1_sys_init.sh..."
-exec bash Setup/1_sys_init.sh
-WRAPPER_EOF
-chmod +x /tmp/setup_runner.sh
-"@
-
-  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $wrapperScriptCommand -Description "Create wrapper script" -Logger $logger)) {
-    throw "Failed to create wrapper script"
-  }
-
-  # Execute the wrapper script with real-time output
-  $logger.WriteLog("INFO", "Executing main setup script...", "Cyan")
-  $wslArgs = @("-d", $wslDistroName, "-u", $wslUsername, "/tmp/setup_runner.sh")
-
-  try {
-    $process = Start-Process -FilePath "wsl" -ArgumentList $wslArgs -NoNewWindow -Wait -PassThru
-    
-    if ($process.ExitCode -eq 0) {
-      $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed")
-    }
-    else {
-      throw "Setup script failed with exit code: $($process.ExitCode)"
-    }
-  }
-  catch {
-    $logger.WritePhaseStatus("MAIN_SETUP", "ERROR", "Setup execution failed: $($_.Exception.Message)")
-    throw
-  }	
+  $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed")
+	
   # Phase 7: Export (optional)
   Export-WSLImage -Logger $logger -WslDistroName $wslDistroName -ExportPath $configuredArchTarballExportPath
 	
