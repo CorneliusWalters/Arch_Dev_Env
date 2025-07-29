@@ -100,14 +100,12 @@ sync_wsl_time() {
     fi
     
     # Force time sync from Windows host
-    local wintime=$(powershell.exe -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'")
-    if [ -n "$wintime" ]; then
+    local wintime
+    if wintime=$(powershell.exe -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'" 2>/dev/null); then
         execute_and_log "sudo date -s \"$wintime\"" \
             "Setting system time from Windows host" "TIME"
     else
-        print_warning "TIME" "Failed to get time from Windows host, trying NTP"
-        execute_and_log "sudo timedatectl set-ntp true" \
-            "Enable NTP time synchronization" "TIME"
+        print_warning "TIME" "Cannot access Windows PowerShell from WSL, using system time"
     fi
     
     print_status "TIME" "Current system time: $(date)"
