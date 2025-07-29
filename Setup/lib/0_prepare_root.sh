@@ -21,7 +21,7 @@ echo "--> Updating package databases..."
 pacman -Sy 
 
 echo "--> Installing essential packages: sudo..."
-pacman -S --noconfirm sudo
+pacman -S --noconfirm sudo git inetutils curl
 
 echo "--> Configuring WSL mount options for executable permissions..."
 
