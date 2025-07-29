@@ -20,91 +20,44 @@ class WSLProcessCapture {
     # --- SIMPLIFIED execution method - NO EVENT HANDLERS ---
     [bool] ExecuteCommand([string]$Command, [string]$Description) {
         $this.Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
-        
+    
         try {
-            # Simple approach using Start-Process with file redirection
-            $enhancedCommand = "$Command && echo 'WSL_COMMAND_SUCCESS'"
-            
-            $wslArgs = @("-d", $this.DistroName, "-u", $this.Username, "-e", "bash", "-c", $enhancedCommand)
-            
-            # Use Start-Process with file redirection - NO EVENT HANDLERS
-            $wslProcess = Start-Process -FilePath "wsl" -ArgumentList $wslArgs -RedirectStandardOutput $this.OutputLogFile -RedirectStandardError $this.ErrorLogFile -Wait -PassThru -NoNewWindow
-            
-            # Give it a moment to write files
-            Start-Sleep -Milliseconds 300
-            
-            # Read and display the output files
-            $stdout = @()
-            $stderr = @()
-            
-            if (Test-Path $this.OutputLogFile) {
-                $stdout = Get-Content $this.OutputLogFile -ErrorAction SilentlyContinue
-                if (-not $stdout) { $stdout = @() }
-            }
-            
-            if (Test-Path $this.ErrorLogFile) {
-                $stderr = Get-Content $this.ErrorLogFile -ErrorAction SilentlyContinue
-                if (-not $stderr) { $stderr = @() }
-            }
-            
-            # Display output with proper formatting
-            foreach ($line in $stdout) {
-                if ($line) { 
-                    $this.DisplayLine($line)
-                    Add-Content -Path $this.Logger.LogFile -Value "WSL-OUT: $line" -Encoding UTF8
+            # Method 1: Direct execution with real-time output (no file redirection)
+            $this.Logger.WriteLog("INFO", "Executing: $Command", "Cyan")
+        
+            # Use cmd /c for immediate output display
+            $cmdLine = "wsl -d $($this.DistroName) -u $($this.Username) bash -c `"$Command`""
+            $this.Logger.WriteLog("DEBUG", "Command line: $cmdLine", "Gray")
+        
+            # Execute directly and let output go to console
+            $result = cmd /c $cmdLine
+            $exitCode = $LASTEXITCODE
+        
+            # Also log the result to file
+            if ($result) {
+                foreach ($line in $result) {
+                    if ($line) {
+                        $this.DisplayLine($line)
+                        Add-Content -Path $this.Logger.LogFile -Value "WSL-OUT: $line" -Encoding UTF8
+                    }
                 }
             }
-            
-            foreach ($line in $stderr) {
-                if ($line) { 
-                    Write-Host "WSL-ERR: $line" -ForegroundColor Red
-                    Add-Content -Path $this.Logger.LogFile -Value "WSL-ERR: $line" -Encoding UTF8
-                }
-            }
-            
-            $exitCode = $wslProcess.ExitCode
-            
-            # Debug information
+        
             $this.Logger.WriteLog("DEBUG", "Exit code: $exitCode", "Gray")
-            $this.Logger.WriteLog("DEBUG", "Output lines count: $($stdout.Count)", "Gray")
-            $this.Logger.WriteLog("DEBUG", "Error lines count: $($stderr.Count)", "Gray")
-            
+        
             if ($exitCode -eq 0) {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
                 return $true
             }
             else {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exit code: $exitCode")
-                
-                # Show recent errors if available
-                if ($stderr.Count -gt 0) {
-                    $this.Logger.WriteLog("ERROR", "Recent errors:", "Red")
-                    $stderr | Select-Object -Last 5 | ForEach-Object {
-                        if ($_) { $this.Logger.WriteLog("ERROR", "  $_", "Red") }
-                    }
-                }
-                
-                # Show recent output if available
-                if ($stdout.Count -gt 0) {
-                    $this.Logger.WriteLog("ERROR", "Recent output:", "Yellow")
-                    $stdout | Select-Object -Last 5 | ForEach-Object {
-                        if ($_) { $this.Logger.WriteLog("ERROR", "  $_", "Gray") }
-                    }
-                }
-                
                 return $false
             }
-            
+        
         }
         catch {
             $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
             return $false
-        }
-        finally {
-            # Clean up temp files
-            if (Test-Path $this.ErrorLogFile) {
-                Remove-Item $this.ErrorLogFile -ErrorAction SilentlyContinue
-            }
         }
     }
     
