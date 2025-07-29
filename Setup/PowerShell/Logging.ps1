@@ -17,113 +17,98 @@ class WSLProcessCapture {
         $this.ErrorLogFile = "$($Logger.LogDir)\wsl_error.log"
     }
     
-    # --- Enhanced execution method with both real-time AND file output ---
-
+    # --- SIMPLIFIED execution method - NO EVENT HANDLERS ---
     [bool] ExecuteCommand([string]$Command, [string]$Description) {
         $this.Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
-    
-        # Clear previous log files for this command
-        if (Test-Path $this.OutputLogFile) { Clear-Content $this.OutputLogFile }
-        if (Test-Path $this.ErrorLogFile) { Clear-Content $this.ErrorLogFile }
-    
+        
         try {
-            $psi = New-Object System.Diagnostics.ProcessStartInfo
-            $psi.FileName = "wsl"
-            $psi.Arguments = "-d $($this.DistroName) -u $($this.Username) bash -c `"$Command`""
-            $psi.RedirectStandardOutput = $true
-            $psi.RedirectStandardError = $true
-            $psi.UseShellExecute = $false
-            $psi.CreateNoWindow = $true
-        
-            $process = New-Object System.Diagnostics.Process
-            $process.StartInfo = $psi
-        
-            # Real-time output handling WITH file logging - USING GetNewClosure()
-            $process.add_OutputDataReceived({
-                    param($processObject, $eventArgs)
-                    if (-not [string]::IsNullOrEmpty($eventArgs.Data)) {
-                        # Display to console with colors
-                        $this.DisplayLine($eventArgs.Data)
-                
-                        # Write to file for persistent logging
-                        Add-Content -Path $this.OutputLogFile -Value $eventArgs.Data -Encoding UTF8
-                
-                        # Also write to main log file
-                        Add-Content -Path $this.Logger.LogFile -Value "WSL-OUT: $($eventArgs.Data)" -Encoding UTF8
-                    }
-                }.GetNewClosure())
-        
-            $process.add_ErrorDataReceived({
-                    param($processObject, $eventArgs)
-                    if (-not [string]::IsNullOrEmpty($eventArgs.Data)) {
-                        # Display error to console
-                        Write-Host "WSL-ERR: $($eventArgs.Data)" -ForegroundColor Red
-                
-                        # Write to error file
-                        Add-Content -Path $this.ErrorLogFile -Value $eventArgs.Data -Encoding UTF8
-                
-                        # Also write to main log file
-                        Add-Content -Path $this.Logger.LogFile -Value "WSL-ERR: $($eventArgs.Data)" -Encoding UTF8
-                    }
-                }.GetNewClosure())
-        
-            $process.Start()
-            $process.BeginOutputReadLine()
-            $process.BeginErrorReadLine()
-            $process.WaitForExit()
-        
-            $exitCode = $process.ExitCode
-        
-            # Log command completion details
-            $this.Logger.WriteLog("DEBUG", "Command completed with exit code: $exitCode", "Gray")
-            $this.Logger.WriteLog("DEBUG", "Full output logged to: $($this.OutputLogFile)", "Gray")
-            if (Test-Path $this.ErrorLogFile -PathType Leaf) {
-                $errorSize = (Get-Item $this.ErrorLogFile).Length
-                if ($errorSize -gt 0) {
-                    $this.Logger.WriteLog("DEBUG", "Errors logged to: $($this.ErrorLogFile)", "Gray")
+            # Simple approach using Start-Process with file redirection
+            $enhancedCommand = "$Command && echo 'WSL_COMMAND_SUCCESS'"
+            
+            $wslArgs = @("-d", $this.DistroName, "-u", $this.Username, "-e", "bash", "-c", $enhancedCommand)
+            
+            # Use Start-Process with file redirection - NO EVENT HANDLERS
+            $wslProcess = Start-Process -FilePath "wsl" -ArgumentList $wslArgs -RedirectStandardOutput $this.OutputLogFile -RedirectStandardError $this.ErrorLogFile -Wait -PassThru -NoNewWindow
+            
+            # Give it a moment to write files
+            Start-Sleep -Milliseconds 300
+            
+            # Read and display the output files
+            $stdout = @()
+            $stderr = @()
+            
+            if (Test-Path $this.OutputLogFile) {
+                $stdout = Get-Content $this.OutputLogFile -ErrorAction SilentlyContinue
+                if (-not $stdout) { $stdout = @() }
+            }
+            
+            if (Test-Path $this.ErrorLogFile) {
+                $stderr = Get-Content $this.ErrorLogFile -ErrorAction SilentlyContinue
+                if (-not $stderr) { $stderr = @() }
+            }
+            
+            # Display output with proper formatting
+            foreach ($line in $stdout) {
+                if ($line) { 
+                    $this.DisplayLine($line)
+                    Add-Content -Path $this.Logger.LogFile -Value "WSL-OUT: $line" -Encoding UTF8
                 }
             }
-        
+            
+            foreach ($line in $stderr) {
+                if ($line) { 
+                    Write-Host "WSL-ERR: $line" -ForegroundColor Red
+                    Add-Content -Path $this.Logger.LogFile -Value "WSL-ERR: $line" -Encoding UTF8
+                }
+            }
+            
+            $exitCode = $wslProcess.ExitCode
+            
+            # Debug information
+            $this.Logger.WriteLog("DEBUG", "Exit code: $exitCode", "Gray")
+            $this.Logger.WriteLog("DEBUG", "Output lines count: $($stdout.Count)", "Gray")
+            $this.Logger.WriteLog("DEBUG", "Error lines count: $($stderr.Count)", "Gray")
+            
             if ($exitCode -eq 0) {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
                 return $true
             }
             else {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exit code: $exitCode")
-            
-                # Show recent errors from file if available
-                if (Test-Path $this.ErrorLogFile -PathType Leaf) {
-                    $recentErrors = Get-Content $this.ErrorLogFile -Tail 5 -ErrorAction SilentlyContinue
-                    if ($recentErrors) {
-                        $this.Logger.WriteLog("ERROR", "Recent errors from log file:", "Red")
-                        foreach ($errorLine in $recentErrors) {
-                            $this.Logger.WriteLog("ERROR", "  $errorLine", "Red")
-                        }
+                
+                # Show recent errors if available
+                if ($stderr.Count -gt 0) {
+                    $this.Logger.WriteLog("ERROR", "Recent errors:", "Red")
+                    $stderr | Select-Object -Last 5 | ForEach-Object {
+                        if ($_) { $this.Logger.WriteLog("ERROR", "  $_", "Red") }
                     }
                 }
-            
-                # Show recent output from file if available
-                if (Test-Path $this.OutputLogFile -PathType Leaf) {
-                    $recentOutput = Get-Content $this.OutputLogFile -Tail 5 -ErrorAction SilentlyContinue
-                    if ($recentOutput) {
-                        $this.Logger.WriteLog("ERROR", "Recent output from log file:", "Yellow")
-                        foreach ($outputLine in $recentOutput) {
-                            $this.Logger.WriteLog("ERROR", "  $outputLine", "Gray")
-                        }
+                
+                # Show recent output if available
+                if ($stdout.Count -gt 0) {
+                    $this.Logger.WriteLog("ERROR", "Recent output:", "Yellow")
+                    $stdout | Select-Object -Last 5 | ForEach-Object {
+                        if ($_) { $this.Logger.WriteLog("ERROR", "  $_", "Gray") }
                     }
                 }
-            
+                
                 return $false
             }
-        
+            
         }
         catch {
             $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
             return $false
         }
+        finally {
+            # Clean up temp files
+            if (Test-Path $this.ErrorLogFile) {
+                Remove-Item $this.ErrorLogFile -ErrorAction SilentlyContinue
+            }
+        }
     }
     
-    # --- Keep the existing DisplayLine method ---
+    # --- Keep the DisplayLine method ---
     [void] DisplayLine([string]$Line) {
         if ($Line -match '\[ERROR\]') {
             Write-Host "WSL: $Line" -ForegroundColor Red
@@ -142,20 +127,8 @@ class WSLProcessCapture {
         }
     }
     
-    # --- Enhanced cleanup method ---
     [void] Cleanup() {
-        # Optionally archive the log files instead of deleting them
-        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        
-        if (Test-Path $this.OutputLogFile) {
-            $archivePath = "$($this.OutputLogFile).$timestamp"
-            Move-Item $this.OutputLogFile $archivePath -ErrorAction SilentlyContinue
-        }
-        
-        if (Test-Path $this.ErrorLogFile) {
-            $archivePath = "$($this.ErrorLogFile).$timestamp"
-            Move-Item $this.ErrorLogFile $archivePath -ErrorAction SilentlyContinue
-        }
+        # Nothing to clean up in this simpler approach
     }
 }
 class WslLogger {
