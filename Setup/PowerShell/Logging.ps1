@@ -18,13 +18,14 @@ class WSLProcessCapture {
     }
     
     # --- Enhanced execution method with both real-time AND file output ---
+
     [bool] ExecuteCommand([string]$Command, [string]$Description) {
         $this.Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
-        
+    
         # Clear previous log files for this command
         if (Test-Path $this.OutputLogFile) { Clear-Content $this.OutputLogFile }
         if (Test-Path $this.ErrorLogFile) { Clear-Content $this.ErrorLogFile }
-        
+    
         try {
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName = "wsl"
@@ -33,46 +34,46 @@ class WSLProcessCapture {
             $psi.RedirectStandardError = $true
             $psi.UseShellExecute = $false
             $psi.CreateNoWindow = $true
-            
+        
             $process = New-Object System.Diagnostics.Process
             $process.StartInfo = $psi
-            
-            # Real-time output handling WITH file logging
+        
+            # Real-time output handling WITH file logging - USING GetNewClosure()
             $process.add_OutputDataReceived({
-                    param($processObject, $e)
-                    if (-not [string]::IsNullOrEmpty($e.Data)) {
+                    param($processObject, $eventArgs)
+                    if (-not [string]::IsNullOrEmpty($eventArgs.Data)) {
                         # Display to console with colors
-                        $this.DisplayLine($e.Data)
-                    
+                        $this.DisplayLine($eventArgs.Data)
+                
                         # Write to file for persistent logging
-                        Add-Content -Path $this.OutputLogFile -Value $e.Data -Encoding UTF8
-                    
+                        Add-Content -Path $this.OutputLogFile -Value $eventArgs.Data -Encoding UTF8
+                
                         # Also write to main log file
-                        Add-Content -Path $this.Logger.LogFile -Value "WSL-OUT: $($e.Data)" -Encoding UTF8
+                        Add-Content -Path $this.Logger.LogFile -Value "WSL-OUT: $($eventArgs.Data)" -Encoding UTF8
                     }
-                })
-            
+                }.GetNewClosure())
+        
             $process.add_ErrorDataReceived({
-                    param($processObject, $e)
-                    if (-not [string]::IsNullOrEmpty($e.Data)) {
+                    param($processObject, $eventArgs)
+                    if (-not [string]::IsNullOrEmpty($eventArgs.Data)) {
                         # Display error to console
-                        Write-Host "WSL-ERR: $($e.Data)" -ForegroundColor Red
-                    
+                        Write-Host "WSL-ERR: $($eventArgs.Data)" -ForegroundColor Red
+                
                         # Write to error file
-                        Add-Content -Path $this.ErrorLogFile -Value $e.Data -Encoding UTF8
-                    
+                        Add-Content -Path $this.ErrorLogFile -Value $eventArgs.Data -Encoding UTF8
+                
                         # Also write to main log file
-                        Add-Content -Path $this.Logger.LogFile -Value "WSL-ERR: $($e.Data)" -Encoding UTF8
+                        Add-Content -Path $this.Logger.LogFile -Value "WSL-ERR: $($eventArgs.Data)" -Encoding UTF8
                     }
-                })
-            
+                }.GetNewClosure())
+        
             $process.Start()
             $process.BeginOutputReadLine()
             $process.BeginErrorReadLine()
             $process.WaitForExit()
-            
+        
             $exitCode = $process.ExitCode
-            
+        
             # Log command completion details
             $this.Logger.WriteLog("DEBUG", "Command completed with exit code: $exitCode", "Gray")
             $this.Logger.WriteLog("DEBUG", "Full output logged to: $($this.OutputLogFile)", "Gray")
@@ -82,39 +83,39 @@ class WSLProcessCapture {
                     $this.Logger.WriteLog("DEBUG", "Errors logged to: $($this.ErrorLogFile)", "Gray")
                 }
             }
-            
+        
             if ($exitCode -eq 0) {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
                 return $true
             }
             else {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exit code: $exitCode")
-                
+            
                 # Show recent errors from file if available
                 if (Test-Path $this.ErrorLogFile -PathType Leaf) {
                     $recentErrors = Get-Content $this.ErrorLogFile -Tail 5 -ErrorAction SilentlyContinue
                     if ($recentErrors) {
                         $this.Logger.WriteLog("ERROR", "Recent errors from log file:", "Red")
-                        foreach ($errorline in $recentErrors) {
-                            $this.Logger.WriteLog("ERROR", "  $error", "Red")
+                        foreach ($errorLine in $recentErrors) {
+                            $this.Logger.WriteLog("ERROR", "  $errorLine", "Red")
                         }
                     }
                 }
-                
+            
                 # Show recent output from file if available
                 if (Test-Path $this.OutputLogFile -PathType Leaf) {
                     $recentOutput = Get-Content $this.OutputLogFile -Tail 5 -ErrorAction SilentlyContinue
                     if ($recentOutput) {
                         $this.Logger.WriteLog("ERROR", "Recent output from log file:", "Yellow")
-                        foreach ($output in $recentOutput) {
-                            $this.Logger.WriteLog("ERROR", "  $output", "Gray")
+                        foreach ($outputLine in $recentOutput) {
+                            $this.Logger.WriteLog("ERROR", "  $outputLine", "Gray")
                         }
                     }
                 }
-                
+            
                 return $false
             }
-            
+        
         }
         catch {
             $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
