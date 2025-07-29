@@ -91,14 +91,6 @@ optimise_pacman() {
 sync_wsl_time() {
     print_status "TIME" "Synchronizing WSL system time with Windows host..."
     
-    # Disable and stop timesyncd if it exists
-    if command_exists systemctl; then
-        execute_and_log "sudo systemctl stop systemd-timesyncd || true" \
-            "Stop timesyncd service if it exists" "TIME"
-        execute_and_log "sudo systemctl disable systemd-timesyncd || true" \
-            "Disable timesyncd service if it exists" "TIME"
-    fi
-    
     # Force time sync from Windows host
     local wintime
     if wintime=$(powershell.exe -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'" 2>/dev/null); then
