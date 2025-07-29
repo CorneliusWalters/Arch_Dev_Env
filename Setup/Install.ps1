@@ -75,7 +75,7 @@ try {
     throw "Config file creation failed"
   }
   $logger.WritePhaseStatus("CONFIG", "SUCCESS", "Config file created")
-  
+
   $logger.WritePhaseStatus("USER_CONFIG", "STARTING", "Configuring default WSL user")
 
   # Create the wsl.conf file as root
@@ -102,75 +102,82 @@ echo '[user]' > /etc/wsl.conf && echo 'default=$wslUsername' >> /etc/wsl.conf &&
   }			
   ########################################################################################			
   ########################################################################################			
-  #  $logger.WritePhaseStatus("DEBUG", "STARTING", "Testing WSL capture")
-  #
-  #  # Test with a simple command first
-  #  $testCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
-  #  $testResult = $testCapture.ExecuteCommand("echo 'Hello from WSL'; whoami; pwd", "WSL Capture Test")
-  #     
-  #  if ($testResult) {
-  #    $logger.WritePhaseStatus("DEBUG", "SUCCESS", "WSL capture is working")
-  #  }
-  #  else {
-  #    $logger.WritePhaseStatus("DEBUG", "ERROR", "WSL capture failed")
-  #  }
-  #
-  #  $createScriptCommand = @"
-  #cat > /tmp/setup_wrapper.sh << 'WRAPPER_EOF'
-  ##!/bin/bash
-  #echo "Hello from wrapper script"
-  #WRAPPER_EOF
-  #"@
-  #
-  #  # Change this line - use $testCapture instead of $wslCapture:
-  #  if (-not $testCapture.ExecuteCommand($createScriptCommand, "Create test script")) {
-  #    throw "Failed to create script"
-  #  }
-  #
-  #  # And this line too:
-  #  $checkCommand = "ls -la /tmp/setup_wrapper.sh && cat /tmp/setup_wrapper.sh"  
-  #  if (-not $testCapture.ExecuteCommand($checkCommand, "Verify script created")) {
-  #    throw "Script verification failed"
-  #  }
+  $logger.WritePhaseStatus("DEBUG", "STARTING", "Testing WSL basic functionality")
+
+  $debugCommands = @(
+    "whoami",
+    "pwd", 
+    "echo `$HOME",
+    "test -d '$wslRepoPath' && echo 'REPO_DIR_EXISTS' || echo 'REPO_DIR_MISSING'",
+    "test -f '$wslRepoPath/Setup/1_sys_init.sh' && echo 'SCRIPT_EXISTS' || echo 'SCRIPT_MISSING'",
+    "ls -la '$wslRepoPath/Setup/' | head -5"
+  )
+
+  foreach ($cmd in $debugCommands) {
+    $result = wsl -d $wslDistroName -u $wslUsername bash -c $cmd
+    $logger.WriteLog("DEBUG", "Command: $cmd", "Gray")
+    $logger.WriteLog("DEBUG", "Result: $result", "Gray")
+  }
   #  ########################################################################################			
   #  ########################################################################################			
   # Phase 6: Main Setup 
   $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script")
-  $wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
-  
-  $logger.WriteLog("DEBUG", "wslCapture type: $($wslCapture.GetType().Name)", "Gray")
-  $logger.WriteLog("DEBUG", "wslRepoPath: '$wslRepoPath'", "Gray")
-  $logger.WriteLog("DEBUG", "logger.LogDir: '$($logger.LogDir)'", "Gray")
-  try {
-    # Create the script content as a here-document directly in WSL
-    #    $setupCommand = @"
-    #cd ~
-    #cat > /tmp/setup_wrapper.sh << 'WRAPPER_EOF'
-    ##!/bin/bash
-    #export FORCE_OVERWRITE='true'
-    #export SYSTEM_LOCALE='en_US.UTF-8'  
-    #cd '$wslRepoPath'
-    #echo "Starting 1_sys_init.sh from: `$(pwd)"
-    #exec bash Setup/1_sys_init.sh
-    #WRAPPER_EOF
-    #chmod +x /tmp/setup_wrapper.sh && /tmp/setup_wrapper.sh
-    #"@
-    #
-    # First, just test if we can see the file in WSL
-    $setupCommand = @"
-export FORCE_OVERWRITE='true' && export SYSTEM_LOCALE='en_US.UTF-8' && cd '$wslRepoPath' && echo "Starting from: `$(pwd)" && bash Setup/1_sys_init.sh
+
+  # First, verify the script exists
+  $testScriptCommand = "test -f '$wslRepoPath/Setup/1_sys_init.sh' && echo 'SCRIPT_EXISTS' || echo 'SCRIPT_MISSING'"
+  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $testScriptCommand -Description "Verify script exists" -Logger $logger)) {
+    throw "Setup script verification failed"
+  }
+
+  # Create a wrapper script for better control
+  $wrapperScriptCommand = @"
+cat > /tmp/setup_runner.sh << 'WRAPPER_EOF'
+#!/bin/bash
+set -e
+export FORCE_OVERWRITE='true'
+export SYSTEM_LOCALE='en_US.UTF-8'
+export POWERSHELL_EXECUTION='true'
+
+echo "=== WSL Setup Starting at \$(date) ==="
+echo "Working directory: \$(pwd)"
+echo "User: \$(whoami)"
+echo "Repository path: $wslRepoPath"
+
+cd '$wslRepoPath' || { echo "ERROR: Cannot cd to $wslRepoPath"; exit 1; }
+echo "Changed to: \$(pwd)"
+
+if [ ! -f Setup/1_sys_init.sh ]; then
+    echo "ERROR: Setup/1_sys_init.sh not found"
+    exit 1
+fi
+
+echo "Starting 1_sys_init.sh..."
+exec bash Setup/1_sys_init.sh
+WRAPPER_EOF
+chmod +x /tmp/setup_runner.sh
 "@
 
-    if (-not $wslCapture.ExecuteCommand($setupCommand, "Main setup script")) {
-      throw "Main setup script failed"
-    }
+  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $wrapperScriptCommand -Description "Create wrapper script" -Logger $logger)) {
+    throw "Failed to create wrapper script"
+  }
+
+  # Execute the wrapper script with real-time output
+  $logger.WriteLog("INFO", "Executing main setup script...", "Cyan")
+  $wslArgs = @("-d", $wslDistroName, "-u", $wslUsername, "/tmp/setup_runner.sh")
+
+  try {
+    $process = Start-Process -FilePath "wsl" -ArgumentList $wslArgs -NoNewWindow -Wait -PassThru
     
-    $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed")
+    if ($process.ExitCode -eq 0) {
+      $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed")
+    }
+    else {
+      throw "Setup script failed with exit code: $($process.ExitCode)"
+    }
   }
   catch {
-    $logger.WriteLog("DEBUG", "Exception details: $($_.Exception)", "Red")
-    $logger.WriteLog("DEBUG", "Exception type: $($_.Exception.GetType().Name)", "Red")
-    throw "Main setup script failed: $($_.Exception.Message)"
+    $logger.WritePhaseStatus("MAIN_SETUP", "ERROR", "Setup execution failed: $($_.Exception.Message)")
+    throw
   }	
   # Phase 7: Export (optional)
   Export-WSLImage -Logger $logger -WslDistroName $wslDistroName -ExportPath $configuredArchTarballExportPath
