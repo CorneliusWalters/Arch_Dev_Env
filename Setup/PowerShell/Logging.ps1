@@ -6,7 +6,7 @@ class WSLProcessCapture {
     [string]$DistroName
     [string]$Username
     [string]$OutputLogFile
-    [System.Diagnostics.Process]$Process
+    [string]$ErrorLogFile
     
     # --- Constructor ---
     WSLProcessCapture([PSCustomObject]$Logger, [string]$DistroName, [string]$Username) {
@@ -14,99 +14,147 @@ class WSLProcessCapture {
         $this.DistroName = $DistroName
         $this.Username = $Username
         $this.OutputLogFile = "$($Logger.LogDir)\wsl_output.log"
+        $this.ErrorLogFile = "$($Logger.LogDir)\wsl_error.log"
     }
     
-    # --- Methods ---
+    # --- Enhanced execution method with both real-time AND file output ---
     [bool] ExecuteCommand([string]$Command, [string]$Description) {
         $this.Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
         
+        # Clear previous log files for this command
+        if (Test-Path $this.OutputLogFile) { Clear-Content $this.OutputLogFile }
+        if (Test-Path $this.ErrorLogFile) { Clear-Content $this.ErrorLogFile }
+        
         try {
-            # Simple approach - no nested bash
-            $enhancedCommand = "$Command && echo 'WSL_COMMAND_SUCCESS'"
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = "wsl"
+            $psi.Arguments = "-d $($this.DistroName) -u $($this.Username) bash -c `"$Command`""
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $psi.UseShellExecute = $false
+            $psi.CreateNoWindow = $true
             
-            # Execute and capture output directly
-            $wslArgs = @("-d", $this.DistroName, "-u", $this.Username, "-e", "bash", "-c", $enhancedCommand)
-            $wslProcess = Start-Process -FilePath "wsl" -ArgumentList $wslArgs -RedirectStandardOutput $this.OutputLogFile -RedirectStandardError "$($this.OutputLogFile).err" -Wait -PassThru -NoNewWindow
+            $process = New-Object System.Diagnostics.Process
+            $process.StartInfo = $psi
             
-            # Read the output files
-            Start-Sleep -Milliseconds 100
+            # Real-time output handling WITH file logging
+            $process.add_OutputDataReceived({
+                    param($processObject, $e)
+                    if (-not [string]::IsNullOrEmpty($e.Data)) {
+                        # Display to console with colors
+                        $this.DisplayLine($e.Data)
+                    
+                        # Write to file for persistent logging
+                        Add-Content -Path $this.OutputLogFile -Value $e.Data -Encoding UTF8
+                    
+                        # Also write to main log file
+                        Add-Content -Path $this.Logger.LogFile -Value "WSL-OUT: $($e.Data)" -Encoding UTF8
+                    }
+                })
             
-            $stdout = @()
-            $stderr = @()
+            $process.add_ErrorDataReceived({
+                    param($processObject, $e)
+                    if (-not [string]::IsNullOrEmpty($e.Data)) {
+                        # Display error to console
+                        Write-Host "WSL-ERR: $($e.Data)" -ForegroundColor Red
+                    
+                        # Write to error file
+                        Add-Content -Path $this.ErrorLogFile -Value $e.Data -Encoding UTF8
+                    
+                        # Also write to main log file
+                        Add-Content -Path $this.Logger.LogFile -Value "WSL-ERR: $($e.Data)" -Encoding UTF8
+                    }
+                })
             
-            if (Test-Path $this.OutputLogFile) {
-                $stdout = Get-Content $this.OutputLogFile -ErrorAction SilentlyContinue
-                if (-not $stdout) { $stdout = @() }
+            $process.Start()
+            $process.BeginOutputReadLine()
+            $process.BeginErrorReadLine()
+            $process.WaitForExit()
+            
+            $exitCode = $process.ExitCode
+            
+            # Log command completion details
+            $this.Logger.WriteLog("DEBUG", "Command completed with exit code: $exitCode", "Gray")
+            $this.Logger.WriteLog("DEBUG", "Full output logged to: $($this.OutputLogFile)", "Gray")
+            if (Test-Path $this.ErrorLogFile -PathType Leaf) {
+                $errorSize = (Get-Item $this.ErrorLogFile).Length
+                if ($errorSize -gt 0) {
+                    $this.Logger.WriteLog("DEBUG", "Errors logged to: $($this.ErrorLogFile)", "Gray")
+                }
             }
             
-            if (Test-Path "$($this.OutputLogFile).err") {
-                $stderr = Get-Content "$($this.OutputLogFile).err" -ErrorAction SilentlyContinue
-                if (-not $stderr) { $stderr = @() }
-            }
-            
-            # Display output
-            foreach ($line in $stdout) {
-                if ($line) { $this.DisplayLine($line) }
-            }
-            foreach ($line in $stderr) {
-                if ($line) { $this.DisplayLine($line) }
-            }
-            
-            $exitCode = $wslProcess.ExitCode
-            
-            # Debug output
-            $this.Logger.WriteLog("DEBUG", "Exit code: $exitCode", "Gray")
-            $this.Logger.WriteLog("DEBUG", "Output lines count: $($stdout.Count)", "Gray")
-            $this.Logger.WriteLog("DEBUG", "Error lines count: $($stderr.Count)", "Gray")
-            
-            # Check for success - more lenient check
             if ($exitCode -eq 0) {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
                 return $true
-            } else {
-                $errorMsg = "$Description - Exit code: $exitCode"
+            }
+            else {
+                $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exit code: $exitCode")
                 
-                if ($stderr.Count -gt 0) {
-                    $recentErrors = $stderr | Select-Object -Last 3
-                    $errorMsg += " - Recent errors: $($recentErrors -join '; ')"
+                # Show recent errors from file if available
+                if (Test-Path $this.ErrorLogFile -PathType Leaf) {
+                    $recentErrors = Get-Content $this.ErrorLogFile -Tail 5 -ErrorAction SilentlyContinue
+                    if ($recentErrors) {
+                        $this.Logger.WriteLog("ERROR", "Recent errors from log file:", "Red")
+                        foreach ($errorline in $recentErrors) {
+                            $this.Logger.WriteLog("ERROR", "  $error", "Red")
+                        }
+                    }
                 }
                 
-                if ($stdout.Count -gt 0) {
-                    $recentOutput = $stdout | Select-Object -Last 2
-                    $errorMsg += " - Last output: $($recentOutput -join '; ')"
+                # Show recent output from file if available
+                if (Test-Path $this.OutputLogFile -PathType Leaf) {
+                    $recentOutput = Get-Content $this.OutputLogFile -Tail 5 -ErrorAction SilentlyContinue
+                    if ($recentOutput) {
+                        $this.Logger.WriteLog("ERROR", "Recent output from log file:", "Yellow")
+                        foreach ($output in $recentOutput) {
+                            $this.Logger.WriteLog("ERROR", "  $output", "Gray")
+                        }
+                    }
                 }
                 
-                $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", $errorMsg)
                 return $false
             }
-        } catch {
+            
+        }
+        catch {
             $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
             return $false
-        } finally {
-            # Clean up temp files
-            if (Test-Path "$($this.OutputLogFile).err") {
-                Remove-Item "$($this.OutputLogFile).err" -ErrorAction SilentlyContinue
-            }
         }
     }
     
-    # --- ADD THIS METHOD BACK ---
+    # --- Keep the existing DisplayLine method ---
     [void] DisplayLine([string]$Line) {
         if ($Line -match '\[ERROR\]') {
             Write-Host "WSL: $Line" -ForegroundColor Red
-        } elseif ($Line -match '\[SUCCESS\]') {
+        }
+        elseif ($Line -match '\[SUCCESS\]') {
             Write-Host "WSL: $Line" -ForegroundColor Green
-        } elseif ($Line -match '\[STATUS\]') {
+        }
+        elseif ($Line -match '\[STATUS\]') {
             Write-Host "WSL: $Line" -ForegroundColor Cyan
-        } elseif ($Line -match '\[WARNING\]') {
+        }
+        elseif ($Line -match '\[WARNING\]') {
             Write-Host "WSL: $Line" -ForegroundColor Yellow
-        } else {
+        }
+        else {
             Write-Host "WSL: $Line" -ForegroundColor White
         }
     }
     
+    # --- Enhanced cleanup method ---
     [void] Cleanup() {
-        # Nothing to clean up in this simpler approach
+        # Optionally archive the log files instead of deleting them
+        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        
+        if (Test-Path $this.OutputLogFile) {
+            $archivePath = "$($this.OutputLogFile).$timestamp"
+            Move-Item $this.OutputLogFile $archivePath -ErrorAction SilentlyContinue
+        }
+        
+        if (Test-Path $this.ErrorLogFile) {
+            $archivePath = "$($this.ErrorLogFile).$timestamp"
+            Move-Item $this.ErrorLogFile $archivePath -ErrorAction SilentlyContinue
+        }
     }
 }
 class WslLogger {
@@ -147,7 +195,7 @@ class WslLogger {
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         $message = "[$timestamp] [PHASE: $Phase] [$Status] $Details"
         
-        $color = switch($Status) {
+        $color = switch ($Status) {
             "SUCCESS" { "Green" }
             "ERROR" { "Red" }
             "STARTING" { "Cyan" }
@@ -161,7 +209,76 @@ class WslLogger {
         $phaseLogPath = "$($this.LogDir)\phases.log"
         Add-Content -Path $phaseLogPath -Value $message
     }
-
+    [bool] InvokeWSLWithRealTimeOutput([string]$DistroName, [string]$Username, [string]$Command, [string]$Description) {
+        $this.WritePhaseStatus("WSL_REAL", "STARTING", $Description)
+        
+        try {
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = "wsl"
+            $psi.Arguments = "-d $DistroName -u $Username bash -c `"$Command`""
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $psi.UseShellExecute = $false
+            $psi.CreateNoWindow = $true
+            
+            $process = New-Object System.Diagnostics.Process
+            $process.StartInfo = $psi
+            
+            # Real-time output handling with proper coloring
+            $process.add_OutputDataReceived({
+                    param($processObject, $e)
+                    if (-not [string]::IsNullOrEmpty($e.Data)) {
+                        if ($e.Data -match '\[ERROR\]') {
+                            Write-Host "WSL: $($e.Data)" -ForegroundColor Red
+                        }
+                        elseif ($e.Data -match '\[SUCCESS\]') {
+                            Write-Host "WSL: $($e.Data)" -ForegroundColor Green
+                        }
+                        elseif ($e.Data -match '\[STATUS\]') {
+                            Write-Host "WSL: $($e.Data)" -ForegroundColor Cyan
+                        }
+                        elseif ($e.Data -match '\[WARNING\]') {
+                            Write-Host "WSL: $($e.Data)" -ForegroundColor Yellow
+                        }
+                        else {
+                            Write-Host "WSL: $($e.Data)" -ForegroundColor White
+                        }
+                    
+                        # Also write to log file
+                        Add-Content -Path $this.LogFile -Value "WSL: $($e.Data)"
+                    }
+                })
+            
+            $process.add_ErrorDataReceived({
+                    param($processObject, $e)
+                    if (-not [string]::IsNullOrEmpty($e.Data)) {
+                        Write-Host "WSL-ERR: $($e.Data)" -ForegroundColor Red
+                        Add-Content -Path $this.LogFile -Value "WSL-ERR: $($e.Data)"
+                    }
+                })
+            
+            $process.Start()
+            $process.BeginOutputReadLine()
+            $process.BeginErrorReadLine()
+            $process.WaitForExit()
+            
+            $exitCode = $process.ExitCode
+            
+            if ($exitCode -eq 0) {
+                $this.WritePhaseStatus("WSL_REAL", "SUCCESS", $Description)
+                return $true
+            }
+            else {
+                $this.WritePhaseStatus("WSL_REAL", "ERROR", "$Description - Exit code: $exitCode")
+                return $false
+            }
+            
+        }
+        catch {
+            $this.WritePhaseStatus("WSL_REAL", "ERROR", "$Description - Exception: $($_.Exception.Message)")
+            return $false
+        }
+    }
     # Enhanced error logging with recovery info
     WriteRecoveryInfo([string]$DistroName, [string]$Username, [string]$RepoPath) {
         $this.WriteLog("RECOVERY", "=== RECOVERY INSTRUCTIONS ===", "Yellow")
