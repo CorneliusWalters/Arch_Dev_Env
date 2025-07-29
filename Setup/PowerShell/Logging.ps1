@@ -1,14 +1,13 @@
 # Setup/PowerShell/Logging.ps1
 
+
 class WSLProcessCapture {
-    # --- Properties ---
     [PSCustomObject]$Logger
     [string]$DistroName
     [string]$Username
     [string]$OutputLogFile
     [string]$ErrorLogFile
-    
-    # --- Constructor ---
+	    
     WSLProcessCapture([PSCustomObject]$Logger, [string]$DistroName, [string]$Username) {
         $this.Logger = $Logger
         $this.DistroName = $DistroName
@@ -16,35 +15,84 @@ class WSLProcessCapture {
         $this.OutputLogFile = "$($Logger.LogDir)\wsl_output.log"
         $this.ErrorLogFile = "$($Logger.LogDir)\wsl_error.log"
     }
-    
-    # --- SIMPLIFIED execution method - NO EVENT HANDLERS ---
+	    
     [bool] ExecuteCommand([string]$Command, [string]$Description) {
         $this.Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
-    
+	        
         try {
-            # Method 1: Direct execution with real-time output (no file redirection)
-            $this.Logger.WriteLog("INFO", "Executing: $Command", "Cyan")
-        
-            # Use cmd /c for immediate output display
-            $cmdLine = "wsl -d $($this.DistroName) -u $($this.Username) bash -c `"$Command`""
-            $this.Logger.WriteLog("DEBUG", "Command line: $cmdLine", "Gray")
-        
-            # Execute directly and let output go to console
-            $result = cmd /c $cmdLine
-            $exitCode = $LASTEXITCODE
-        
-            # Also log the result to file
-            if ($result) {
-                foreach ($line in $result) {
+            # Use Start-Process for better control
+            $psi = New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName = "wsl.exe"
+            $psi.Arguments = "-d $($this.DistroName) -u $($this.Username) -- bash -c `"$Command`""
+            $psi.UseShellExecute = $false
+            $psi.RedirectStandardOutput = $true
+            $psi.RedirectStandardError = $true
+            $psi.CreateNoWindow = $true
+	            
+            $process = [System.Diagnostics.Process]::Start($psi)
+	            
+            # Read output in real-time using simple loops (no events)
+            $standardOutput = @()
+            $standardError = @()  # Changed from $error to $standardError
+	            
+            while (!$process.HasExited) {
+                if (!$process.StandardOutput.EndOfStream) {
+                    $line = $process.StandardOutput.ReadLine()
                     if ($line) {
                         $this.DisplayLine($line)
-                        Add-Content -Path $this.Logger.LogFile -Value "WSL-OUT: $line" -Encoding UTF8
+                        $standardOutput += $line
+                        # Also log to file
+                        Add-Content -Path $this.OutputLogFile -Value $line -Encoding UTF8 -ErrorAction SilentlyContinue
+                    }
+                }
+                if (!$process.StandardError.EndOfStream) {
+                    $errorLine = $process.StandardError.ReadLine()
+                    if ($errorLine) {
+                        Write-Host "WSL-ERR: $errorLine" -ForegroundColor Red
+                        $standardError += $errorLine
+                        # Also log to file
+                        Add-Content -Path $this.ErrorLogFile -Value $errorLine -Encoding UTF8 -ErrorAction SilentlyContinue
+                    }
+                }
+                Start-Sleep -Milliseconds 50
+            }
+	            
+            # Read any remaining output
+            $remainingOutput = $process.StandardOutput.ReadToEnd()
+            $remainingError = $process.StandardError.ReadToEnd()
+	            
+            if ($remainingOutput) {
+                $remainingOutput.Split("`n") | ForEach-Object {
+                    if ($_.Trim()) { 
+                        $this.DisplayLine($_)
+                        $standardOutput += $_
+                        Add-Content -Path $this.OutputLogFile -Value $_ -Encoding UTF8 -ErrorAction SilentlyContinue
                     }
                 }
             }
-        
-            $this.Logger.WriteLog("DEBUG", "Exit code: $exitCode", "Gray")
-        
+            if ($remainingError) {
+                $remainingError.Split("`n") | ForEach-Object {
+                    if ($_.Trim()) { 
+                        Write-Host "WSL-ERR: $_" -ForegroundColor Red
+                        $standardError += $_
+                        Add-Content -Path $this.ErrorLogFile -Value $_ -Encoding UTF8 -ErrorAction SilentlyContinue
+                    }
+                }
+            }
+	            
+            $process.WaitForExit()
+            $exitCode = $process.ExitCode
+            $process.Dispose()
+	            
+            # Log summary to main log
+            $this.Logger.WriteLog("DEBUG", "Command completed with exit code: $exitCode", "Gray")
+            if ($standardOutput.Count -gt 0) {
+                $this.Logger.WriteLog("DEBUG", "Standard output lines: $($standardOutput.Count)", "Gray")
+            }
+            if ($standardError.Count -gt 0) {
+                $this.Logger.WriteLog("WARNING", "Standard error lines: $($standardError.Count)", "Yellow")
+            }
+	            
             if ($exitCode -eq 0) {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
                 return $true
@@ -53,35 +101,37 @@ class WSLProcessCapture {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exit code: $exitCode")
                 return $false
             }
-        
+	            
         }
         catch {
             $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
             return $false
         }
     }
-    
-    # --- Keep the DisplayLine method ---
+	    
     [void] DisplayLine([string]$Line) {
-        if ($Line -match '\[ERROR\]') {
-            Write-Host "WSL: $Line" -ForegroundColor Red
-        }
-        elseif ($Line -match '\[SUCCESS\]') {
-            Write-Host "WSL: $Line" -ForegroundColor Green
-        }
-        elseif ($Line -match '\[STATUS\]') {
-            Write-Host "WSL: $Line" -ForegroundColor Cyan
-        }
-        elseif ($Line -match '\[WARNING\]') {
-            Write-Host "WSL: $Line" -ForegroundColor Yellow
-        }
-        else {
-            Write-Host "WSL: $Line" -ForegroundColor White
+        if ([string]::IsNullOrWhiteSpace($Line)) { return }
+	        
+        switch -Regex ($Line) {
+            '\[ERROR\]' { Write-Host "WSL: $Line" -ForegroundColor Red }
+            '\[SUCCESS\]' { Write-Host "WSL: $Line" -ForegroundColor Green }
+            '\[STATUS\]' { Write-Host "WSL: $Line" -ForegroundColor Cyan }
+            '\[WARNING\]' { Write-Host "WSL: $Line" -ForegroundColor Yellow }
+            'ERROR:' { Write-Host "WSL: $Line" -ForegroundColor Red }
+            'WARNING:' { Write-Host "WSL: $Line" -ForegroundColor Yellow }
+            'SUCCESS:' { Write-Host "WSL: $Line" -ForegroundColor Green }
+            default { Write-Host "WSL: $Line" -ForegroundColor White }
         }
     }
-    
+	    
     [void] Cleanup() {
-        # Nothing to clean up in this simpler approach
+        # Clean up any resources if needed
+        if (Test-Path $this.OutputLogFile) {
+            $this.Logger.WriteLog("INFO", "WSL output log available at: $($this.OutputLogFile)", "Gray")
+        }
+        if (Test-Path $this.ErrorLogFile) {
+            $this.Logger.WriteLog("INFO", "WSL error log available at: $($this.ErrorLogFile)", "Gray")
+        }
     }
 }
 class WslLogger {

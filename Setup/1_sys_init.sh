@@ -80,6 +80,12 @@ else
     print_error "MIRROR_TEST" "Mirror test failed, cannot continue"
     exit 1
 fi
+
+
+	check_filesystem_health || {
+	    print_error "MAIN" "Filesystem health check failed, cannot continue"
+	    exit 1
+	}
     optimise_pacman || exit 1
 
     update_system || exit 1
