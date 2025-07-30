@@ -36,12 +36,17 @@ class WSLProcessCapture {
             
             foreach ($line in $output) {
                 if ($line) {
-                    if ($line -eq "WSL_SUCCESS_MARKER") {
+
+                    $trimmedLine = $line.Trim()
+
+                    if ($trimmedLine -eq "WSL_SUCCESS_MARKER") {
                         $success = $true
+                        $this.Logger.WriteLog("DEBUG", "Success marker detected", "Green")
                         continue
                     }
-                    elseif ($line -eq "WSL_FAILED_MARKER") {
+                    elseif ($trimmedLine -eq "WSL_FAILED_MARKER") {
                         $success = $false
+                        $this.Logger.WriteLog("DEBUG", "Failed marker detected", "Red")
                         continue
                     }
                     
