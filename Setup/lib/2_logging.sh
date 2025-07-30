@@ -147,36 +147,41 @@ execute_and_log() {
     # Log execution start with stack trace
     print_status "$category" "Stack trace: $stack_trace"
     print_status "$category" "Executing: $desc"
-    log_message "COMMAND" "$category" "$ $cmd"
+    
+    # Fix the command logging - escape quotes properly
+    local safe_cmd=$(printf '%q' "$cmd")
+    log_message "COMMAND" "$category" "\$ $safe_cmd"
 
-    # Execute with timing and error capture
+    # Execute with timing and error capture, with real-time output
     local start_time=$(date +%s)
-    if { 
-        eval "$cmd" 2>&1 | while IFS= read -r line; do
-            echo "$line"
-            sync
-        done
-        exit ${PIPESTATUS[0]}
-    }; then
-        local end_time=$(date +%s)
-        local duration=$((end_time - start_time))
-        local exit_code=0
+    
+    # Use a different approach for real-time output with proper error handling
+    local output
+    local exit_code
+    
+    if output=$(eval "$cmd" 2>&1); then
+        exit_code=0
+    else
+        exit_code=$?
+    fi
+    
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
 
+    if [ $exit_code -eq 0 ]; then
         log_message "SUCCESS" "$category" "[${FUNCNAME[1]}] Command completed successfully"
+        log_message "OUTPUT" "$category" "[${FUNCNAME[1]}] Output: $output"
         log_message "TIMING" "$category" "[${FUNCNAME[1]}] Duration: ${duration}s"
         
         print_success "$category" "[${FUNCNAME[1]}] $desc completed (${duration}s)"
         return 0
     else
-        local exit_code=$?
-        local end_time=$(date +%s)
-        local duration=$((end_time - start_time))
-
         log_message "ERROR" "$category" "[${FUNCNAME[1]}] Command failed with exit code: $exit_code"
         log_message "ERROR" "$category" "[${FUNCNAME[1]}] Stack trace: $stack_trace"
-        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Failed command: $cmd"
+        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Failed command: $safe_cmd"
         log_message "ERROR" "$category" "[${FUNCNAME[1]}] Description: $desc"
         log_message "ERROR" "$category" "[${FUNCNAME[1]}] Duration: ${duration}s"
+        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Output: $output"
 
         print_error "$category" "[${FUNCNAME[1]}] FAILED: $desc (${duration}s)"
         return $exit_code
