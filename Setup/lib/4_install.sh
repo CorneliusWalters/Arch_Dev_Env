@@ -87,6 +87,34 @@ optimise_pacman() {
         "Refresh package databases" \
         "PACMAN" || return 1
 }
+check_filesystem_health() {
+    print_status "HEALTH" "Checking filesystem health..."
+    
+    # Test if we can write to various locations
+    local test_locations=("/tmp" "$HOME" "/var/tmp")
+    local working_location=""
+    
+    for location in "${test_locations[@]}"; do
+        if echo "test" > "$location/filesystem_test" 2>/dev/null; then
+            rm "$location/filesystem_test" 2>/dev/null
+            working_location="$location"
+            break
+        fi
+    done
+    
+    if [[ -z "$working_location" ]]; then
+        print_error "HEALTH" "Critical: No writable filesystem locations found"
+        return 1
+    fi
+    
+    # Update LOGFILE to use working location if needed
+    if [[ ! -w "$(dirname "$LOGFILE")" ]]; then
+        export LOGFILE="$working_location/wsl_install_$(date +%Y%m%d_%H%M%S).log"
+        print_warning "HEALTH" "Switched to fallback log location: $LOGFILE"
+    fi
+    
+    return 0
+}
 
 sync_wsl_time() {
     print_status "TIME" "Synchronizing WSL system time with Windows host..."

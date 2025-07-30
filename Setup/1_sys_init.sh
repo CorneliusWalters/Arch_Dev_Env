@@ -74,12 +74,13 @@ check_dependencies || exit 1
     # After check_dependencies
     optimise_mirrors || exit 1
     print_status "MIRROR_TEST" "Testing mirrors..."
-if execute_and_log_with_retry "sudo pacman -Sy archlinux-keyring --noconfirm" 3 5 "MIRROR_TEST"; then
-    print_success "MIRROR_TEST" "Mirrors are working properly"
-else
+    
+    if execute_and_log_with_retry "sudo pacman -Sy archlinux-keyring --noconfirm" 3 5 "MIRROR_TEST"; then
+        print_success "MIRROR_TEST" "Mirrors are working properly"
+    else
     print_error "MIRROR_TEST" "Mirror test failed, cannot continue"
     exit 1
-fi
+    fi
 
 
 	check_filesystem_health || {
