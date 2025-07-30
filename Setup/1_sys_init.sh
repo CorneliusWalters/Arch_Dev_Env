@@ -99,10 +99,10 @@ check_dependencies || exit 1
     install_python_environment || exit 1
     
     # source Configurations
-    source lib/config/tmux.sh
-    source lib/config/zsh.sh
-    source lib/config/nvim.sh
-    source lib/config/p10k.sh
+    source "$SCRIPT_DIR/lib/config/tmux.sh"
+    source "$SCRIPT_DIR/lib/config/zsh.sh"
+    source "$SCRIPT_DIR/lib/config/nvim.sh"
+    source "$SCRIPT_DIR/lib/config/p10k.sh"
     
     # Configurations
     setup_shell || exit 1
