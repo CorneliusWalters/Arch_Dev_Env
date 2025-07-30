@@ -207,7 +207,7 @@ return {
 EOF
 
 
-cat > cat >"$PRISTINE_DIR/keymaps.lua" << 'EOL'
+cat >"$PRISTINE_DIR/keymaps.lua" << 'EOL'
 -- Core keymaps that do not depend on any plugins
 
 print("Loading core keymaps...")

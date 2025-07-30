@@ -201,15 +201,25 @@ execute_and_log_with_retry() {
         print_status "$category" "[$func] Attempt $attempt of $max_attempts"
         log_message "RETRY" "$category" "[$func] Executing attempt $attempt: $cmd"
 
-        # Use the same real-time output approach
-        if { 
-            eval "$cmd" 2>&1 | while IFS= read -r line; do
+        # Execute command and capture exit code properly
+        local output
+        local exit_code
+        
+        if output=$(eval "$cmd" 2>&1); then
+            exit_code=0
+        else
+            exit_code=$?
+        fi
+        
+        # Show output in real-time (simplified)
+        if [ -n "$output" ]; then
+            echo "$output" | while IFS= read -r line; do
                 echo "$line"
                 sync
             done
-            exit ${PIPESTATUS[0]}
-        }; then
-            local exit_code=$?
+        fi
+
+        if [ $exit_code -eq 0 ]; then
             local end_time=$(date +%s)
             local duration=$((end_time - start_time))
             
@@ -217,9 +227,8 @@ execute_and_log_with_retry() {
             log_message "TIMING" "$category" "[$func] Total duration: ${duration}s, Attempts: $attempt"
             print_success "$category" "[$func] Command succeeded on attempt $attempt (${duration}s)"
             
-            return $exit_code
+            return 0
         else
-            local exit_code=$?
             local current_time=$(date +%s)
             local current_duration=$((current_time - start_time))
             
@@ -243,5 +252,6 @@ execute_and_log_with_retry() {
     
     return $exit_code
 }
+
 #######--- END OF FILE ---#######
 

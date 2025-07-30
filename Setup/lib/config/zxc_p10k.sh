@@ -137,10 +137,6 @@ cat > "$PRISTINE_FILE" << 'EOL'
 (( ${#p10k_config_opts} )) && setopt ${p10k_config_opts[@]}
 'builtin' 'unset' 'p10k_config_opts'
 EOL
-else
-    print_warning "P10K_CONF" "Powerlevel10k config (~/.config/zsh/.p10k.zsh) already exists. Skipping overwrite to preserve user settings."
-    print_status "P10K_CONF" "To update to the latest config, please merge changes manually or remove ~/.config/zsh/.p10k.zsh and rerun."
-fi
 
 # 2. Copy the pristine file to the working location.
 cp "$PRISTINE_FILE" "$WORKING_FILE"
