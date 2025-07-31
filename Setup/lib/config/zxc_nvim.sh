@@ -10,9 +10,9 @@ local WORKING_DIR="$HOME/.config/nvim"
 # --- Define the list of files to manage ---
 local NVIM_CONFIG_FILES=(
     "init.lua"
-    "preferences.lua"
-    "plugins.lua"
-    "keymaps.lua"
+    "lua/preferences.lua"
+    "lua/plugins.lua"
+    "lua/keymaps.lua"
 )
 # --- END: Path definitions ---
 
@@ -20,7 +20,7 @@ print_status "NVIM" "Deploying pristine NeoVIM configuration..."
 
 # 1. Always write the pristine config from the repo to our pristine location.
 
-cat > "$PRISTINE_DIR/init.lua" << 'EOF'
+cat > "$PRISTINE_DIR/lua/init.lua" << 'EOF'
 -- ##--init.lua 
 
 -- Set leader key early, as many plugins might use it during setup
@@ -57,7 +57,7 @@ vim.cmd([[colorscheme kanagawa]])
 EOF
 
 
-cat >"$PRISTINE_DIR/preferences.lua" << 'EOF'
+cat >"$PRISTINE_DIR/lua/preferences.lua" << 'EOF'
 
 -- This file is required by init.lua before plugins are loaded.
 -- It's for settings that don't depend on any plugins.
@@ -81,7 +81,7 @@ vim.opt.wrap = false
 EOF
 
 
-cat > "$PRISTINE_DIR/plugins.lua" << 'EOF'
+cat > "$PRISTINE_DIR/lua/plugins.lua" << 'EOF'
 return {
   -- Appearance
   { "rebelot/kanagawa.nvim", priority = 1000 },
@@ -207,7 +207,7 @@ return {
 EOF
 
 
-cat >"$PRISTINE_DIR/keymaps.lua" << 'EOL'
+cat >"$PRISTINE_DIR//lua/keymaps.lua" << 'EOL'
 -- Core keymaps that do not depend on any plugins
 
 print("Loading core keymaps...")
@@ -230,6 +230,7 @@ EOL
 
 # 2. Loop through the file list to copy pristine files and apply patches.
 print_status "NVIM" "Applying patches to working configuration files..."
+
 for file in "${NVIM_CONFIG_FILES[@]}"; do
     local pristine_file="$PRISTINE_DIR/$file"
     local working_file="$WORKING_DIR/$file"

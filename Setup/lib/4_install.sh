@@ -277,15 +277,45 @@ setup_systemd_enabler() {
 
     # Fetch the latest distrod release URL for linux-x86_64
     local distrod_url
-    distrod_url=$(curl -s https://api.github.com/repos/null-dev/distrod/releases/latest | grep "browser_download_url.*linux-x86_64.tar.gz" | cut -d '"' -f 4)
-
-    if [ -z "$distrod_url" ]; then
-        print_error "SYSTEMD" "Could not find the latest distrod release URL."
-        return 1
+    local api_response
+    
+    print_status "SYSTEMD" "Fetching latest distrod release information..."
+    
+    # Try to get the release info with better error handling
+    if api_response=$(curl -s --connect-timeout 10 --max-time 30 "https://api.github.com/repos/null-dev/distrod/releases/latest" 2>/dev/null); then
+        # Debug: show what we got
+        print_status "SYSTEMD" "API response received, parsing..."
+        
+        # Try multiple parsing approaches
+        distrod_url=$(echo "$api_response" | grep -o '"browser_download_url":[[:space:]]*"[^"]*linux-x86_64\.tar\.gz"' | cut -d '"' -f 4)
+        
+        if [ -z "$distrod_url" ]; then
+            # Alternative parsing method
+            distrod_url=$(echo "$api_response" | jq -r '.assets[] | select(.name | contains("linux-x86_64.tar.gz")) | .browser_download_url' 2>/dev/null)
+        fi
+        
+        if [ -z "$distrod_url" ]; then
+            # Manual fallback - try to extract any .tar.gz URL containing linux-x86_64
+            distrod_url=$(echo "$api_response" | grep -o 'https://[^"]*linux-x86_64[^"]*\.tar\.gz')
+        fi
+    else
+        print_warning "SYSTEMD" "GitHub API call failed, trying fallback method..."
+        api_response=""
     fi
 
+    # If all parsing failed, use a known working URL as fallback
+    if [ -z "$distrod_url" ]; then
+        print_warning "SYSTEMD" "Could not parse latest release URL, using fallback..."
+        # Use a known working version - you should update this periodically
+        distrod_url="https://github.com/null-dev/distrod/releases/download/v0.1.3/distrod-v0.1.3-linux-x86_64.tar.gz"
+        print_status "SYSTEMD" "Using fallback URL: $distrod_url"
+    else
+        print_status "SYSTEMD" "Found distrod URL: $distrod_url"
+    fi
+
+    # Proceed with download
     print_status "SYSTEMD" "Downloading distrod from $distrod_url"
-    execute_and_log "curl -L -o /tmp/distrod.tar.gz \"$distrod_url\"" \
+    execute_and_log "curl -L --connect-timeout 10 --max-time 120 -o /tmp/distrod.tar.gz \"$distrod_url\"" \
         "Downloading distrod" "SYSTEMD" || return 1
 
     execute_and_log "tar -xzf /tmp/distrod.tar.gz -C /tmp" \
@@ -293,10 +323,18 @@ setup_systemd_enabler() {
 
     # The extracted folder name might vary, find it
     local distrod_dir
-    distrod_dir=$(find /tmp -maxdepth 1 -type d -name "distrod-*")
+    distrod_dir=$(find /tmp -maxdepth 1 -type d -name "distrod-*" | head -1)
 
     if [ -z "$distrod_dir" ]; then
         print_error "SYSTEMD" "Could not find extracted distrod directory in /tmp."
+        return 1
+    fi
+
+    print_status "SYSTEMD" "Found distrod directory: $distrod_dir"
+
+    # Check if install script exists
+    if [ ! -f "$distrod_dir/install" ]; then
+        print_error "SYSTEMD" "Install script not found in $distrod_dir"
         return 1
     fi
 
@@ -309,6 +347,7 @@ setup_systemd_enabler() {
     print_success "SYSTEMD" "distrod installed successfully."
     print_warning "SYSTEMD" "A one-time 'wsl --shutdown' is required to activate systemd."
 }
+
 install_db_tools() {
     print_status "DB" "Installing database tools..."
     # Add clients for databases you use

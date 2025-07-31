@@ -20,6 +20,8 @@ BLUE='\033[0;34m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
+PHASE_MARKER_PREFIX="=== PHASE:"
+
 init_logging() {
     # Create the header directly with command substitution
     cat >> "$LOGFILE" << EOF
@@ -54,6 +56,25 @@ EOF
     sync
 }
 
+# Add a phase marker function
+print_phase_start() {
+    local phase=$1
+    local description=$2
+    echo -e "${BLUE}${PHASE_MARKER_PREFIX} ${phase} START ===${NC} $description" >&2
+    log_message "PHASE_START" "$phase" "$description"
+    sync
+    sleep 0.1  # Small delay to ensure PowerShell sees the marker
+}
+
+print_phase_end() {
+    local phase=$1
+    local status=$2  # SUCCESS or ERROR
+    echo -e "${GREEN}${PHASE_MARKER_PREFIX} ${phase} ${status} ===${NC}" >&2
+    log_message "PHASE_END" "$phase" "$status"
+    sync
+    sleep 0.1
+}
+
 log_message() {
     local level=$1
     local category=$2
@@ -84,7 +105,7 @@ log_message() {
         
     # Always output to stdout for PowerShell capture with immediate flush
     echo "$log_entry" >&2
-    exec 2>&2
+    sync
 
     # Always output to stdout for PowerShell capture
     if [[ -z "$POWERSHELL_EXECUTION" ]]; then
@@ -99,7 +120,7 @@ print_status() {
     echo -e "${BLUE}[STATUS]${NC} [$category] [$func] $message" >&2
     log_message "STATUS" "$category" "$message"
 
-    exec 2>&2
+    sync
 }
 
 print_success() {
@@ -108,7 +129,7 @@ print_success() {
     local func="${FUNCNAME[1]:-main}"
     echo -e "${GREEN}[SUCCESS]${NC} [$category] [$func] $message" >&2
     log_message "SUCCESS" "$category" "$message"
-    exec 2>&2
+    sync
 }
 
 print_warning() {
@@ -117,7 +138,7 @@ print_warning() {
     local func="${FUNCNAME[1]:-main}"
     echo -e "${YELLOW}[WARNING]${NC} [$category] [$func] $message" >&2
     log_message "WARNING" "$category" "$message"
-    exec 2>&2
+    sync
 }
 
 print_error() {
@@ -126,7 +147,7 @@ print_error() {
     local func="${FUNCNAME[1]:-main}"
     echo -e "${RED}[ERROR]${NC} [$category] [$func] $message" >&2
     log_message "ERROR" "$category" "$message"
-    exec 2>&2
+    sync
 }
 
 execute_and_log() {

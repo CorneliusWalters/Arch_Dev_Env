@@ -16,6 +16,7 @@
 ##      │   ├── 4_install.sh        # Package/Main installation functions
 ##      │   ├── 5_sync_packs.sh     # hooks and script patch functionality
 ##      │   ├── 6_commit_config.sh  # git functionality to make changes to your repo
+##      │   ├── 99_wrapper.sh       # Wrapper function to execute from powershell to kick off seemless instalation
 ##      │   ├── config
 ##      │   │   ├── nvim.sh         # Neovim configurations
 ##      │   │   ├── tmux.sh         # Tmux configurations
@@ -72,7 +73,9 @@ check_dependencies || exit 1
     
     # System update and base dependencies
     # After check_dependencies
+    print_phase_start "MIRRORS" "Optimizing package mirrors..."
     optimise_mirrors || exit 1
+    print_phase_end "MIRRORS" "Success"
     print_status "MIRROR_TEST" "Testing mirrors..."
     
     if execute_and_log_with_retry "sudo pacman -Sy archlinux-keyring --noconfirm" 3 5 "MIRROR_TEST"; then
@@ -89,16 +92,27 @@ check_dependencies || exit 1
 	}
     optimise_pacman || exit 1
 
+    print_phase_start "SYSTEM_UPDATE" "Updating system packages..."
     update_system || exit 1
     setup_locale || exit 1
+    print_phase_end "SYSTEM_UPDATE" "SUCCESS"
+
+    print_phase_start "BASE_PACKAGES" "Installing base packages..."
     install_base_packages || exit 1
-    
+    print_phase_end "BASE_PACKAGES" "SUCCESS"
+
     # Development tools
+    print_phase_start "DEV_TOOLS" "Installing development tools..."
     install_dev_tools || exit 1
     install_db_tools || exit 1
     install_python_environment || exit 1
-    
+    print_phase_end "DEV_TOOLS" "SUCCESS"
+
+
     # source Configurations
+
+    print_phase_start "CONFIGS" "Setting up configurations..."
+
     source "$SCRIPT_DIR/lib/config/tmux.sh"
     source "$SCRIPT_DIR/lib/config/zsh.sh"
     source "$SCRIPT_DIR/lib/config/nvim.sh"
@@ -109,15 +123,22 @@ check_dependencies || exit 1
     setup_p10k || exit 1
     setup_tmux || exit 1
     setup_neovim || exit 1
+
+    print_phase_end "CONFIGS" "SUCCESS"
+
+    print_phase_start "HOOKS" "Setting up system hooks..."
     setup_pacman_git_hook || exit 1
     setup_systemd_enabler || exit 1
     setup_watcher_service || exit 1 
+    print_phase_end "HOOKS" "SUCCESS"
+
 
     print_success "MAIN" "Installation complete!"
     print_status "MAIN" "Please log out and log back in for all changes to take effect."
     print_status "MAIN" "After logging back in, run 'nvim' and wait for plugins to install."
     print_status "MAIN" "Check logs at: $LOGFILE"
 } || {
+    print_phase_end "INIT" "ERROR"
     print_error "MAIN" "Installation failed. Check logs at: $LOGFILE"
     exit 1
 }

@@ -19,120 +19,142 @@ class WSLProcessCapture {
     
     [bool] ExecuteCommand([string]$Command, [string]$Description) {
         $this.Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
-        
+    
+        # Initialize variables that might be used in cleanup
+        $readerJob = $null
+        $pipePath = $null
+    
         try {
             $this.Logger.WriteLog("INFO", "Starting: $Description", "Cyan")
-            
-            # Create process with streaming enabled and unbuffered output
-            $psi = New-Object System.Diagnostics.ProcessStartInfo
-            $psi.FileName = "wsl.exe"
-            # Add stdbuf to disable buffering + force line buffering
-            $psi.Arguments = "-d $($this.DistroName) -u $($this.Username) -- stdbuf -oL -eL bash -c `"$Command`""
-            $psi.UseShellExecute = $false
-            $psi.RedirectStandardOutput = $true
-            $psi.RedirectStandardError = $true
-            $psi.CreateNoWindow = $true
-            
-            $process = New-Object System.Diagnostics.Process
-            $process.StartInfo = $psi
-            
-            # Capture instance references in local scope
-            $loggerRef = $this.Logger
-            $outputLogRef = $this.OutputLogFile
-            $errorLogRef = $this.ErrorLogFile
-            $thisRef = $this
-            
-            # Shared variable for tracking last output time
-            $lastOutputTime = [ref](Get-Date)
-            
-            # Event handler for standard output
-            $outputAction = {
-                param($sender, $e)
-                if (-not [string]::IsNullOrEmpty($e.Data)) {
-                    $lastOutputTime.Value = Get-Date
-                    
-                    # Immediately display to console
-                    $thisRef.DisplayLine($e.Data)
-                    
-                    # Force console flush
-                    [Console]::Out.Flush()
-                    
-                    # Log to files (non-blocking)
-                    try {
-                        Add-Content -Path $loggerRef.LogFile -Value "WSL-OUT: $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
-                        Add-Content -Path $outputLogRef -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'): $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
-                    }
-                    catch { }
-                }
-            }.GetNewClosure()
-            
-            # Event handler for error output
-            $errorAction = {
-                param($sender, $e)
-                if (-not [string]::IsNullOrEmpty($e.Data)) {
-                    $lastOutputTime.Value = Get-Date
-                    
-                    # Immediately display to console
-                    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] WSL-ERR: $($e.Data)" -ForegroundColor Red
-                    [Console]::Out.Flush()
-                    
-                    # Log to files (non-blocking)
-                    try {
-                        Add-Content -Path $loggerRef.LogFile -Value "WSL-ERR: $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
-                        Add-Content -Path $errorLogRef -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'): $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
-                    }
-                    catch { }
-                }
-            }.GetNewClosure()
-            
-            # Register event handlers
-            $outputEventJob = Register-ObjectEvent -InputObject $process -EventName OutputDataReceived -Action $outputAction
-            $errorEventJob = Register-ObjectEvent -InputObject $process -EventName ErrorDataReceived -Action $errorAction
-            
-            # Start process and begin async reading
-            $process.Start() | Out-Null
-            $process.BeginOutputReadLine()
-            $process.BeginErrorReadLine()
-            
-            # Wait for completion with more frequent checks
-            $startTime = Get-Date
-            $lastProgressDot = Get-Date
-            
-            while (!$process.HasExited) {
-                Start-Sleep -Milliseconds 100  # Check more frequently
-                
-                $now = Get-Date
-                $timeSinceLastOutput = $now - $lastOutputTime.Value
-                
-                # Show progress dots if no output for 5 seconds
-                if ($timeSinceLastOutput.TotalSeconds -gt 5 -and ($now - $lastProgressDot).TotalSeconds -gt 2) {
-                    Write-Host "." -NoNewline -ForegroundColor DarkGray
-                    [Console]::Out.Flush()
-                    $lastProgressDot = $now
-                }
+        
+            # Create named pipe path in WSL
+            $pipePath = "/tmp/$($this.PipeName)"
+            $windowsPipePath = "\\wsl$\$($this.DistroName)\tmp\$($this.PipeName)"
+        
+            # Create the named pipe in WSL
+            $createPipeCmd = "mkfifo '$pipePath'"
+            $pipeResult = wsl -d $this.DistroName -u $this.Username bash -c $createPipeCmd
+        
+            if ($LASTEXITCODE -ne 0) {
+                throw "Failed to create named pipe: $pipeResult"
             }
+        
+            $this.Logger.WriteLog("INFO", "Created named pipe: $pipePath", "Gray")
+        
+            # Start background job to read from pipe and display output
+            $readerJob = Start-Job -ScriptBlock {
+                param($WindowsPipePath, $LogFile, $ErrorFile)
             
-            # Wait a bit more for any final output
+                try {
+                    # Wait for pipe to be available
+                    $timeout = 30
+                    $elapsed = 0
+                    while (-not (Test-Path $WindowsPipePath) -and $elapsed -lt $timeout) {
+                        Start-Sleep -Milliseconds 500
+                        $elapsed += 0.5
+                    }
+                
+                    if (-not (Test-Path $WindowsPipePath)) {
+                        Write-Error "Pipe not available after timeout"
+                        return
+                    }
+                
+                    # Read from pipe and output in real-time
+                    $reader = New-Object System.IO.StreamReader($WindowsPipePath)
+                
+                    while ($null -ne ($line = $reader.ReadLine())) {
+                        # Break on our finish marker
+                        if ($line -eq "COMMAND_FINISHED") {
+                            break
+                        }
+                    
+                        $timestamp = Get-Date -Format "HH:mm:ss"
+                    
+                        # Immediate console output with color coding
+                        switch -Regex ($line) {
+                            '^\[ERROR\]|ERROR:' { 
+                                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                                Write-Host "$line" -ForegroundColor Red
+                            }
+                            '^\[SUCCESS\]|SUCCESS:' { 
+                                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                                Write-Host "$line" -ForegroundColor Green
+                            }
+                            '^\[STATUS\]|STATUS:' { 
+                                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                                Write-Host "$line" -ForegroundColor Cyan
+                            }
+                            '^\[WARNING\]|WARNING:' { 
+                                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                                Write-Host "$line" -ForegroundColor Yellow
+                            }
+                            default { 
+                                Write-Host "[$timestamp] " -NoNewline -ForegroundColor Gray
+                                Write-Host "$line" -ForegroundColor White
+                            }
+                        }
+                    
+                        # Log to files
+                        try {
+                            Add-Content -Path $LogFile -Value "WSL: $line" -Encoding UTF8 -ErrorAction SilentlyContinue
+                        }
+                        catch { }
+                    
+                        # Force console flush
+                        [Console]::Out.Flush()
+                    }
+                
+                    $reader.Close()
+                
+                }
+                catch {
+                    Write-Error "Pipe reader error: $($_.Exception.Message)"
+                }
+            } -ArgumentList $windowsPipePath, $this.Logger.LogFile, $this.OutputLogFile
+        
+            # Give the reader job a moment to start
             Start-Sleep -Milliseconds 500
-            $process.WaitForExit()
-            $exitCode = $process.ExitCode
-            
-            # Log completion
-            $endTime = Get-Date
-            $duration = $endTime - $startTime
-            $this.Logger.WriteLog("INFO", "Command completed in $($duration.TotalSeconds.ToString('F1'))s with exit code: $exitCode", "Gray")
-            
-            # Clean up event handlers
-            try {
-                Unregister-Event -SourceIdentifier $outputEventJob.Name -Force -ErrorAction SilentlyContinue
-                Unregister-Event -SourceIdentifier $errorEventJob.Name -Force -ErrorAction SilentlyContinue
-                Remove-Job -Job $outputEventJob -Force -ErrorAction SilentlyContinue
-                Remove-Job -Job $errorEventJob -Force -ErrorAction SilentlyContinue
+        
+            # Execute the command with output redirected to the pipe
+            $wrappedCommand = "{ $Command; } 2>&1 | tee '$pipePath'; echo 'COMMAND_FINISHED' > '$pipePath'"
+        
+            $this.Logger.WriteLog("INFO", "Executing command with pipe output...", "Cyan")
+        
+            # Run the actual command
+            $result = wsl -d $this.DistroName -u $this.Username bash -c $wrappedCommand
+            $exitCode = $LASTEXITCODE
+        
+            # Output any result that wasn't captured by the pipe (shouldn't be much with tee)
+            if (-not [string]::IsNullOrWhiteSpace($result)) {
+                $this.Logger.WriteLog("INFO", "Additional command output: $result", "Gray")
+                Write-Host $result -ForegroundColor White
             }
-            catch { }
-            
-            $process.Dispose()
-            
+        
+            # Wait for reader job to finish (with timeout)
+            $jobTimeout = 30
+            $readerJob | Wait-Job -Timeout $jobTimeout | Out-Null
+        
+            # Get any remaining output from the job
+            if ($readerJob.State -eq "Completed") {
+                $jobOutput = Receive-Job $readerJob
+                if ($jobOutput) {
+                    Write-Host $jobOutput -ForegroundColor White
+                }
+            }
+        
+            # Cleanup
+            if ($readerJob) {
+                Remove-Job $readerJob -Force -ErrorAction SilentlyContinue
+            }
+        
+            # Remove the pipe
+            if ($pipePath) {
+                try {
+                    wsl -d $this.DistroName -u $this.Username bash -c "rm -f '$pipePath'" | Out-Null
+                }
+                catch { }
+            }
+        
             if ($exitCode -eq 0) {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
                 return $true
@@ -141,88 +163,27 @@ class WSLProcessCapture {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exit code: $exitCode")
                 return $false
             }
-            
+        
         }
         catch {
             $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
-            # Clean up any remaining event handlers
-            try {
-                Get-EventSubscriber | Where-Object { $_.SourceObject -eq $process } | Unregister-Event -Force -ErrorAction SilentlyContinue
-                Get-Job | Where-Object { $_.Name -like "Event.*" } | Remove-Job -Force -ErrorAction SilentlyContinue
+        
+            # Cleanup on error - now with proper null checks
+            if ($readerJob) {
+                try {
+                    Remove-Job $readerJob -Force -ErrorAction SilentlyContinue
+                }
+                catch { }
             }
-            catch { }
+        
+            if ($pipePath) {
+                try {
+                    wsl -d $this.DistroName -u $this.Username bash -c "rm -f '$pipePath'" | Out-Null
+                }
+                catch { }
+            }
+        
             return $false
-        }
-    }
-    
-    [void] DisplayLine([string]$Line) {
-        if ([string]::IsNullOrWhiteSpace($Line)) { return }
-        
-        $timestamp = Get-Date -Format "HH:mm:ss"
-        $cleanLine = $Line.Trim()
-        
-        # Enhanced color coding with immediate flush after each write
-        switch -Regex ($cleanLine) {
-            '^\[ERROR\]|ERROR:' { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
-                Write-Host "$cleanLine" -ForegroundColor Red
-            }
-            '^\[SUCCESS\]|SUCCESS:' { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
-                Write-Host "$cleanLine" -ForegroundColor Green
-            }
-            '^\[STATUS\]|STATUS:' { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
-                Write-Host "$cleanLine" -ForegroundColor Cyan
-            }
-            '^\[WARNING\]|WARNING:' { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
-                Write-Host "$cleanLine" -ForegroundColor Yellow
-            }
-            'downloading|retrieving packages' { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
-                Write-Host "$cleanLine" -ForegroundColor Blue
-            }
-            'installing|upgrading' { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
-                Write-Host "$cleanLine" -ForegroundColor Green
-            }
-            'Total.*Size:|Package.*New Version' { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
-                Write-Host "$cleanLine" -ForegroundColor Cyan
-            }
-            'checking|resolving dependencies' { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
-                Write-Host "$cleanLine" -ForegroundColor Yellow
-            }
-            '^===.*===|^---.*---' { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
-                Write-Host "$cleanLine" -ForegroundColor Magenta
-            }
-            'completed.*\(\d+s\)' { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
-                Write-Host "$cleanLine" -ForegroundColor Green
-            }
-            'Duration:\s*\d+s' { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
-                Write-Host "$cleanLine" -ForegroundColor Green
-            }
-            default { 
-                Write-Host "[$timestamp] " -NoNewline -ForegroundColor Gray
-                Write-Host "$cleanLine" -ForegroundColor White
-            }
-        }
-        
-        # Force immediate console update after each line
-        [Console]::Out.Flush()
-    }
-    
-    [void] Cleanup() {
-        if (Test-Path $this.OutputLogFile) {
-            $this.Logger.WriteLog("INFO", "WSL output log: $($this.OutputLogFile)", "Gray")
-        }
-        if (Test-Path $this.ErrorLogFile) {
-            $this.Logger.WriteLog("INFO", "WSL error log: $($this.ErrorLogFile)", "Gray")
         }
     }
 }
