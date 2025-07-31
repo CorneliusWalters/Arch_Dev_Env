@@ -72,6 +72,17 @@ class WSLProcessCapture {
                     
                         # Immediate console output with color coding
                         switch -Regex ($line) {
+                            '^=== PHASE: (\w+) (START|SUCCESS|ERROR) ===' {
+                                $phase = $matches[1]
+                                $status = $matches[2]
+                                $color = switch ($status) {
+                                    "START" { "Cyan" }
+                                    "SUCCESS" { "Green" }
+                                    "ERROR" { "Red" }
+                                }
+                                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                                Write-Host "PHASE $phase $status" -ForegroundColor $color
+                            }
                             '^\[ERROR\]|ERROR:' { 
                                 Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
                                 Write-Host "$line" -ForegroundColor Red
