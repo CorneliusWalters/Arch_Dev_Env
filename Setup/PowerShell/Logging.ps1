@@ -34,35 +34,35 @@ class WSLProcessCapture {
             $process = New-Object System.Diagnostics.Process
             $process.StartInfo = $psi
             
-            # Store references for event handlers
-            $logger = $this.Logger
-            $outputLogFile = $this.OutputLogFile
-            $errorLogFile = $this.ErrorLogFile
-            $displayLineMethod = $this
+            # Capture instance references in local scope BEFORE creating scriptblocks
+            $loggerRef = $this.Logger
+            $outputLogRef = $this.OutputLogFile
+            $errorLogRef = $this.ErrorLogFile
+            $thisRef = $this
             
             # Event handler for standard output with file logging
-            $outputReceived = {
+            $outputAction = {
                 param($sender, $e)
                 if (-not [string]::IsNullOrEmpty($e.Data)) {
                     # Display to console
-                    $displayLineMethod.DisplayLine($e.Data)
+                    $thisRef.DisplayLine($e.Data)
                     
                     # Log to main log file
                     try {
-                        Add-Content -Path $logger.LogFile -Value "WSL-OUT: $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
+                        Add-Content -Path $loggerRef.LogFile -Value "WSL-OUT: $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
                     }
                     catch { }
                     
                     # Log to dedicated output file
                     try {
-                        Add-Content -Path $outputLogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'): $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
+                        Add-Content -Path $outputLogRef -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'): $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
                     }
                     catch { }
                 }
-            }
+            }.GetNewClosure()
             
             # Event handler for error output with file logging
-            $errorReceived = {
+            $errorAction = {
                 param($sender, $e)
                 if (-not [string]::IsNullOrEmpty($e.Data)) {
                     # Display to console
@@ -70,21 +70,21 @@ class WSLProcessCapture {
                     
                     # Log to main log file
                     try {
-                        Add-Content -Path $logger.LogFile -Value "WSL-ERR: $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
+                        Add-Content -Path $loggerRef.LogFile -Value "WSL-ERR: $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
                     }
                     catch { }
                     
                     # Log to dedicated error file
                     try {
-                        Add-Content -Path $errorLogFile -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'): $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
+                        Add-Content -Path $errorLogRef -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'): $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
                     }
                     catch { }
                 }
-            }
+            }.GetNewClosure()
             
             # Register event handlers
-            Register-ObjectEvent -InputObject $process -EventName OutputDataReceived -Action $outputReceived | Out-Null
-            Register-ObjectEvent -InputObject $process -EventName ErrorDataReceived -Action $errorReceived | Out-Null
+            $outputEventJob = Register-ObjectEvent -InputObject $process -EventName OutputDataReceived -Action $outputAction
+            $errorEventJob = Register-ObjectEvent -InputObject $process -EventName ErrorDataReceived -Action $errorAction
             
             # Start process and begin async reading
             $process.Start() | Out-Null
@@ -112,7 +112,10 @@ class WSLProcessCapture {
             $this.Logger.WriteLog("INFO", "Command completed in $($duration.TotalSeconds.ToString('F1'))s with exit code: $exitCode", "Gray")
             
             # Clean up event handlers
-            Get-EventSubscriber | Where-Object { $_.SourceObject -eq $process } | Unregister-Event -Force
+            Unregister-Event -SourceIdentifier $outputEventJob.Name -Force
+            Unregister-Event -SourceIdentifier $errorEventJob.Name -Force
+            Remove-Job -Job $outputEventJob -Force
+            Remove-Job -Job $errorEventJob -Force
             $process.Dispose()
             
             if ($exitCode -eq 0) {
@@ -129,7 +132,8 @@ class WSLProcessCapture {
             $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
             # Clean up any remaining event handlers
             try {
-                Get-EventSubscriber | Where-Object { $_.SourceObject.GetType().Name -eq "Process" } | Unregister-Event -Force
+                Get-EventSubscriber | Where-Object { $_.SourceObject -eq $process } | Unregister-Event -Force
+                Get-Job | Where-Object { $_.Name -like "Event.*" } | Remove-Job -Force
             }
             catch { }
             return $false
@@ -172,6 +176,7 @@ class WSLProcessCapture {
         }
     }
 }
+
 class WslLogger {
     # --- Properties ---
     [string]$LogFile
