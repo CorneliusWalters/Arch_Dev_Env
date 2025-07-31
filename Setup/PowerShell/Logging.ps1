@@ -27,20 +27,51 @@ class WSLProcessCapture {
         try {
             $this.Logger.WriteLog("INFO", "Starting: $Description", "Cyan")
         
-            # Create named pipe path in WSL
-            $pipePath = "/tmp/$($this.PipeName)"
-            $windowsPipePath = "\\wsl$\$($this.DistroName)\tmp\$($this.PipeName)"
+            # Create a safer pipe name (avoid special characters)
+            $safePipeName = "wsl_output_$([System.IO.Path]::GetRandomFileName().Replace('.',''))"
+            $pipePath = "/tmp/$safePipeName"
+            $windowsPipePath = "\\wsl$\$($this.DistroName)\tmp\$safePipeName"
         
-            # Create the named pipe in WSL
-            $createPipeCmd = "mkfifo '$pipePath'"
-            $pipeResult = wsl -d $this.DistroName -u $this.Username bash -c $createPipeCmd
+            $this.Logger.WriteLog("INFO", "Creating named pipe: $pipePath", "Gray")
         
-            if ($LASTEXITCODE -ne 0) {
-                throw "Failed to create named pipe: $pipeResult"
+            # Test if /tmp is writable first
+            $testWriteCmd = "test -w /tmp && echo 'TMP_WRITABLE' || echo 'TMP_NOT_WRITABLE'"
+            $testResult = wsl -d $this.DistroName -u $this.Username bash -c $testWriteCmd
+            $this.Logger.WriteLog("INFO", "Temp directory test: $testResult", "Gray")
+        
+            if ($testResult -notmatch "TMP_WRITABLE") {
+                throw "Temp directory /tmp is not writable: $testResult"
             }
         
-            $this.Logger.WriteLog("INFO", "Created named pipe: $pipePath", "Gray")
+            # Check if mkfifo command exists
+            $mkfifoTest = "command -v mkfifo && echo 'MKFIFO_EXISTS' || echo 'MKFIFO_MISSING'"
+            $mkfifoResult = wsl -d $this.DistroName -u $this.Username bash -c $mkfifoTest
+            $this.Logger.WriteLog("INFO", "mkfifo test: $mkfifoResult", "Gray")
         
+            if ($mkfifoResult -notmatch "MKFIFO_EXISTS") {
+                throw "mkfifo command not available: $mkfifoResult"
+            }
+        
+            # Create the named pipe in WSL with verbose error reporting
+            $createPipeCmd = "mkfifo '$pipePath' 2>&1 && echo 'PIPE_CREATED' || echo 'PIPE_FAILED'"
+            $pipeResult = wsl -d $this.DistroName -u $this.Username bash -c $createPipeCmd
+        
+            $this.Logger.WriteLog("INFO", "Pipe creation result: $pipeResult", "Gray")
+        
+            if ($pipeResult -notmatch "PIPE_CREATED") {
+                throw "Failed to create named pipe '$pipePath': $pipeResult"
+            }
+        
+            # Verify pipe exists
+            $verifyCmd = "test -p '$pipePath' && echo 'PIPE_EXISTS' || echo 'PIPE_MISSING'"
+            $verifyResult = wsl -d $this.DistroName -u $this.Username bash -c $verifyCmd
+            $this.Logger.WriteLog("INFO", "Pipe verification: $verifyResult", "Gray")
+        
+            if ($verifyResult -notmatch "PIPE_EXISTS") {
+                throw "Pipe verification failed: $verifyResult"
+            }
+        
+            $this.Logger.WriteLog("SUCCESS", "Named pipe created successfully: $pipePath", "Green")
             # Start background job to read from pipe and display output
             $readerJob = Start-Job -ScriptBlock {
                 param($WindowsPipePath, $LogFile, $ErrorFile)
@@ -179,7 +210,7 @@ class WSLProcessCapture {
         catch {
             $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
         
-            # Cleanup on error - now with proper null checks
+            # Cleanup on error
             if ($readerJob) {
                 try {
                     Remove-Job $readerJob -Force -ErrorAction SilentlyContinue
@@ -189,7 +220,7 @@ class WSLProcessCapture {
         
             if ($pipePath) {
                 try {
-                    wsl -d $this.DistroName -u $this.Username bash -c "rm -f '$pipePath'" | Out-Null
+                    wsl -d $this.DistroName -u $this.Username bash -c "rm -f '$pipePath'" 2>&1 | Out-Null
                 }
                 catch { }
             }
