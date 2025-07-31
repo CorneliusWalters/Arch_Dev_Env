@@ -1,6 +1,7 @@
 # Setup/PowerShell/Logging.ps1
 
 
+
 class WSLProcessCapture {
     [PSCustomObject]$Logger
     [string]$DistroName
@@ -22,10 +23,11 @@ class WSLProcessCapture {
         try {
             $this.Logger.WriteLog("INFO", "Starting: $Description", "Cyan")
             
-            # Create process with streaming enabled
+            # Create process with streaming enabled and unbuffered output
             $psi = New-Object System.Diagnostics.ProcessStartInfo
             $psi.FileName = "wsl.exe"
-            $psi.Arguments = "-d $($this.DistroName) -u $($this.Username) bash -c `"$Command`""
+            # Add stdbuf to disable buffering + force line buffering
+            $psi.Arguments = "-d $($this.DistroName) -u $($this.Username) -- stdbuf -oL -eL bash -c `"$Command`""
             $psi.UseShellExecute = $false
             $psi.RedirectStandardOutput = $true
             $psi.RedirectStandardError = $true
@@ -34,48 +36,49 @@ class WSLProcessCapture {
             $process = New-Object System.Diagnostics.Process
             $process.StartInfo = $psi
             
-            # Capture instance references in local scope BEFORE creating scriptblocks
+            # Capture instance references in local scope
             $loggerRef = $this.Logger
             $outputLogRef = $this.OutputLogFile
             $errorLogRef = $this.ErrorLogFile
             $thisRef = $this
             
-            # Event handler for standard output with file logging
+            # Shared variable for tracking last output time
+            $lastOutputTime = [ref](Get-Date)
+            
+            # Event handler for standard output
             $outputAction = {
                 param($sender, $e)
                 if (-not [string]::IsNullOrEmpty($e.Data)) {
-                    # Display to console
+                    $lastOutputTime.Value = Get-Date
+                    
+                    # Immediately display to console
                     $thisRef.DisplayLine($e.Data)
                     
-                    # Log to main log file
+                    # Force console flush
+                    [Console]::Out.Flush()
+                    
+                    # Log to files (non-blocking)
                     try {
                         Add-Content -Path $loggerRef.LogFile -Value "WSL-OUT: $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
-                    }
-                    catch { }
-                    
-                    # Log to dedicated output file
-                    try {
                         Add-Content -Path $outputLogRef -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'): $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
                     }
                     catch { }
                 }
             }.GetNewClosure()
             
-            # Event handler for error output with file logging
+            # Event handler for error output
             $errorAction = {
                 param($sender, $e)
                 if (-not [string]::IsNullOrEmpty($e.Data)) {
-                    # Display to console
-                    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] WSL-ERR: $($e.Data)" -ForegroundColor Red
+                    $lastOutputTime.Value = Get-Date
                     
-                    # Log to main log file
+                    # Immediately display to console
+                    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] WSL-ERR: $($e.Data)" -ForegroundColor Red
+                    [Console]::Out.Flush()
+                    
+                    # Log to files (non-blocking)
                     try {
                         Add-Content -Path $loggerRef.LogFile -Value "WSL-ERR: $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
-                    }
-                    catch { }
-                    
-                    # Log to dedicated error file
-                    try {
                         Add-Content -Path $errorLogRef -Value "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss'): $($e.Data)" -Encoding UTF8 -ErrorAction SilentlyContinue
                     }
                     catch { }
@@ -91,18 +94,26 @@ class WSLProcessCapture {
             $process.BeginOutputReadLine()
             $process.BeginErrorReadLine()
             
-            # Wait for completion while showing progress
+            # Wait for completion with more frequent checks
             $startTime = Get-Date
+            $lastProgressDot = Get-Date
+            
             while (!$process.HasExited) {
-                Start-Sleep -Milliseconds 250
+                Start-Sleep -Milliseconds 100  # Check more frequently
                 
-                # Optional: Show progress dots every 10 seconds for long-running commands
-                $elapsed = (Get-Date) - $startTime
-                if ($elapsed.TotalSeconds -gt 0 -and ($elapsed.TotalSeconds % 10) -lt 0.25) {
+                $now = Get-Date
+                $timeSinceLastOutput = $now - $lastOutputTime.Value
+                
+                # Show progress dots if no output for 5 seconds
+                if ($timeSinceLastOutput.TotalSeconds -gt 5 -and ($now - $lastProgressDot).TotalSeconds -gt 2) {
                     Write-Host "." -NoNewline -ForegroundColor DarkGray
+                    [Console]::Out.Flush()
+                    $lastProgressDot = $now
                 }
             }
             
+            # Wait a bit more for any final output
+            Start-Sleep -Milliseconds 500
             $process.WaitForExit()
             $exitCode = $process.ExitCode
             
@@ -112,10 +123,14 @@ class WSLProcessCapture {
             $this.Logger.WriteLog("INFO", "Command completed in $($duration.TotalSeconds.ToString('F1'))s with exit code: $exitCode", "Gray")
             
             # Clean up event handlers
-            Unregister-Event -SourceIdentifier $outputEventJob.Name -Force
-            Unregister-Event -SourceIdentifier $errorEventJob.Name -Force
-            Remove-Job -Job $outputEventJob -Force
-            Remove-Job -Job $errorEventJob -Force
+            try {
+                Unregister-Event -SourceIdentifier $outputEventJob.Name -Force -ErrorAction SilentlyContinue
+                Unregister-Event -SourceIdentifier $errorEventJob.Name -Force -ErrorAction SilentlyContinue
+                Remove-Job -Job $outputEventJob -Force -ErrorAction SilentlyContinue
+                Remove-Job -Job $errorEventJob -Force -ErrorAction SilentlyContinue
+            }
+            catch { }
+            
             $process.Dispose()
             
             if ($exitCode -eq 0) {
@@ -132,8 +147,8 @@ class WSLProcessCapture {
             $this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
             # Clean up any remaining event handlers
             try {
-                Get-EventSubscriber | Where-Object { $_.SourceObject -eq $process } | Unregister-Event -Force
-                Get-Job | Where-Object { $_.Name -like "Event.*" } | Remove-Job -Force
+                Get-EventSubscriber | Where-Object { $_.SourceObject -eq $process } | Unregister-Event -Force -ErrorAction SilentlyContinue
+                Get-Job | Where-Object { $_.Name -like "Event.*" } | Remove-Job -Force -ErrorAction SilentlyContinue
             }
             catch { }
             return $false
@@ -146,28 +161,63 @@ class WSLProcessCapture {
         $timestamp = Get-Date -Format "HH:mm:ss"
         $cleanLine = $Line.Trim()
         
-        # Enhanced color coding for better readability
+        # Enhanced color coding with immediate flush after each write
         switch -Regex ($cleanLine) {
-            '^\[ERROR\]|ERROR:' { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor Red }
-            '^\[SUCCESS\]|SUCCESS:' { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor Green }
-            '^\[STATUS\]|STATUS:' { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor Cyan }
-            '^\[WARNING\]|WARNING:' { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor Yellow }
-            'downloading|retrieving packages' { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor Blue }
-            'installing|upgrading' { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor Green }
-            'Total.*Size:|Package.*New Version' { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor Cyan }
-            'checking|resolving dependencies' { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor Yellow }
-            '^===.*===|^---.*---' { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor Magenta }
-            'completed.*\(\d+s\)' { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor Green }
-            'Duration:\s*\d+s' { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor Green }
-            default { Write-Host "[$timestamp] " -NoNewline; Write-Host "$cleanLine" -ForegroundColor White }
+            '^\[ERROR\]|ERROR:' { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                Write-Host "$cleanLine" -ForegroundColor Red
+            }
+            '^\[SUCCESS\]|SUCCESS:' { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                Write-Host "$cleanLine" -ForegroundColor Green
+            }
+            '^\[STATUS\]|STATUS:' { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                Write-Host "$cleanLine" -ForegroundColor Cyan
+            }
+            '^\[WARNING\]|WARNING:' { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                Write-Host "$cleanLine" -ForegroundColor Yellow
+            }
+            'downloading|retrieving packages' { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                Write-Host "$cleanLine" -ForegroundColor Blue
+            }
+            'installing|upgrading' { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                Write-Host "$cleanLine" -ForegroundColor Green
+            }
+            'Total.*Size:|Package.*New Version' { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                Write-Host "$cleanLine" -ForegroundColor Cyan
+            }
+            'checking|resolving dependencies' { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                Write-Host "$cleanLine" -ForegroundColor Yellow
+            }
+            '^===.*===|^---.*---' { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                Write-Host "$cleanLine" -ForegroundColor Magenta
+            }
+            'completed.*\(\d+s\)' { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                Write-Host "$cleanLine" -ForegroundColor Green
+            }
+            'Duration:\s*\d+s' { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                Write-Host "$cleanLine" -ForegroundColor Green
+            }
+            default { 
+                Write-Host "[$timestamp] " -NoNewline -ForegroundColor Gray
+                Write-Host "$cleanLine" -ForegroundColor White
+            }
         }
         
-        # Force immediate console update
+        # Force immediate console update after each line
         [Console]::Out.Flush()
     }
     
     [void] Cleanup() {
-        # Summary of log files created
         if (Test-Path $this.OutputLogFile) {
             $this.Logger.WriteLog("INFO", "WSL output log: $($this.OutputLogFile)", "Gray")
         }
@@ -176,7 +226,6 @@ class WSLProcessCapture {
         }
     }
 }
-
 class WslLogger {
     # --- Properties ---
     [string]$LogFile

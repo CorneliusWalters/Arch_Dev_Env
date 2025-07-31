@@ -83,8 +83,8 @@ log_message() {
     fi
         
     # Always output to stdout for PowerShell capture with immediate flush
-    echo "$log_entry"
-    sync  # Force immediate write to streams
+    echo "$log_entry" >&2
+    exec 2>&2
 
     # Always output to stdout for PowerShell capture
     if [[ -z "$POWERSHELL_EXECUTION" ]]; then
@@ -99,7 +99,7 @@ print_status() {
     echo -e "${BLUE}[STATUS]${NC} [$category] [$func] $message" >&2
     log_message "STATUS" "$category" "$message"
 
-    sync
+    exec 2>&2
 }
 
 print_success() {
@@ -108,7 +108,7 @@ print_success() {
     local func="${FUNCNAME[1]:-main}"
     echo -e "${GREEN}[SUCCESS]${NC} [$category] [$func] $message" >&2
     log_message "SUCCESS" "$category" "$message"
-    sync
+    exec 2>&2
 }
 
 print_warning() {
@@ -117,7 +117,7 @@ print_warning() {
     local func="${FUNCNAME[1]:-main}"
     echo -e "${YELLOW}[WARNING]${NC} [$category] [$func] $message" >&2
     log_message "WARNING" "$category" "$message"
-    sync
+    exec 2>&2
 }
 
 print_error() {
@@ -126,7 +126,7 @@ print_error() {
     local func="${FUNCNAME[1]:-main}"
     echo -e "${RED}[ERROR]${NC} [$category] [$func] $message" >&2
     log_message "ERROR" "$category" "$message"
-    sync
+    exec 2>&2
 }
 
 execute_and_log() {
