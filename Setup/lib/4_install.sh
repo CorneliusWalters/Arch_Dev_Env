@@ -475,6 +475,11 @@ setup_pacman_git_hook() {
     local sync_script_source="$SCRIPT_DIR/lib/5_sync_packs.sh"
     local sync_script_target="/usr/local/bin/5_sync_packs.sh"
     local hook_file="/etc/pacman.d/hooks/auto-git-sync.hook"
+    local hook_dir="/etc/pacman.d/hooks"
+
+    # Create the hooks directory if it doesn't exist
+    execute_and_log "sudo mkdir -p \"$hook_dir\"" \
+        "Creating pacman hooks directory" "HOOK_SETUP" || return 1
 
     # Copy the sync script and make it executable
     execute_and_log "sudo cp \"$sync_script_source\" \"$sync_script_target\"" \
@@ -483,8 +488,7 @@ setup_pacman_git_hook() {
         "Making package sync script executable" "HOOK_SETUP" || return 1
 
     # Create the pacman hook file
-    # Use tee to write to the hook file with sudo
-    execute_and_log "sudo bash -c 'cat > \"$hook_file\" << EOL
+    execute_and_log "sudo tee \"$hook_file\" > /dev/null << 'EOL'
 [Trigger]
 Operation = Install
 Operation = Upgrade
@@ -496,7 +500,8 @@ Target = *
 Description = Syncing installed packages to Git repository...
 When = PostTransaction
 Exec = $sync_script_target
-EOL'" "Creating pacman hook file $hook_file" "HOOK_SETUP" || return 1
+EOL" \
+        "Creating pacman hook file $hook_file" "HOOK_SETUP" || return 1
 
     print_success "HOOK_SETUP" "Pacman Git sync hook setup complete."
 }
