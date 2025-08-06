@@ -1,4 +1,4 @@
-class WSLProcessCapture {
+﻿class WSLProcessCapture {
     [PSCustomObject]$Logger
     [string]$DistroName
     [string]$Username
@@ -195,6 +195,7 @@ class WSLProcessCapture {
                                         }
                                     }
                                 }
+                                # ** FIX IS HERE: Moved this line inside the 'if' block **
                                 $lastSize = $content.Length
                             }
                             else {
