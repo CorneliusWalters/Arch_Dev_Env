@@ -1,5 +1,3 @@
-# Setup/PowerShell/Logging.ps1
-
 class WSLProcessCapture {
     [PSCustomObject]$Logger
     [string]$DistroName
@@ -95,20 +93,21 @@ class WSLProcessCapture {
                                             Write-Host ""
                                             continue
                                         }
-                                        elseif ($trimmedLine -match '^>>> PROGRESS: \[(\d+)/(\d+)\] (.+) - (.+)') {
-                                            $current = [int]$matches[1]
-                                            $total = [int]$matches[2]
-                                            $phase = $matches[3]
-                                            $action = $matches[4]
-                                            $percentage = [math]::Round(($current / $total) * 100, 1)
-                                            
-                                            Write-Host ""
-                                            Write-Host "📊 PROGRESS: " -NoNewline -ForegroundColor Magenta
-                                            # Fix the percentage display issue by using string concatenation
-                                            $progressText = "[$current/$total] ($percentage" + "%) "
-                                            Write-Host $progressText -NoNewline -ForegroundColor Cyan
-                                            Write-Host "$phase - $action" -ForegroundColor White
-                                            continue
+                                        elseif ($trimmedLine.StartsWith('>>> PROGRESS: [') -and $trimmedLine.Contains(']')) {
+                                            if ($trimmedLine -match '>>> PROGRESS: \[(\d+)/(\d+)\] (.+) - (.+)') {
+                                                $current = [int]$matches[1]
+                                                $total = [int]$matches[2]
+                                                $phase = $matches[3]
+                                                $action = $matches[4]
+                                                $percentage = [math]::Round(($current / $total) * 100, 1)
+                                                
+                                                Write-Host ""
+                                                Write-Host "📊 PROGRESS: " -NoNewline -ForegroundColor Magenta
+                                                $progressText = "[$current/$total] ($percentage%)"
+                                                Write-Host $progressText -NoNewline -ForegroundColor Cyan
+                                                Write-Host " $phase - $action" -ForegroundColor White
+                                                continue
+                                            }
                                         }
                                         elseif ($trimmedLine -match '^>>> PHASE_SEPARATOR <<<') {
                                             Write-Host ""
@@ -323,7 +322,7 @@ class WSLProcessCapture {
         }
     }
     
-    # Fixed method signature - removed [void]
+    # Method without return type annotation
     Cleanup() {
         if (Test-Path $this.OutputLogFile) {
             $this.Logger.WriteLog("INFO", "WSL output log: $($this.OutputLogFile)", "Gray")
@@ -352,7 +351,7 @@ class WslLogger {
         }
     }
 
-    # Methods - removed [void] return types
+    # Methods without return type annotations
     WriteLog([string]$Level, [string]$Message, [ConsoleColor]$ForegroundColor = "White") {
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         $logMessage = "[$timestamp] [$Level] $Message"
