@@ -268,138 +268,97 @@ install_base_packages() {
         "Packages" || return 1
 }
 setup_systemd_enabler() {
-    print_status "SYSTEMD" "Installing distrod to enable systemd..."
+    print_status "SYSTEMD" "Checking for systemd enabler (distrod)..."
 
     if command -v distrod >/dev/null 2>&1; then
         print_success "SYSTEMD" "distrod is already installed."
         return 0
     fi
 
-    # Clean up any existing files first
-    execute_and_log "rm -f /tmp/distrod.tar.gz /tmp/distrod-*" \
-        "Cleaning up existing distrod files" "SYSTEMD"
+    print_status "SYSTEMD" "distrod not found, proceeding with installation."
 
-    # Fetch the latest distrod release URL for linux-x86_64
+    # Define paths and cleanup old files
+    local temp_archive="/tmp/distrod.tar.gz"
+    local extract_dir="/tmp/distrod_install"
+    execute_and_log "rm -f '$temp_archive'; rm -rf '$extract_dir'" \
+        "Cleaning up previous distrod artifacts" "SYSTEMD"
+
+    # --- Fetch the latest distrod release URL ---
     local distrod_url=""
     local api_response=""
-    
-    print_status "SYSTEMD" "Fetching latest distrod release information..."
-    
-    # Try to get the release info with better error handling
-    if api_response=$(curl -s --connect-timeout 10 --max-time 30 --fail "https://api.github.com/repos/null-dev/distrod/releases/latest" 2>/dev/null); then
-        print_status "SYSTEMD" "API response received, parsing..."
-        
-        # Try jq first (most reliable)
+    # FIX 1: Correct repository is 'nullpo-head/distrod'
+    local api_url="https://api.github.com/repos/nullpo-head/distrod/releases/latest"
+
+    print_status "SYSTEMD" "Fetching latest release info from GitHub API..."
+    if api_response=$(curl -s --connect-timeout 10 --max-time 30 --fail "$api_url" 2>/dev/null); then
+        print_status "SYSTEMD" "API response received, parsing for download URL..."
+
+        # FIX 2: Correct asset name is 'x86_64.tar.gz', not 'linux-x86_64'
         if command -v jq >/dev/null 2>&1; then
-            distrod_url=$(echo "$api_response" | jq -r '.assets[] | select(.name | contains("linux-x86_64.tar.gz")) | .browser_download_url' 2>/dev/null)
-        fi
-        
-        # Fallback to grep if jq failed
-        if [ -z "$distrod_url" ]; then
-            distrod_url=$(echo "$api_response" | grep -o '"browser_download_url":[[:space:]]*"[^"]*linux-x86_64\.tar\.gz"' | cut -d '"' -f 4 | head -1)
-        fi
-        
-        # Another grep approach
-        if [ -z "$distrod_url" ]; then
-            distrod_url=$(echo "$api_response" | grep -o 'https://[^"]*linux-x86_64[^"]*\.tar\.gz' | head -1)
+            distrod_url=$(echo "$api_response" | jq -r '.assets[] | select(.name | endswith("x86_64.tar.gz")) | .browser_download_url' 2>/dev/null)
+        else
+            # Fallback to grep if jq is not available
+            distrod_url=$(echo "$api_response" | grep -o 'https://[^"]*x86_64[^"]*\.tar\.gz' | head -1)
         fi
     else
-        print_warning "SYSTEMD" "GitHub API call failed, using fallback..."
+        print_warning "SYSTEMD" "GitHub API call failed. Will use a fallback URL."
     fi
 
-    # Final fallback to known working version
+    # Final fallback to a known working version if API parsing fails
     if [ -z "$distrod_url" ] || [[ ! "$distrod_url" =~ ^https:// ]]; then
-        print_warning "SYSTEMD" "Could not parse latest release URL, using fallback version..."
+        print_warning "SYSTEMD" "Could not determine latest release URL, using fallback."
         distrod_url="https://github.com/nullpo-head/distrod/releases/download/v0.1.3/distrod-v0.1.3-linux-x86_64.tar.gz"
     fi
 
     print_status "SYSTEMD" "Using distrod URL: $distrod_url"
 
-    # Download with better error checking
+    # --- Download and Validate ---
     print_status "SYSTEMD" "Downloading distrod..."
-    if ! execute_and_log "curl -L --connect-timeout 10 --max-time 120 --fail -o /tmp/distrod.tar.gz \"$distrod_url\"" \
-        "Downloading distrod from $distrod_url" "SYSTEMD"; then
-        print_error "SYSTEMD" "Failed to download distrod"
+    if ! execute_and_log "curl -L --connect-timeout 10 --max-time 120 --fail -o '$temp_archive' \"$distrod_url\"" \
+        "Downloading distrod" "SYSTEMD"; then
+        print_error "SYSTEMD" "Failed to download distrod from primary URL."
         return 1
     fi
 
-    # Validate the downloaded file
     print_status "SYSTEMD" "Validating downloaded file..."
-    if ! execute_and_log "file /tmp/distrod.tar.gz | grep -q 'gzip compressed'" \
-        "Checking if downloaded file is valid gzip" "SYSTEMD"; then
-        
-        print_error "SYSTEMD" "Downloaded file is not a valid gzip archive"
-        print_status "SYSTEMD" "File info: $(file /tmp/distrod.tar.gz)"
-        print_status "SYSTEMD" "First few bytes: $(head -c 100 /tmp/distrod.tar.gz | xxd || head -c 100 /tmp/distrod.tar.gz)"
-        
-        # Try alternative download URLs
-        local alt_urls=(
-            "https://github.com/nullpo-head/distrod/releases/download/v0.1.3/distrod-v0.1.3-linux-x86_64.tar.gz"
-            "https://github.com/nullpo-head/distrod/releases/latest/download/distrod-linux-x86_64.tar.gz"
-        )
-        
-        for alt_url in "${alt_urls[@]}"; do
-            print_status "SYSTEMD" "Trying alternative URL: $alt_url"
-            if execute_and_log "curl -L --connect-timeout 10 --max-time 120 --fail -o /tmp/distrod.tar.gz \"$alt_url\"" \
-                "Downloading from alternative URL" "SYSTEMD" && \
-               execute_and_log "file /tmp/distrod.tar.gz | grep -q 'gzip compressed'" \
-                "Validating alternative download" "SYSTEMD"; then
-                break
-            fi
-        done
-        
-        # Final validation
-        if ! execute_and_log "file /tmp/distrod.tar.gz | grep -q 'gzip compressed'" \
-            "Final validation of downloaded file" "SYSTEMD"; then
-            print_error "SYSTEMD" "All download attempts failed to produce valid archive"
-            return 1
-        fi
+    if ! file "$temp_archive" | grep -q 'gzip compressed'; then
+        print_error "SYSTEMD" "Downloaded file is not a valid gzip archive. Aborting."
+        print_status "SYSTEMD" "File info: $(file "$temp_archive")"
+        return 1
     fi
 
-    # Extract with verbose output
-    execute_and_log "tar -xzf /tmp/distrod.tar.gz -C /tmp --verbose" \
+    # --- Extract and Install ---
+    # FIX 3: Create a dedicated directory for extraction because the tarball
+    # does not contain a root folder. This prevents polluting /tmp.
+    print_status "SYSTEMD" "Creating extraction directory at $extract_dir"
+    execute_and_log "mkdir -p '$extract_dir'" \
+        "Creating temporary directory" "SYSTEMD" || return 1
+
+    execute_and_log "tar -xzf '$temp_archive' -C '$extract_dir' --verbose" \
         "Extracting distrod" "SYSTEMD" || return 1
 
-    # Find the extracted directory (handle different naming patterns)
-    local distrod_dir=""
-    for pattern in "distrod-v*" "distrod-*" "distrod*"; do
-        distrod_dir=$(find /tmp -maxdepth 1 -type d -name "$pattern" 2>/dev/null | head -1)
-        if [ -n "$distrod_dir" ]; then
-            break
-        fi
-    done
-
-    if [ -z "$distrod_dir" ]; then
-        print_error "SYSTEMD" "Could not find extracted distrod directory in /tmp"
-        print_status "SYSTEMD" "Contents of /tmp after extraction:"
-        ls -la /tmp/
+    local install_script="$extract_dir/install"
+    if [ ! -f "$install_script" ]; then
+        print_error "SYSTEMD" "Install script not found at $install_script"
+        print_status "SYSTEMD" "Contents of $extract_dir:"
+        ls -la "$extract_dir/"
         return 1
     fi
 
-    print_status "SYSTEMD" "Found distrod directory: $distrod_dir"
-
-    # Check if install script exists
-    if [ ! -f "$distrod_dir/install" ]; then
-        print_error "SYSTEMD" "Install script not found in $distrod_dir"
-        print_status "SYSTEMD" "Directory contents:"
-        ls -la "$distrod_dir/"
-        return 1
-    fi
-
-    # Make install script executable and run it
-    execute_and_log "chmod +x \"$distrod_dir/install\"" \
+    execute_and_log "chmod +x '$install_script'" \
         "Making distrod installer executable" "SYSTEMD" || return 1
 
-    execute_and_log "sudo \"$distrod_dir/install\"" \
+    # The installer requires sudo privileges
+    execute_and_log "sudo '$install_script'" \
         "Running distrod installer" "SYSTEMD" || return 1
 
-    # Cleanup
-    execute_and_log "rm -rf /tmp/distrod.tar.gz \"$distrod_dir\"" \
+    # --- Cleanup ---
+    execute_and_log "rm -f '$temp_archive'; rm -rf '$extract_dir'" \
         "Cleaning up distrod installer files" "SYSTEMD"
 
     print_success "SYSTEMD" "distrod installed successfully."
-    print_warning "SYSTEMD" "A WSL restart may be required to activate systemd."
-    
+    print_warning "SYSTEMD" "A WSL restart ('wsl --shutdown') may be required to activate systemd."
+
     return 0
 }
 
