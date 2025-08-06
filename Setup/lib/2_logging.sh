@@ -197,57 +197,38 @@ execute_and_log() {
     local cmd="$1"
     local desc="$2"
     local category="${3:-COMMAND}"
+    local func="${FUNCNAME[1]:-main}"
 
-    # Get caller context using BASH_SOURCE array
-    local stack_trace=""
-    for ((i=1; i<${#BASH_SOURCE[@]}; i++)); do
-        local script=$(basename "${BASH_SOURCE[$i]}")
-        local line="${BASH_LINENO[$i-1]}"
-        local func="${FUNCNAME[$i]}"
-        [[ "$func" != "main" ]] && stack_trace+="$script[${func}]:$line -> "
-    done
-    stack_trace+=$(basename "${BASH_SOURCE[0]}")
-
-    # Log execution start with stack trace
-    print_status "$category" "Stack trace: $stack_trace"
+    # Announce what we are about to do. This goes to the log file and the console.
     print_status "$category" "Executing: $desc"
-    
-    # Fix the command logging - escape quotes properly
-    local safe_cmd=$(printf '%q' "$cmd")
-    log_message "COMMAND" "$category" "\$ $safe_cmd"
+    log_message "COMMAND" "$category" "[$func] \$ $cmd"
 
-    # Execute with timing and error capture, with real-time output
-    local start_time=$(date +%s)
+    local start_time
+    start_time=$(date +%s)
     
-    # Use a different approach for real-time output with proper error handling
-    local output
-    local exit_code
+    # --- CORE CHANGE ---
+    # Execute the command directly. Its stdout/stderr will stream to the
+    # parent process (the PowerShell job) in real-time.
+    # We capture the exit code immediately after.
+    eval "$cmd"
+    local exit_code=$?
     
-    if output=$(eval "$cmd" 2>&1); then
-        exit_code=0
-    else
-        exit_code=$?
-    fi
-    
-    local end_time=$(date +%s)
+    local end_time
+    end_time=$(date +%s)
     local duration=$((end_time - start_time))
 
+    # --- POST-EXECUTION SUMMARY ---
+    # After the command's own output has finished streaming, we print our summary.
     if [ $exit_code -eq 0 ]; then
-        log_message "SUCCESS" "$category" "[${FUNCNAME[1]}] Command completed successfully"
-        log_message "OUTPUT" "$category" "[${FUNCNAME[1]}] Output: $output"
-        log_message "TIMING" "$category" "[${FUNCNAME[1]}] Duration: ${duration}s"
-        
-        print_success "$category" "[${FUNCNAME[1]}] $desc completed (${duration}s)"
+        # The command's output is already on the screen. We just add our success message.
+        print_success "$category" "$desc completed successfully (${duration}s)."
+        # Add a more detailed entry to the file log for posterity.
+        log_message "SUCCESS" "$category" "[$func] Command finished. Exit Code: 0, Duration: ${duration}s"
         return 0
     else
-        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Command failed with exit code: $exit_code"
-        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Stack trace: $stack_trace"
-        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Failed command: $safe_cmd"
-        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Description: $desc"
-        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Duration: ${duration}s"
-        log_message "ERROR" "$category" "[${FUNCNAME[1]}] Output: $output"
-
-        print_error "$category" "[${FUNCNAME[1]}] FAILED: $desc (${duration}s)"
+        # The command's error messages are already on the screen. We add our failure summary.
+        print_error "$category" "FAILED: $desc (Exit Code: $exit_code, Duration: ${duration}s)."
+        log_message "ERROR" "$category" "[$func] Command failed. Exit Code: $exit_code, Duration: ${duration}s"
         return $exit_code
     fi
 }

@@ -123,9 +123,10 @@ echo '[user]' > /etc/wsl.conf && echo 'default=$wslUsername' >> /etc/wsl.conf &&
   # Phase 6: Main Setup 
   $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup via repository wrapper script")
 
+  # Use the WSLProcessCapture instance we already created for the user
   $wrapperPath = "$wslRepoPath/Setup/lib/99_wrapper.sh"
-  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command "bash '$wrapperPath'" -Description "Execute repository wrapper script" -Logger $logger)) {
-    throw "Repository wrapper script execution failed"
+  if (-not $wslCapture.ExecuteCommand("bash '$wrapperPath'", "Execute main setup script")) {
+    throw "Main setup script execution failed"
   }
 
   $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed")
