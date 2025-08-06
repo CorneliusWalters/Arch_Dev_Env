@@ -20,7 +20,10 @@ BLUE='\033[0;34m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
-PHASE_MARKER_PREFIX="=== PHASE:"
+# Phase Markers
+PHASE_MARKER_PREFIX="### PHASE_BOUNDARY ###"
+PHASE_START_MARKER=">>> PHASE_START"
+PHASE_END_MARKER="<<< PHASE_END"
 
 init_logging() {
     # Create the header directly with command substitution
@@ -60,20 +63,60 @@ EOF
 print_phase_start() {
     local phase=$1
     local description=$2
-    echo -e "${BLUE}${PHASE_MARKER_PREFIX} ${phase} START ===${NC} $description" >&2
-    log_message "PHASE_START" "$phase" "$description"
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    # Multiple output methods to ensure visibility
+    {
+        echo ""
+        echo "$PHASE_MARKER_PREFIX"
+        echo "$PHASE_START_MARKER: $phase"
+        echo "TIMESTAMP: $timestamp"
+        echo "DESCRIPTION: $description"
+        echo "$PHASE_MARKER_PREFIX"
+        echo ""
+    } | tee /dev/stderr
+    
+    # Aggressive flushing
     sync
-    sleep 0.1  # Small delay to ensure PowerShell sees the marker
+    sleep 0.2
+    printf "\n" >&2  # Extra newline to stderr
+    sync
 }
 
 print_phase_end() {
     local phase=$1
-    local status=$2  # SUCCESS or ERROR
-    echo -e "${GREEN}${PHASE_MARKER_PREFIX} ${phase} ${status} ===${NC}" >&2
-    log_message "PHASE_END" "$phase" "$status"
+    local status=$2
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    {
+        echo ""
+        echo "$PHASE_MARKER_PREFIX"
+        echo "$PHASE_END_MARKER: $phase"
+        echo "STATUS: $status"
+        echo "TIMESTAMP: $timestamp"
+        echo "$PHASE_MARKER_PREFIX"
+        echo ""
+    } | tee /dev/stderr
+    
     sync
-    sleep 0.1
+    sleep 0.2
+    printf "\n" >&2
+    sync
 }
+
+# Add a progress indicator function
+print_progress() {
+    local current=$1
+    local total=$2
+    local phase=$3
+    local action=$4
+    
+    {
+        echo ">>> PROGRESS: [$current/$total] $phase - $action"
+    } | tee /dev/stderr
+    sync
+}
+
 
 log_message() {
     local level=$1

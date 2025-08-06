@@ -11,16 +11,21 @@ export POWERSHELL_EXECUTION='true'
 # Force unbuffered output for real-time streaming
 export PYTHONUNBUFFERED=1
 export DEBIAN_FRONTEND=noninteractive
-stty -icanon 2>/dev/null || true
+export TERM=xterm-256color
 
-echo "=== WSL Setup Starting at $(date) ==="
-echo "User: $(whoami)"
-echo "Home: $HOME"
-echo "Working Directory: $(pwd)"
 
+stty -icanon min 1 time 0 2>/dev/null || true
+
+echo "### PHASE_BOUNDARY ###"
+echo ">>> PHASE_START: WRAPPER_INIT"
+echo "DESCRIPTION: WSL Setup Starting"
+echo "### PHASE_BOUNDARY ###"
+
+# Force output flush and add visual separator
 # Force output flush
 sync
-sleep 0.1
+printf "\n" >&2
+sleep 0.2
 
 # Get the repository root (assuming this script is in Setup/lib/)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,7 +52,13 @@ if [ ! -f Setup/1_sys_init.sh ]; then
 fi
 
 echo "Starting 1_sys_init.sh..."
+
+echo "### PHASE_BOUNDARY ###"
+echo ">>> PHASE_START: SCRIPT_EXECUTION"
+echo "DESCRIPTION: Starting main installation script"
+echo "### PHASE_BOUNDARY ###"
+
 sync
 
-# Use stdbuf to disable buffering and run normally (not exec)
-stdbuf -oL -eL bash Setup/1_sys_init.sh
+# Use unbuffered execution
+exec stdbuf -oL -eL bash Setup/1_sys_init.sh
