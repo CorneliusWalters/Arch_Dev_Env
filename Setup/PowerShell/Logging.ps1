@@ -1,6 +1,5 @@
 # Setup/PowerShell/Logging.ps1
 
-
 class WSLProcessCapture {
     [PSCustomObject]$Logger
     [string]$DistroName
@@ -54,14 +53,14 @@ class WSLProcessCapture {
                 $currentPhase = ""
                 $phaseStartTime = Get-Date
                 $consecutiveEmptyReads = 0
-                $maxConsecutiveEmpty = 50  # Allow some empty reads before giving up
+                $maxConsecutiveEmpty = 50
             
                 while (((Get-Date) - $startTime).TotalSeconds -lt $maxWaitTime) {
                     if (Test-Path $FilePath) {
                         try {
                             $content = Get-Content $FilePath -Raw -ErrorAction SilentlyContinue -Encoding UTF8
                             if ($content -and $content.Length -gt $lastSize) {
-                                $consecutiveEmptyReads = 0  # Reset counter on successful read
+                                $consecutiveEmptyReads = 0
                                 $newContent = $content.Substring($lastSize)
                                 $lines = $newContent -split "`r?`n" | Where-Object { $_ -ne "" }
                             
@@ -105,7 +104,9 @@ class WSLProcessCapture {
                                             
                                             Write-Host ""
                                             Write-Host "📊 PROGRESS: " -NoNewline -ForegroundColor Magenta
-                                            Write-Host "[$current/$total] ($percentage%) " -NoNewline -ForegroundColor Cyan
+                                            # Fix the percentage display issue by using string concatenation
+                                            $progressText = "[$current/$total] ($percentage" + "%) "
+                                            Write-Host $progressText -NoNewline -ForegroundColor Cyan
                                             Write-Host "$phase - $action" -ForegroundColor White
                                             continue
                                         }
@@ -120,24 +121,22 @@ class WSLProcessCapture {
                                             $action = $matches[1]
                                             $phaseName = $matches[2]
                                             if ($action -eq "EXECUTING") {
-                                                Write-Host "🔧 $action`: " -NoNewline -ForegroundColor Blue
+                                                Write-Host "🔧 $action" + ": " -NoNewline -ForegroundColor Blue
                                                 Write-Host "$phaseName" -ForegroundColor White -BackgroundColor DarkBlue
                                             }
                                             else {
-                                                Write-Host "✅ $action`: " -NoNewline -ForegroundColor Green
+                                                Write-Host "✅ $action" + ": " -NoNewline -ForegroundColor Green
                                                 Write-Host "$phaseName" -ForegroundColor White -BackgroundColor DarkGreen
                                             }
                                             continue
                                         }
                                         elseif ($trimmedLine -match '^=== PHASE:.*START ===') {
-                                            # Alternative phase marker detection
                                             Write-Host ""
                                             Write-Host "🚀 " -NoNewline -ForegroundColor Green
                                             Write-Host "$trimmedLine" -ForegroundColor Magenta
                                             continue
                                         }
                                         elseif ($trimmedLine -match '^=== PHASE:.*SUCCESS ===') {
-                                            # Alternative phase marker detection
                                             Write-Host "✅ " -NoNewline -ForegroundColor Green
                                             Write-Host "$trimmedLine" -ForegroundColor Green
                                             Write-Host ""
@@ -160,7 +159,6 @@ class WSLProcessCapture {
                                             Write-Host "⚠️  $line" -ForegroundColor Yellow
                                         }
                                         elseif ($trimmedLine -match '^===.*===') {
-                                            # Generic separator detection
                                             Write-Host "$line" -ForegroundColor Cyan
                                         }
                                         else { 
@@ -187,7 +185,6 @@ class WSLProcessCapture {
                             else {
                                 $consecutiveEmptyReads++
                                 if ($consecutiveEmptyReads -gt $maxConsecutiveEmpty) {
-                                    # Check if we should stop
                                     if (Test-Path $FinishPath) {
                                         break
                                     }
@@ -195,7 +192,6 @@ class WSLProcessCapture {
                             }
                         }
                         catch {
-                            # Ignore file read errors during active writing
                             $consecutiveEmptyReads++
                         }
                     }
@@ -205,16 +201,16 @@ class WSLProcessCapture {
                 
                     # Check if we should stop
                     if (Test-Path $FinishPath) {
-                        Start-Sleep -Milliseconds 1000  # Give final output time
+                        Start-Sleep -Milliseconds 1000
                         break
                     }
                 
-                    # Adaptive sleep - faster polling when actively reading
+                    # Adaptive sleep
                     if ($consecutiveEmptyReads -lt 5) {
-                        Start-Sleep -Milliseconds 50   # Fast polling when active
+                        Start-Sleep -Milliseconds 50
                     }
                     else {
-                        Start-Sleep -Milliseconds 200  # Slower when idle
+                        Start-Sleep -Milliseconds 200
                     }
                 }
                 
@@ -227,22 +223,18 @@ class WSLProcessCapture {
             # Give the tail job a moment to start
             Start-Sleep -Milliseconds 750
             
-            # Execute command with output redirection and better error handling
+            # Execute command with output redirection
             $wrappedCommand = @"
 {
-    # Set up output redirection with error handling
     exec > >(tee '$outputFile') 2>&1
     
-    # Add phase boundary marker at start
     echo '### PHASE_BOUNDARY ###'
     echo '>>> PHASE_START: COMMAND_EXECUTION'
     echo 'DESCRIPTION: $Description'
     echo '### PHASE_BOUNDARY ###'
     
-    # Execute the actual command
     $Command
     
-    # Add completion marker
     echo '### PHASE_BOUNDARY ###'
     echo '<<< PHASE_END: COMMAND_EXECUTION'
     echo '### PHASE_BOUNDARY ###'
@@ -260,7 +252,7 @@ class WSLProcessCapture {
             $result = wsl -d $this.DistroName -u $this.Username bash -c $wrappedCommand
             $exitCode = $LASTEXITCODE
             
-            # Wait for tail job to finish with progress indication
+            # Wait for tail job to finish
             $waitStartTime = Get-Date
             $jobCompleted = $false
             
@@ -331,7 +323,8 @@ class WSLProcessCapture {
         }
     }
     
-    [void] Cleanup() {
+    # Fixed method signature - removed [void]
+    Cleanup() {
         if (Test-Path $this.OutputLogFile) {
             $this.Logger.WriteLog("INFO", "WSL output log: $($this.OutputLogFile)", "Gray")
         }
@@ -342,11 +335,11 @@ class WSLProcessCapture {
 }
 
 class WslLogger {
-    # --- Properties ---
+    # Properties
     [string]$LogFile
     [string]$LogDir
 
-    # --- Constructor ---
+    # Constructor
     WslLogger([string]$BasePath = "c:\wsl") {
         $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
         $this.LogDir = "$BasePath\tmp\logs\$timestamp"
@@ -359,8 +352,7 @@ class WslLogger {
         }
     }
 
-    # --- Methods ---
-    # The [void] has been removed from the method definitions for PS 5.1 compatibility.
+    # Methods - removed [void] return types
     WriteLog([string]$Level, [string]$Message, [ConsoleColor]$ForegroundColor = "White") {
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         $logMessage = "[$timestamp] [$Level] $Message"
@@ -393,6 +385,7 @@ class WslLogger {
         $phaseLogPath = "$($this.LogDir)\phases.log"
         Add-Content -Path $phaseLogPath -Value $message
     }
+    
     [bool] InvokeWSLWithRealTimeOutput([string]$DistroName, [string]$Username, [string]$Command, [string]$Description) {
         $this.WritePhaseStatus("WSL_REAL", "STARTING", $Description)
         
@@ -408,7 +401,7 @@ class WslLogger {
             $process = New-Object System.Diagnostics.Process
             $process.StartInfo = $psi
             
-            # Real-time output handling with proper coloring
+            # Real-time output handling
             $process.add_OutputDataReceived({
                     param($processObject, $e)
                     if (-not [string]::IsNullOrEmpty($e.Data)) {
@@ -428,7 +421,6 @@ class WslLogger {
                             Write-Host "WSL: $($e.Data)" -ForegroundColor White
                         }
                     
-                        # Also write to log file
                         Add-Content -Path $this.LogFile -Value "WSL: $($e.Data)"
                     }
                 })
@@ -463,7 +455,7 @@ class WslLogger {
             return $false
         }
     }
-    # Enhanced error logging with recovery info
+    
     WriteRecoveryInfo([string]$DistroName, [string]$Username, [string]$RepoPath) {
         $this.WriteLog("RECOVERY", "=== RECOVERY INSTRUCTIONS ===", "Yellow")
         $this.WriteLog("RECOVERY", "To continue manually, run:", "Yellow")
