@@ -270,91 +270,65 @@ install_base_packages() {
 setup_systemd_enabler() {
     print_status "SYSTEMD" "Checking for systemd enabler (distrod)..."
 
-    if command -v distrod >/dev/null 2>&1; then
-        print_success "SYSTEMD" "distrod is already installed."
+    # Check if systemd is already the init process (PID 1)
+    if [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+        print_success "SYSTEMD" "Systemd is already active (PID 1)."
         return 0
     fi
-
-    print_status "SYSTEMD" "distrod not found, proceeding with installation."
-
-    local temp_archive="/tmp/distrod.tar.gz"
-    local extract_dir="/tmp/distrod_install"
-    execute_and_log "rm -f '$temp_archive'; rm -rf '$extract_dir'" \
-        "Cleaning up previous distrod artifacts" "SYSTEMD"
-
-    # --- Fetch the latest distrod release URL ---
-    local distrod_url=""
-    local api_response=""
-    local api_url="https://api.github.com/repos/nullpo-head/distrod/releases/latest"
-
-    print_status "SYSTEMD" "Fetching latest release info from GitHub API..."
-    # FIX 1: Make the API call more robust with retries
-    local attempt=1
-    while [ $attempt -le 3 ]; do
-        api_response=$(curl -sL --connect-timeout 10 --max-time 30 --fail "$api_url" 2>/dev/null)
-        if [ $? -eq 0 ]; then
-            print_status "SYSTEMD" "API response received on attempt $attempt."
-            break
-        fi
-        print_warning "SYSTEMD" "API call attempt $attempt failed. Retrying in 3 seconds..."
-        sleep 3
-        ((attempt++))
-    done
-
-    if [ -n "$api_response" ]; then
-        if command -v jq >/dev/null 2>&1; then
-            distrod_url=$(echo "$api_response" | jq -r '.assets[] | select(.name | endswith("x86_64.tar.gz")) | .browser_download_url' 2>/dev/null)
-        else
-            distrod_url=$(echo "$api_response" | grep -o 'https://[^"]*x86_64[^"]*\.tar\.gz' | head -1)
-        fi
+    
+    # If distrod is installed but not active, we might just need to enable it.
+    if command -v distrod >/dev/null 2>&1; then
+        print_warning "SYSTEMD" "distrod command exists, but systemd is not PID 1. Attempting to enable..."
     else
-        print_warning "SYSTEMD" "All GitHub API attempts failed."
+        print_status "SYSTEMD" "distrod not found, proceeding with full installation."
     fi
 
-    # FIX 2: Correct the fallback URL to use the actual asset name for v0.1.3
-    if [ -z "$distrod_url" ] || [[ ! "$distrod_url" =~ ^https:// ]]; then
-        print_warning "SYSTEMD" "Could not determine latest release URL, using corrected fallback."
-        distrod_url="https://github.com/nullpo-head/distrod/releases/download/v0.1.3/distrod-x86_64.tar.gz"
-    fi
+    # --- Installation Phase ---
+    # FIX 1: Follow the README - download the install.sh script directly.
+    local install_script_path="/tmp/distrod_install.sh"
+    local install_url="https://raw.githubusercontent.com/nullpo-head/wsl-distrod/main/install.sh"
 
-    print_status "SYSTEMD" "Using distrod URL: $distrod_url"
-
-    # --- Download and Validate ---
-    print_status "SYSTEMD" "Downloading distrod..."
-    if ! execute_and_log "curl -L --connect-timeout 10 --max-time 120 --fail -o '$temp_archive' \"$distrod_url\"" \
-        "Downloading distrod" "SYSTEMD"; then
-        print_error "SYSTEMD" "Failed to download distrod. Please check network and URL."
+    print_status "SYSTEMD" "Downloading distrod installer script..."
+    if ! execute_and_log "curl -L --fail -o '$install_script_path' '$install_url'" \
+        "Downloading distrod installer" "SYSTEMD"; then
+        print_error "SYSTEMD" "Failed to download the distrod installer script."
         return 1
     fi
 
-    print_status "SYSTEMD" "Validating downloaded file..."
-    if ! file "$temp_archive" | grep -q 'gzip compressed'; then
-        print_error "SYSTEMD" "Downloaded file is not a valid gzip archive. Aborting."
-        print_status "SYSTEMD" "File info: $(file "$temp_archive")"
+    execute_and_log "chmod +x '$install_script_path'" \
+        "Making installer executable" "SYSTEMD" || return 1
+
+    # FIX 2: Run the installer with the required 'install' argument.
+    print_status "SYSTEMD" "Running the distrod installer..."
+    if ! execute_and_log "sudo '$install_script_path' install" \
+        "Installing distrod" "SYSTEMD"; then
+        print_error "SYSTEMD" "distrod installation script failed."
         return 1
     fi
 
-    # --- Extract and Install (This part was already correct) ---
-    print_status "SYSTEMD" "Creating extraction directory at $extract_dir"
-    execute_and_log "mkdir -p '$extract_dir'" "Creating temporary directory" "SYSTEMD" || return 1
-
-    execute_and_log "tar -xzf '$temp_archive' -C '$extract_dir' --verbose" "Extracting distrod" "SYSTEMD" || return 1
-
-    local install_script="$extract_dir/install"
-    if [ ! -f "$install_script" ]; then
-        print_error "SYSTEMD" "Install script not found at $install_script"
+    # --- Enablement Phase ---
+    # FIX 3: Add the critical, missing 'distrod enable' command.
+    local distrod_binary="/opt/distrod/bin/distrod"
+    if [ ! -f "$distrod_binary" ]; then
+        print_error "SYSTEMD" "distrod binary not found at $distrod_binary after installation."
         return 1
     fi
 
-    execute_and_log "chmod +x '$install_script'" "Making distrod installer executable" "SYSTEMD" || return 1
-    execute_and_log "sudo '$install_script'" "Running distrod installer" "SYSTEMD" || return 1
+    print_status "SYSTEMD" "Enabling distrod to take over the init process..."
+    if ! execute_and_log "sudo '$distrod_binary' enable" \
+        "Enabling distrod" "SYSTEMD"; then
+        print_error "SYSTEMD" "Failed to enable distrod."
+        return 1
+    fi
 
-    # --- Cleanup ---
-    execute_and_log "rm -f '$temp_archive'; rm -rf '$extract_dir'" "Cleaning up distrod installer files" "SYSTEMD"
+    # --- Final Steps ---
+    execute_and_log "rm -f '$install_script_path'" "Cleaning up installer script" "SYSTEMD"
 
-    print_success "SYSTEMD" "distrod installed successfully."
-    print_warning "SYSTEMD" "A WSL restart ('wsl --shutdown') may be required to activate systemd."
-
+    print_success "SYSTEMD" "distrod has been installed and enabled successfully."
+    # FIX 4: Add the final, crucial warning about restarting.
+    print_warning "SYSTEMD" "A FULL WSL SHUTDOWN ('wsl --shutdown') is required to activate systemd."
+    print_warning "SYSTEMD" "The main PowerShell script should handle this restart."
+    
     return 0
 }
 
