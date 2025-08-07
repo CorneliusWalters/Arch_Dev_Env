@@ -50,7 +50,8 @@ source $ZSH/oh-my-zsh.sh
 # For WSL specific clipboard
 
 
-if [[ "$-" == *i* ]] && [[ -n "$WSL_DISTRO_NAME" ]] && [[ -z "$TMUX" ]] && [[ "$TERM_PROGRAM" != "vscode" ]]; then
+
+	if [[ "$-" == *i* && -t 0 ]] && [[ -n "$WSL_DISTRO_NAME" ]] && [[ -z "$TMUX" ]] && [[ "$TERM_PROGRAM" != "vscode" ]]; then
     tmux -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -A -s main
 fi
 

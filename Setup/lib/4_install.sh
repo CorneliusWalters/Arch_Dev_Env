@@ -277,7 +277,6 @@ setup_systemd_enabler() {
 
     print_status "SYSTEMD" "distrod not found, proceeding with installation."
 
-    # Define paths and cleanup old files
     local temp_archive="/tmp/distrod.tar.gz"
     local extract_dir="/tmp/distrod_install"
     execute_and_log "rm -f '$temp_archive'; rm -rf '$extract_dir'" \
@@ -286,28 +285,36 @@ setup_systemd_enabler() {
     # --- Fetch the latest distrod release URL ---
     local distrod_url=""
     local api_response=""
-    # FIX 1: Correct repository is 'nullpo-head/distrod'
     local api_url="https://api.github.com/repos/nullpo-head/distrod/releases/latest"
 
     print_status "SYSTEMD" "Fetching latest release info from GitHub API..."
-    if api_response=$(curl -s --connect-timeout 10 --max-time 30 --fail "$api_url" 2>/dev/null); then
-        print_status "SYSTEMD" "API response received, parsing for download URL..."
+    # FIX 1: Make the API call more robust with retries
+    local attempt=1
+    while [ $attempt -le 3 ]; do
+        api_response=$(curl -sL --connect-timeout 10 --max-time 30 --fail "$api_url" 2>/dev/null)
+        if [ $? -eq 0 ]; then
+            print_status "SYSTEMD" "API response received on attempt $attempt."
+            break
+        fi
+        print_warning "SYSTEMD" "API call attempt $attempt failed. Retrying in 3 seconds..."
+        sleep 3
+        ((attempt++))
+    done
 
-        # FIX 2: Correct asset name is 'x86_64.tar.gz', not 'linux-x86_64'
+    if [ -n "$api_response" ]; then
         if command -v jq >/dev/null 2>&1; then
             distrod_url=$(echo "$api_response" | jq -r '.assets[] | select(.name | endswith("x86_64.tar.gz")) | .browser_download_url' 2>/dev/null)
         else
-            # Fallback to grep if jq is not available
             distrod_url=$(echo "$api_response" | grep -o 'https://[^"]*x86_64[^"]*\.tar\.gz' | head -1)
         fi
     else
-        print_warning "SYSTEMD" "GitHub API call failed. Will use a fallback URL."
+        print_warning "SYSTEMD" "All GitHub API attempts failed."
     fi
 
-    # Final fallback to a known working version if API parsing fails
+    # FIX 2: Correct the fallback URL to use the actual asset name for v0.1.3
     if [ -z "$distrod_url" ] || [[ ! "$distrod_url" =~ ^https:// ]]; then
-        print_warning "SYSTEMD" "Could not determine latest release URL, using fallback."
-        distrod_url="https://github.com/nullpo-head/distrod/releases/download/v0.1.3/distrod-v0.1.3-linux-x86_64.tar.gz"
+        print_warning "SYSTEMD" "Could not determine latest release URL, using corrected fallback."
+        distrod_url="https://github.com/nullpo-head/distrod/releases/download/v0.1.3/distrod-x86_64.tar.gz"
     fi
 
     print_status "SYSTEMD" "Using distrod URL: $distrod_url"
@@ -316,7 +323,7 @@ setup_systemd_enabler() {
     print_status "SYSTEMD" "Downloading distrod..."
     if ! execute_and_log "curl -L --connect-timeout 10 --max-time 120 --fail -o '$temp_archive' \"$distrod_url\"" \
         "Downloading distrod" "SYSTEMD"; then
-        print_error "SYSTEMD" "Failed to download distrod from primary URL."
+        print_error "SYSTEMD" "Failed to download distrod. Please check network and URL."
         return 1
     fi
 
@@ -327,34 +334,23 @@ setup_systemd_enabler() {
         return 1
     fi
 
-    # --- Extract and Install ---
-    # FIX 3: Create a dedicated directory for extraction because the tarball
-    # does not contain a root folder. This prevents polluting /tmp.
+    # --- Extract and Install (This part was already correct) ---
     print_status "SYSTEMD" "Creating extraction directory at $extract_dir"
-    execute_and_log "mkdir -p '$extract_dir'" \
-        "Creating temporary directory" "SYSTEMD" || return 1
+    execute_and_log "mkdir -p '$extract_dir'" "Creating temporary directory" "SYSTEMD" || return 1
 
-    execute_and_log "tar -xzf '$temp_archive' -C '$extract_dir' --verbose" \
-        "Extracting distrod" "SYSTEMD" || return 1
+    execute_and_log "tar -xzf '$temp_archive' -C '$extract_dir' --verbose" "Extracting distrod" "SYSTEMD" || return 1
 
     local install_script="$extract_dir/install"
     if [ ! -f "$install_script" ]; then
         print_error "SYSTEMD" "Install script not found at $install_script"
-        print_status "SYSTEMD" "Contents of $extract_dir:"
-        ls -la "$extract_dir/"
         return 1
     fi
 
-    execute_and_log "chmod +x '$install_script'" \
-        "Making distrod installer executable" "SYSTEMD" || return 1
-
-    # The installer requires sudo privileges
-    execute_and_log "sudo '$install_script'" \
-        "Running distrod installer" "SYSTEMD" || return 1
+    execute_and_log "chmod +x '$install_script'" "Making distrod installer executable" "SYSTEMD" || return 1
+    execute_and_log "sudo '$install_script'" "Running distrod installer" "SYSTEMD" || return 1
 
     # --- Cleanup ---
-    execute_and_log "rm -f '$temp_archive'; rm -rf '$extract_dir'" \
-        "Cleaning up distrod installer files" "SYSTEMD"
+    execute_and_log "rm -f '$temp_archive'; rm -rf '$extract_dir'" "Cleaning up distrod installer files" "SYSTEMD"
 
     print_success "SYSTEMD" "distrod installed successfully."
     print_warning "SYSTEMD" "A WSL restart ('wsl --shutdown') may be required to activate systemd."
