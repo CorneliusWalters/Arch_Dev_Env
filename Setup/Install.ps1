@@ -93,11 +93,14 @@ try {
 
   $wslCaptureRoot = [WSLProcessCapture]::new($logger, $wslDistroName, "root")
   # The command to be executed *as the target user*
-  $commandToRunAsUser = "whoami && pwd && echo 'User verification complete'"
-
+ 
 
   # The full command executed by root, which switches to the user
-  $verifyUserCommand = "sudo -u $wslUsername sh -c '$commandToRunAsUser'"
+  $verifyUserCommand = @"
+VERIFY_TEXT='$userVerifyText'
+export VERIFY_TEXT
+sudo -u $wslUsername sh -c 'whoami && pwd && echo "$VERIFY_TEXT"'
+"@
 
   # We re-use the $wslCaptureRoot object which is already configured to run as root
   if (-not $wslCaptureRoot.ExecuteCommand($verifyUserCommand, "Verify user context")) {
