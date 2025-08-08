@@ -91,8 +91,10 @@ try {
   
   $logger.WritePhaseStatus("USER_CONFIG", "STARTING", "Verifying user context via sudo")
 
+  $wslCaptureRoot = [WSLProcessCapture]::new($logger, $wslDistroName, "root")
   # The command to be executed *as the target user*
   $commandToRunAsUser = "whoami && pwd && echo 'User verification complete'"
+
 
   # The full command executed by root, which switches to the user
   $verifyUserCommand = "sudo -u $wslUsername bash -c `"$commandToRunAsUser`""
