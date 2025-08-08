@@ -80,32 +80,22 @@ try {
   $logger.WritePhaseStatus("USER_CONFIG", "STARTING", "Shutting down WSL to apply user settings")
   wsl --shutdown
   Start-Sleep -Seconds 5
-
-  ## Verify the user change worked
-  #$logger.WritePhaseStatus("USER_CONFIG", "STARTING", "Verifying user context")
-  #$verifyUserCommand = "whoami && pwd && echo 'User verification complete'"
-  #$wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
-  #if (-not $wslCapture.ExecuteCommand($verifyUserCommand, "Verify user context")) {
-  #  throw "User context verification failed - still running as wrong user"
-  #}
   
   $logger.WritePhaseStatus("USER_CONFIG", "STARTING", "Verifying user context via sudo")
 
-  $wslCaptureRoot = [WSLProcessCapture]::new($logger, $wslDistroName, "root")
+  $wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
   # The command to be executed *as the target user*
  
 
-  # The full command executed by root, which switches to the user
-  $verifyUserCommand = @"
-VERIFY_TEXT='$userVerifyText'
-export VERIFY_TEXT
-sudo -u $wslUsername sh -c 'whoami && pwd && echo "$VERIFY_TEXT"'
-"@
+  $verifyUserCommand = "whoami && pwd && echo 'User verification complete'"
+
 
   # We re-use the $wslCaptureRoot object which is already configured to run as root
-  if (-not $wslCaptureRoot.ExecuteCommand($verifyUserCommand, "Verify user context")) {
-    throw "User context verification failed. Check sudo permissions for user '$wslUsername'."
+  
+  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $verifyUserCommand -Description "Verify user context" -Logger $logger)) {
+    throw "User context verification failed."
   }
+  
   ########################################################################################			
   ########################################################################################			
   $logger.WritePhaseStatus("DEBUG", "STARTING", "Testing WSL basic functionality")
