@@ -76,18 +76,6 @@ try {
   }
   $logger.WritePhaseStatus("CONFIG", "SUCCESS", "Config file created")
 
-  $logger.WritePhaseStatus("USER_CONFIG", "STARTING", "Configuring default WSL user")
-
-  # Create the wsl.conf file as root
-  $wslCaptureRoot = [WSLProcessCapture]::new($logger, $wslDistroName, "root")
-  $userConfigCommand = @"
-echo '[user]' >> /etc/wsl.conf && echo 'default=$wslUsername' >> /etc/wsl.conf
-"@
-
-  if (-not $wslCaptureRoot.ExecuteCommand($userConfigCommand, "Set WSL user config")) {
-    throw "Failed to set WSL user config"
-  }
-
   # FULL WSL shutdown (not just terminate)
   $logger.WritePhaseStatus("USER_CONFIG", "STARTING", "Shutting down WSL to apply user settings")
   wsl --shutdown
