@@ -97,7 +97,7 @@ try {
 
 
   # The full command executed by root, which switches to the user
-  $verifyUserCommand = "sudo -u $wslUsername bash -c `"$commandToRunAsUser`""
+  $verifyUserCommand = "sudo -u $wslUsername sh -c '$commandToRunAsUser'"
 
   # We re-use the $wslCaptureRoot object which is already configured to run as root
   if (-not $wslCaptureRoot.ExecuteCommand($verifyUserCommand, "Verify user context")) {
