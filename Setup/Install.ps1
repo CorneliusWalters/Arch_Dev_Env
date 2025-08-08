@@ -81,7 +81,7 @@ try {
   # Create the wsl.conf file as root
   $wslCaptureRoot = [WSLProcessCapture]::new($logger, $wslDistroName, "root")
   $userConfigCommand = @"
-echo '[user]' > /etc/wsl.conf && echo 'default=$wslUsername' >> /etc/wsl.conf
+echo '[user]' >> /etc/wsl.conf && echo 'default=$wslUsername' >> /etc/wsl.conf
 "@
 
   if (-not $wslCaptureRoot.ExecuteCommand($userConfigCommand, "Set WSL user config")) {
