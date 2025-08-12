@@ -23,19 +23,6 @@ pacman -Sy
 echo "--> Installing essential packages: sudo..."
 pacman -S --noconfirm sudo git inetutils curl
 
-echo "--> Configuring WSL mount options for executable permissions..."
-
-
-cat > /etc/wsl.conf << EOL
-[automount]
-enabled = true
-options = "metadata,umask=22,fmask=11"
-mountFsTab = false
-
-[user]
-default = ${USERNAME}
-EOL
-
 echo "--> Creating sudoers directory..."
 mkdir -p /etc/sudoers.d
 

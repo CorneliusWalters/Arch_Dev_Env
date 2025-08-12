@@ -314,6 +314,17 @@ setup_systemd_enabler() {
         return 1
     fi
 
+    print_status "SYSTEMD" "Appending default user to distrod's wsl.conf..."
+    # This command safely appends the [user] section to the wsl.conf file
+    # that distrod has just created or configured.
+    local set_user_cmd="printf '\n[user]\ndefault = %s\n' '$USER' | sudo tee -a /etc/wsl.conf"
+
+    if ! execute_and_log "$set_user_cmd" \
+        "Setting default user in /etc/wsl.conf" "SYSTEMD"; then
+        print_warning "SYSTEMD" "Could not set default user. You may need to log in as root first."
+        # This is not a fatal error, so we don't return 1.
+    fi
+    
     print_status "SYSTEMD" "Enabling distrod to take over the init process..."
     if ! execute_and_log "sudo '$distrod_binary' enable" \
         "Enabling distrod" "SYSTEMD"; then
