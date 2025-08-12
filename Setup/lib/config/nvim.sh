@@ -11,7 +11,7 @@ setup_neovim() {
 if [[ -z "$(ls -A ~/.config/nvim 2>/dev/null)" ]] || [[ "$FORCE_OVERWRITE" == "true" ]]; then
     print_status "NVIM" "Setting up NVIM configuration..."
     # Install Node packages for Neovim
-    execute_and_log "npm install --prefix ~/.local neovim tree-sitter-cli" \
+    execute_and_log "sudo npm install --prefix ~/.local neovim tree-sitter-cli" \
         "Installing Neovim Node packages" "NVIM" || return 1
     
     # Add clipboard support

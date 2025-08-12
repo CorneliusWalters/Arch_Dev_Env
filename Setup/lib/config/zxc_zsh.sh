@@ -27,6 +27,11 @@ path=(
     $path
 )
 
+# Force UTF-8 locale settings for compatibility with nvim and other tools
+export LANG=en_ZA.UTF-8
+export LC_ALL=en_ZA.UTF-8
+# --- End of new lines ---
+
 # XDG Base Directory Specification
 export XDG_CONFIG_HOME="$HOME/.config"
 export XDG_CACHE_HOME="$HOME/.cache"
