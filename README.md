@@ -106,14 +106,14 @@ Before you begin, ensure you have the following set up on your **Windows host**:
 - Internet connection for package downloads
 
 ### One-Command Installation
-'''
+```
 powershell
 # Open PowerShell as Administrator
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 git clone https://github.com/CorneliusWalters/Arch_Dev_Env.git c:\wsl\wsl_dev_setup
 cd c:\wsl\wsl_dev_setup\Setup
 .\Install.ps1
-'''
+```
 ### Installation Phases
 
 The installer progresses through several phases:
@@ -189,17 +189,17 @@ This setup uses an innovative **patch-based configuration management system** th
 
 #### How It Works
 
-'''
+```
 
 ~/.config/dotfiles-pristine/    # Original configurations
 ~/.config/zsh/.zshrc           # Your working configuration
 ~/.config/zsh/.zshrc.patch     # Your customizations as a patch file
-'''
+```
 
 #### Making Changes
 
 1. **Edit Configuration Files Normally**:
-'''
+```
 bash
 # Edit your shell configuration
 zshconf
@@ -209,7 +209,7 @@ nvimconf
 
 # Edit Tmux configuration
 tmuxconf
-'''
+```
 
 2. **Automatic Patch Generation**: The config watcher service detects changes and automatically creates patch files and commits them to Git.
 
@@ -219,7 +219,7 @@ tmuxconf
 
 If you need to start fresh or reapply patches:
 
-'''
+```
 bash
 # Force overwrite all configurations (during next login)
 export FORCE_OVERWRITE=true
@@ -227,7 +227,7 @@ export FORCE_OVERWRITE=true
 # Or manually apply patches
 cd $REPO_ROOT
 patch ~/.config/zsh/.zshrc < ~/.config/zsh/.zshrc.patch
-'''
+```
 
 ### Configuration Files Managed
 
@@ -292,17 +292,17 @@ By following this process, your personal Arch Linux WSL environment will always 
 ## 10. Usage
 
 #### **Starting Your Environment**
-'''
+```
 bash
 # Launch WSL (tmux starts automatically)
 wsl -d Arch
 
 # Or launch specific session
 wsl -d Arch -- tmux new-session -A -s dev
-'''
+```
 
 #### **Navigation & File Management**
-'''
+```
 bash
 # Modern file listing
 ls          # Actually runs: lsd -lah
@@ -312,10 +312,10 @@ la          # Tree view: lsd --tree ./*
 # Finding files and content
 find        # Actually runs: fd (faster find alternative)
 grep        # Actually runs: rg (ripgrep - faster grep)
-'''
+```
 
 #### **Development Commands**
-'''
+```
 bash
 # Quick editor access
 v file.txt  # Opens in Neovim
@@ -331,10 +331,10 @@ ipy            # IPython interactive shell
 
 # System monitoring
 top            # Actually runs: btop (better htop)
-'''
+```
 
 #### **Configuration Management**
-'''
+```
 bash
 # Quick config edits
 zshconf     # Edit ZSH configuration
@@ -343,51 +343,47 @@ nvimconf    # Edit Neovim configuration
 
 # System updates
 update      # Runs: sudo pacman -Syu
-'''
+```
 
 ### Service Management
 
 #### **Checking Services**
-'''
+```
 bash
 # View systemd services
 systemctl --user list-units --type=service
 
 # Check config watcher status
 systemctl --user status config-watcher
-'''
+```
 
 #### **Package Management**
-'''
+```
 bash
 # Install new packages (automatically synced to Git)
 sudo pacman -S package-name
 
 # Check installed packages
 pacman -Qqet > /tmp/packages.txt && cat /tmp/packages.txt
-'''
+```
 
-### Tmux Session Management
-
-#### **Key Bindings (Prefix: Ctrl+a)**
-'''
-bash
-Ctrl+a |    # Split pane horizontally
+*   **Tmux:**
+    *   `Ctrl+a & |`: Split pane horizontally
 Ctrl+a -    # Split pane vertically
 Ctrl+a h/j/k/l  # Navigate panes (vim-style)
 Alt+Arrow   # Navigate panes (arrow keys)
 Ctrl+a d    # Detach session
 Ctrl+a ?    # Show help
-'''
+```
 
 *   **Tmux:**
-'''
+```
 
     *tmux ls                    # List sessions
 tmux new-session -s name   # Create named session
 tmux attach -t name        # Attach to session
 tmux kill-session -t name  # Kill session
-'''
+```
 
 ---
 
