@@ -367,25 +367,6 @@ sudo pacman -S package-name
 pacman -Qqet > /tmp/packages.txt && cat /tmp/packages.txt
 ```
 
-*   **Tmux:**
-    *   `Ctrl+a & |`: Split pane horizontally
-Ctrl+a -    # Split pane vertically
-Ctrl+a h/j/k/l  # Navigate panes (vim-style)
-Alt+Arrow   # Navigate panes (arrow keys)
-Ctrl+a d    # Detach session
-Ctrl+a ?    # Show help
-```
-
-*   **Tmux:**
-```
-
-    *tmux ls                    # List sessions
-tmux new-session -s name   # Create named session
-tmux attach -t name        # Attach to session
-tmux kill-session -t name  # Kill session
-```
-
----
 
 
 Once the setup is complete and you've logged back into your WSL Arch terminal:
@@ -400,11 +381,15 @@ Once the setup is complete and you've logged back into your WSL Arch terminal:
     *   `<leader>fg`: Live grep (Telescope).
     *   `<leader>db`: Toggle Dadbod UI for database interaction.
 *   **Tmux:**
-    *   `Ctrl-a`: Your new Tmux prefix.
+    *   `Ctrl-a`: Your new Tmux prefix. 
     *   `Ctrl-a c`: Create new window.
-    *   `Ctrl-a %`: Split pane horizontally.
-    *   `Ctrl-a "`: Split pane vertically.
+    *   `Ctrl-a |`: Split pane horizontally.
+    *   `Ctrl-a -`: Split pane vertically.
     *   `Alt-h/j/k/l`: Navigate panes.
+    *   `tmux ls`: List sessions
+    *   `tmux new-session -s name`: Create named session
+    *   `tmux attach -t name`: Attach to session
+    *   `tmux kill-session -t name`: Kill session
 *   **Aliases:** A range of useful aliases are defined in `~/.config/zsh/.zshrc`:
     *   `ls`, `ll`, `la`: Enhanced `ls` using `lsd`.
     *   `cat`: Uses `bat` for syntax highlighting.
@@ -416,6 +401,9 @@ Once the setup is complete and you've logged back into your WSL Arch terminal:
     *   `v`: Alias for `nvim`.
     *   `update`: Runs `sudo pacman -Syu`.
     *   `zshconf`, `tmuxconf`, `nvimconf`: Quick edit your shell, tmux, and Neovim configs.
+    *   `proj`: cd to ~/project
+    *   `wrk`: cd to ~/work
+    
 
 ## License
 
