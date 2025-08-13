@@ -30,7 +30,8 @@ path=(
 # Force UTF-8 locale settings for compatibility with nvim and other tools
 export LANG=en_ZA.UTF-8
 export LC_ALL=en_ZA.UTF-8
-# --- End of new lines ---
+
+
 
 # XDG Base Directory Specification
 export XDG_CONFIG_HOME="$HOME/.config"
@@ -71,6 +72,7 @@ alias top='btop'
 alias find='fd'
 alias grep='rg'
 
+
 # Git shortcuts
 alias g='git'
 alias lg='lazygit'
@@ -90,6 +92,8 @@ alias du='du -h'
 alias ..='cd ..'
 alias ...='cd ../..'
 alias ....='cd ../../..'
+alias proj='cd ~/projects'
+alias wrk='cd ~/work'
 
 # Quick edit configs
 alias zshconf='${EDITOR:-nvim} ~/.config/zsh/.zshrc'

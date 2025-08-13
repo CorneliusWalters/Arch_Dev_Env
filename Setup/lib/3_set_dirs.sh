@@ -7,7 +7,9 @@ print_status "DIRS" "Creating base directory structure..."
 mkdir -p \
   ~/.config \
   ~/.local/{bin,share,opt,logs} \
-  ~/.cache
+  ~/.cache \
+  ~/projects \
+  ~/work
 
 # --- Centralized Directory Creation for Dotfiles ---
 # Create the main pristine directory

@@ -80,8 +80,6 @@ This project provides a **fully automated setup system** for creating a professi
 
 ### One-Command Installation
 '''
-
-'''
 powershell
 # Open PowerShell as Administrator
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
@@ -181,13 +179,13 @@ This setup uses an innovative **patch-based configuration management system** th
 '''
 bash
 # Edit your shell configuration
-nvim ~/.config/zsh/.zshrc
+zshconf
 
 # Edit Neovim configuration  
-nvim ~/.config/nvim/init.lua
+nvimconf
 
 # Edit Tmux configuration
-nvim ~/.config/tmux/tmux.conf
+tmuxconf
 '''
 
 2. **Automatic Patch Generation**: The config watcher service detects changes and automatically creates patch files and commits them to Git.
@@ -279,7 +277,7 @@ bash
 
 ---
 
-## 📖 Usage Guide
+##  Usage Guide
 
 ### Daily Workflow
 
