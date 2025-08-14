@@ -132,7 +132,7 @@ try {
 	
   $logger.WritePhaseStatus("COMPLETE", "SUCCESS", "Setup completed successfully")
   $logger.WriteHeader("Setup Complete! Shutting down WSL to apply changes.")
-  Start-Sleep -Seconds 5
+  Start-Sleep -Seconds 10
   wsl --shutdown
 	    
 }

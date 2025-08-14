@@ -267,8 +267,9 @@ install_base_packages() {
         "Installing core and custom dependencies" \
         "Packages" || return 1
 }
+
 setup_systemd_enabler() {
-    print_status "SYSTEMD" "Checking for systemd enabler (distrod)..."
+    print_status "SYSTEMD" "Setting up native WSL2 systemd support..."
 
     # Check if systemd is already the init process (PID 1)
     if [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
@@ -276,80 +277,160 @@ setup_systemd_enabler() {
         return 0
     fi
     
-    # If distrod is installed but not active, we might just need to enable it.
-    if command -v distrod >/dev/null 2>&1; then
-        print_warning "SYSTEMD" "distrod command exists, but systemd is not PID 1. Attempting to enable..."
-    else
-        print_status "SYSTEMD" "distrod not found, proceeding with full installation."
-    fi
-
-    # --- Installation Phase ---
-    # FIX 1: Follow the README - download the install.sh script directly.
-    local install_script_path="/tmp/distrod_install.sh"
-    local install_url="https://raw.githubusercontent.com/nullpo-head/wsl-distrod/main/install.sh"
-
-    print_status "SYSTEMD" "Downloading distrod installer script..."
-    if ! execute_and_log "curl -L --fail -o '$install_script_path' '$install_url'" \
-        "Downloading distrod installer" "SYSTEMD"; then
-        print_error "SYSTEMD" "Failed to download the distrod installer script."
-        return 1
-    fi
-
-    execute_and_log "chmod +x '$install_script_path'" \
-        "Making installer executable" "SYSTEMD" || return 1
-
-    # FIX 2: Run the installer with the required 'install' argument.
-    print_status "SYSTEMD" "Running the distrod installer..."
-    if ! execute_and_log "sudo '$install_script_path' install" \
-        "Installing distrod" "SYSTEMD"; then
-        print_error "SYSTEMD" "distrod installation script failed."
-        return 1
-    fi
-
-    # --- Enablement Phase ---
-    # FIX 3: Add the critical, missing 'distrod enable' command.
-    local distrod_binary="/opt/distrod/bin/distrod"
-    if [ ! -f "$distrod_binary" ]; then
-        print_error "SYSTEMD" "distrod binary not found at $distrod_binary after installation."
-        return 1
-    fi
-
-    print_status "SYSTEMD" "Appending default user to distrod's wsl.conf..."
-    # This command safely appends the [user] section to the wsl.conf file
-    # that distrod has just created or configured.
-    print_status "SYSTEMD" "Configuring wsl.conf for systemd and default user..."
-
-    # Create a complete, clean wsl.conf
+    print_status "SYSTEMD" "Configuring WSL for native systemd support..."
+    
+    # Create a clean wsl.conf with systemd enabled
     sudo tee /etc/wsl.conf > /dev/null << EOF
 [user]
 default=$USER
 
 [boot]
 systemd=true
+
+[interop]
+enabled=true
+appendWindowsPath=true
 EOF
-    if ! execute_and_log "$set_user_cmd" \
-        "Setting default user in /etc/wsl.conf" "SYSTEMD"; then
-        print_warning "SYSTEMD" "Could not set default user. You may need to log in as root first."
-        # This is not a fatal error, so we don't return 1.
-    fi
-    
-    print_status "SYSTEMD" "Enabling distrod to take over the init process..."
-    if ! execute_and_log "sudo '$distrod_binary' enable" \
-        "Enabling distrod" "SYSTEMD"; then
-        print_error "SYSTEMD" "Failed to enable distrod."
-        return 1
-    fi
 
-    # --- Final Steps ---
-    execute_and_log "rm -f '$install_script_path'" "Cleaning up installer script" "SYSTEMD"
-
-    print_success "SYSTEMD" "distrod has been installed and enabled successfully."
-    # FIX 4: Add the final, crucial warning about restarting.
-    print_warning "SYSTEMD" "A FULL WSL SHUTDOWN ('wsl --shutdown') is required to activate systemd."
-    print_warning "SYSTEMD" "The main PowerShell script should handle this restart."
+    print_success "SYSTEMD" "WSL systemd configuration complete."
+    print_warning "SYSTEMD" "A full WSL shutdown and restart is required to activate systemd."
+    print_warning "SYSTEMD" "The PowerShell script will handle this restart automatically."
     
     return 0
 }
+
+setup_watcher_service() {
+    print_status "WATCHER" "Setting up config file watcher service..."
+
+    local watcher_script="$REPO_ROOT/Setup/lib/config/watcher.sh"
+    local commit_script="$REPO_ROOT/Setup/lib/6_commit_config.sh"
+    local service_file_path="$HOME/.config/systemd/user/config-watcher.service"
+    local zshrc_file="$HOME/.config/zsh/.zshrc"
+
+    # Make scripts executable
+    chmod +x "$watcher_script" "$commit_script"
+
+    # Create systemd user directory
+    mkdir -p "$HOME/.config/systemd/user/"
+
+    # Create the service file
+    cat > "$service_file_path" << EOL
+[Unit]
+Description=Watches for user config file changes and commits them to Git
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bash $watcher_script
+Restart=always
+RestartSec=10
+Environment=HOME=$HOME
+
+[Install]
+WantedBy=default.target
+EOL
+
+    # Add enabler to .zshrc that waits for systemd to be ready
+cat >> "$zshrc_file" << 'EOL'
+
+# --- One-shot service enabler for config-watcher ---
+# Wait for systemd and enable service on first shell start
+if command -v systemctl >/dev/null 2>&1 && ! systemctl --user is-enabled -q config-watcher.service 2>/dev/null; then
+    echo "Setting up config watcher service..."
+    systemctl --user daemon-reload
+    systemctl --user enable --now config-watcher.service 2>/dev/null && \
+        echo "Config watcher service enabled." || \
+        echo "Config watcher will be enabled after systemd is fully initialized."
+fi
+# --- End one-shot enabler ---
+EOL
+
+    print_success "WATCHER" "Config watcher service configured."
+}
+
+#setup_systemd_enabler() {
+#    print_status "SYSTEMD" "Checking for systemd enabler (distrod)..."
+#
+#    # Check if systemd is already the init process (PID 1)
+#    if [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+#        print_success "SYSTEMD" "Systemd is already active (PID 1)."
+#        return 0
+#    fi
+#    
+#    # If distrod is installed but not active, we might just need to enable it.
+#    if command -v distrod >/dev/null 2>&1; then
+#        print_warning "SYSTEMD" "distrod command exists, but systemd is not PID 1. Attempting to enable..."
+#    else
+#        print_status "SYSTEMD" "distrod not found, proceeding with full installation."
+#    fi
+#
+#    # --- Installation Phase ---
+#    # FIX 1: Follow the README - download the install.sh script directly.
+#    local install_script_path="/tmp/distrod_install.sh"
+#    local install_url="https://raw.githubusercontent.com/nullpo-head/wsl-distrod/main/install.sh"
+#
+#    print_status "SYSTEMD" "Downloading distrod installer script..."
+#    if ! execute_and_log "curl -L --fail -o '$install_script_path' '$install_url'" \
+#        "Downloading distrod installer" "SYSTEMD"; then
+#        print_error "SYSTEMD" "Failed to download the distrod installer script."
+#        return 1
+#    fi
+#
+#    execute_and_log "chmod +x '$install_script_path'" \
+#        "Making installer executable" "SYSTEMD" || return 1
+#
+#    # FIX 2: Run the installer with the required 'install' argument.
+#    print_status "SYSTEMD" "Running the distrod installer..."
+#    if ! execute_and_log "sudo '$install_script_path' install" \
+#        "Installing distrod" "SYSTEMD"; then
+#        print_error "SYSTEMD" "distrod installation script failed."
+#        return 1
+#    fi
+#
+#    # --- Enablement Phase ---
+#    # FIX 3: Add the critical, missing 'distrod enable' command.
+#    local distrod_binary="/opt/distrod/bin/distrod"
+#    if [ ! -f "$distrod_binary" ]; then
+#        print_error "SYSTEMD" "distrod binary not found at $distrod_binary after installation."
+#        return 1
+#    fi
+#
+#    print_status "SYSTEMD" "Appending default user to distrod's wsl.conf..."
+#    # This command safely appends the [user] section to the wsl.conf file
+#    # that distrod has just created or configured.
+#    print_status "SYSTEMD" "Configuring wsl.conf for systemd and default user..."
+#
+#    # Create a complete, clean wsl.conf
+#    sudo tee /etc/wsl.conf > /dev/null << EOF
+#[user]
+#default=$USER
+#
+#[boot]
+#systemd=true
+#EOF
+#    if ! execute_and_log "$set_user_cmd" \
+#        "Setting default user in /etc/wsl.conf" "SYSTEMD"; then
+#        print_warning "SYSTEMD" "Could not set default user. You may need to log in as root first."
+#        # This is not a fatal error, so we don't return 1.
+#    fi
+#    
+#    print_status "SYSTEMD" "Enabling distrod to take over the init process..."
+#    if ! execute_and_log "sudo '$distrod_binary' enable" \
+#        "Enabling distrod" "SYSTEMD"; then
+#        print_error "SYSTEMD" "Failed to enable distrod."
+#        return 1
+#    fi
+#
+#    # --- Final Steps ---
+#    execute_and_log "rm -f '$install_script_path'" "Cleaning up installer script" "SYSTEMD"
+#
+#    print_success "SYSTEMD" "distrod has been installed and enabled successfully."
+#    # FIX 4: Add the final, crucial warning about restarting.
+#    print_warning "SYSTEMD" "A FULL WSL SHUTDOWN ('wsl --shutdown') is required to activate systemd."
+#    print_warning "SYSTEMD" "The main PowerShell script should handle this restart."
+#    
+#    return 0
+#}
 
 install_db_tools() {
     print_status "DB" "Installing database tools..."
@@ -424,59 +505,59 @@ setup_shell() {
     fi
 }
 
-#Create Config Watcher 
-setup_watcher_service() {
-    print_status "WATCHER" "Setting up config file watcher service..."
-
-    local watcher_script="$REPO_ROOT/Setup/lib/config/watcher.sh"
-    # This assumes you've renamed the script as I recommended earlier.
-    # If not, change generate_and_commit_patch.sh to 6_commit_config.sh
-    local commit_script="$REPO_ROOT/Setup/lib/generate_and_commit_patch.sh"
-    local service_file_path="$HOME/.config/systemd/user/config-watcher.service"
-    local zshrc_file="$HOME/.config/zsh/.zshrc"
-
-    # Make scripts executable
-    chmod +x "$watcher_script" "$commit_script"
-
-    # Create systemd user directory
-    mkdir -p "$HOME/.config/systemd/user/"
-
-    # Create the service file
-    # This part is unchanged
-    cat > "$service_file_path" << EOL
-[Unit]
-Description=Watches for user config file changes and commits them to Git.
-After=network-online.target
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/bash $watcher_script
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=default.target
-EOL
-
-    # --- NEW LOGIC: Add a one-shot enabler to .zshrc ---
-    print_status "WATCHER" "Adding one-shot service enabler to .zshrc"
-
-    # This block of code will be added to the end of the user's .zshrc.
-    # It runs once, enables the service, and then does nothing on subsequent shell starts.
-    cat >> "$zshrc_file" << 'EOL'
-
-# --- One-shot service enabler for config-watcher ---
-# This block will run only once after the initial setup.
-if ! systemctl --user is-enabled -q config-watcher.service; then
-    echo "First-time setup: Enabling and starting config-watcher service..."
-    systemctl --user enable --now config-watcher.service
-    echo "Config watcher is now active."
-fi
-# --- End one-shot enabler ---
-EOL
-
-    print_success "WATCHER" "Config watcher service file created. It will be enabled automatically on the next shell start."
-}
+# #Create Config Watcher 
+# setup_watcher_service() {
+#     print_status "WATCHER" "Setting up config file watcher service..."
+# 
+#     local watcher_script="$REPO_ROOT/Setup/lib/config/watcher.sh"
+#     # This assumes you've renamed the script as I recommended earlier.
+#     # If not, change generate_and_commit_patch.sh to 6_commit_config.sh
+#     local commit_script="$REPO_ROOT/Setup/lib/generate_and_commit_patch.sh"
+#     local service_file_path="$HOME/.config/systemd/user/config-watcher.service"
+#     local zshrc_file="$HOME/.config/zsh/.zshrc"
+# 
+#     # Make scripts executable
+#     chmod +x "$watcher_script" "$commit_script"
+# 
+#     # Create systemd user directory
+#     mkdir -p "$HOME/.config/systemd/user/"
+# 
+#     # Create the service file
+#     # This part is unchanged
+#     cat > "$service_file_path" << EOL
+# [Unit]
+# Description=Watches for user config file changes and commits them to Git.
+# After=network-online.target
+# 
+# [Service]
+# Type=simple
+# ExecStart=/usr/bin/bash $watcher_script
+# Restart=always
+# RestartSec=10
+# 
+# [Install]
+# WantedBy=default.target
+# EOL
+# 
+#     # --- NEW LOGIC: Add a one-shot enabler to .zshrc ---
+#     print_status "WATCHER" "Adding one-shot service enabler to .zshrc"
+# 
+#     # This block of code will be added to the end of the user's .zshrc.
+#     # It runs once, enables the service, and then does nothing on subsequent shell starts.
+#     cat >> "$zshrc_file" << 'EOL'
+# 
+# # --- One-shot service enabler for config-watcher ---
+# # This block will run only once after the initial setup.
+# if ! systemctl --user is-enabled -q config-watcher.service; then
+#     echo "First-time setup: Enabling and starting config-watcher service..."
+#     systemctl --user enable --now config-watcher.service
+#     echo "Config watcher is now active."
+# fi
+# # --- End one-shot enabler ---
+# EOL
+# 
+#     print_success "WATCHER" "Config watcher service file created. It will be enabled automatically on the next shell start."
+# }
 
 setup_winyank() {
     print_status "CLIPBOARD" "Setting up win32yank for Neovim clipboard..."
