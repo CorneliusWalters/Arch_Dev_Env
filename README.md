@@ -15,7 +15,7 @@ This repository provides a fully automated and opinionated setup for a powerful 
 - [9. Troubleshooting](#9-troubleshooting)
 - [10. Usage](#10-usage)
 - [License](#license)
-
+---
 ## 1. File Structure
 ```
 Arch_Dev_Env/
@@ -50,6 +50,7 @@ Arch_Dev_Env/
 ├── LICENSE                      # Public domain license (Unlicense)
 └── README.md                    # This documentation file
 ```
+---
 ## 2. Features
 
 ### 🔧 **Core System**
@@ -146,18 +147,18 @@ During the setup, the system-wide locale is automatically configured to `en_ZA.U
 If you prefer a different locale, you can change it after the installation is complete by editing `/etc/locale.conf` and `/etc/locale.gen` manually, then regenerating the locales:
 
 1.  Edit `/etc/locale.conf` (as root):
-    ```bash
+    ```
     sudo nvim /etc/locale.conf
     # Change LANG and other LC_ variables to your preferred locale, e.g., en_US.UTF-8
     ```
 2.  Edit `/etc/locale.gen` (as root):
-    ```bash
+    ```
     sudo nvim /etc/locale.gen
     # Uncomment the line corresponding to your desired locale (e.g., en_US.UTF-8 UTF-8)
     # Comment out en_ZA.UTF-8
     ```
 3.  Generate the new locales:
-    ```bash
+    ```
     sudo locale-gen
     ```
 4.  modify below lines in "~/.config/zsh/.zshrc":

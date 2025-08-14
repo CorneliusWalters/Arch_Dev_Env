@@ -100,7 +100,7 @@ alias zshconf='${EDITOR:-nvim} ~/.config/zsh/.zshrc'
 alias tmuxconf='${EDITOR:-nvim} ~/.config/tmux/tmux.conf'
 alias nvimconf='${EDITOR:-nvim} ~/.config/nvim/init.lua'
 
-
+    
 EOL
 # 2. Copy the pristine file to the working location.
 cp "$PRISTINE_FILE" "$WORKING_FILE"
