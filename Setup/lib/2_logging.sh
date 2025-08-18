@@ -7,7 +7,6 @@
 export PYTHONUNBUFFERED=1
 export DEBIAN_FRONTEND=noninteractive
 
-
 # Setup logging with detailed timestamps and categories
 LOG_DIR="$HOME/.local/logs/$TIMESTAMP"
 mkdir -p "$LOG_DIR"
@@ -27,7 +26,7 @@ PHASE_END_MARKER="<<< PHASE_END"
 
 init_logging() {
     # Create the header directly with command substitution
-    cat >> "$LOGFILE" << EOF
+    cat >>"$LOGFILE" <<EOF
 === Installation Log Started at $(date) ===
 === System Information ===
 User: $(whoami)
@@ -54,7 +53,7 @@ EOF
         echo "Script Directory: $SCRIPT_DIR"
         echo "=========================="
     } | tee /dev/stderr
-    
+
     # Force flush all output streams
     sync
 }
@@ -64,7 +63,7 @@ print_phase_start() {
     local phase=$1
     local description=$2
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
+
     # Multiple output methods to ensure visibility
     {
         echo ""
@@ -75,11 +74,11 @@ print_phase_start() {
         echo "$PHASE_MARKER_PREFIX"
         echo ""
     } | tee /dev/stderr
-    
+
     # Aggressive flushing
     sync
     sleep 0.2
-    printf "\n" >&2  # Extra newline to stderr
+    printf "\n" >&2 # Extra newline to stderr
     sync
 }
 
@@ -87,7 +86,7 @@ print_phase_end() {
     local phase=$1
     local status=$2
     local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-    
+
     {
         echo ""
         echo "$PHASE_MARKER_PREFIX"
@@ -97,7 +96,7 @@ print_phase_end() {
         echo "$PHASE_MARKER_PREFIX"
         echo ""
     } | tee /dev/stderr
-    
+
     sync
     sleep 0.2
     printf "\n" >&2
@@ -110,13 +109,12 @@ print_progress() {
     local total=$2
     local phase=$3
     local action=$4
-    
+
     {
         echo ">>> PROGRESS: [$current/$total] $phase - $action"
     } | tee /dev/stderr
     sync
 }
-
 
 log_message() {
     local level=$1
@@ -124,28 +122,28 @@ log_message() {
     local message=$3
     local func="${FUNCNAME[2]:-main}"
     local timestamp
-    
+
     # Use a more robust timestamp method
     if timestamp=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null); then
         : # Success
     else
         timestamp="TIMESTAMP_ERROR"
     fi
-    
+
     local log_entry="[$timestamp] [$level] [$category] [$func] $message"
-    
+
     # Try to write to log file with error handling
     if [[ -w "$LOGFILE" ]] && [[ -w "$(dirname "$LOGFILE")" ]]; then
-        echo "$log_entry" >> "$LOGFILE" 2>/dev/null || {
+        echo "$log_entry" >>"$LOGFILE" 2>/dev/null || {
             # Fallback to a different location if primary log fails
-            echo "$log_entry" >> "/tmp/fallback_install.log" 2>/dev/null
+            echo "$log_entry" >>"/tmp/fallback_install.log" 2>/dev/null
         }
     else
         # Create fallback log location
         mkdir -p "/tmp" 2>/dev/null
-        echo "$log_entry" >> "/tmp/fallback_install.log" 2>/dev/null
+        echo "$log_entry" >>"/tmp/fallback_install.log" 2>/dev/null
     fi
-        
+
     # Always output to stdout for PowerShell capture with immediate flush
     echo "$log_entry" >&2
     sync
@@ -205,14 +203,14 @@ execute_and_log() {
 
     local start_time
     start_time=$(date +%s)
-    
+
     # --- CORE CHANGE ---
     # Execute the command directly. Its stdout/stderr will stream to the
     # parent process (the PowerShell job) in real-time.
     # We capture the exit code immediately after.
     eval "$cmd"
     local exit_code=$?
-    
+
     local end_time
     end_time=$(date +%s)
     local duration=$((end_time - start_time))
@@ -249,13 +247,13 @@ execute_and_log_with_retry() {
         # Execute command and capture exit code properly
         local output
         local exit_code
-        
+
         if output=$(eval "$cmd" 2>&1); then
             exit_code=0
         else
             exit_code=$?
         fi
-        
+
         # Show output in real-time (simplified)
         if [ -n "$output" ]; then
             echo "$output" | while IFS= read -r line; do
@@ -267,16 +265,16 @@ execute_and_log_with_retry() {
         if [ $exit_code -eq 0 ]; then
             local end_time=$(date +%s)
             local duration=$((end_time - start_time))
-            
+
             log_message "SUCCESS" "$category" "[$func] Succeeded on attempt $attempt (${duration}s)"
             log_message "TIMING" "$category" "[$func] Total duration: ${duration}s, Attempts: $attempt"
             print_success "$category" "[$func] Command succeeded on attempt $attempt (${duration}s)"
-            
+
             return 0
         else
             local current_time=$(date +%s)
             local current_duration=$((current_time - start_time))
-            
+
             log_message "WARNING" "$category" "[$func] Attempt $attempt failed with exit code: $exit_code"
             log_message "TIMING" "$category" "[$func] Current duration: ${current_duration}s"
 
@@ -285,18 +283,17 @@ execute_and_log_with_retry() {
                 sleep $delay
             fi
         fi
-        
+
         attempt=$((attempt + 1))
     done
 
     local final_time=$(date +%s)
     local total_duration=$((final_time - start_time))
-    
+
     log_message "ERROR" "$category" "[$func] Failed after $max_attempts attempts (${total_duration}s)"
     print_error "$category" "[$func] Command failed after $max_attempts attempts (${total_duration}s)"
-    
+
     return $exit_code
 }
 
 #######--- END OF FILE ---#######
-

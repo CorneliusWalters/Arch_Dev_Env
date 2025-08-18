@@ -18,7 +18,7 @@ pacman-key --init
 pacman-key --populate archlinux
 
 echo "--> Updating package databases..."
-pacman -Sy 
+pacman -Sy
 
 echo "--> Installing essential packages: sudo..."
 pacman -S --noconfirm sudo git inetutils curl
@@ -33,6 +33,6 @@ echo "--> Unlocking user account..."
 passwd -d "${USERNAME}"
 
 echo "--> Granting passwordless sudo to 'wheel' group..."
-echo '%wheel ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/wheel
+echo '%wheel ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/wheel
 
 echo "--- Root Preparation Complete ---"

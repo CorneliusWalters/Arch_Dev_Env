@@ -45,4 +45,3 @@ chown -R "$USER:$USER" ~/.config ~/.local ~/.cache
 print_success "DIRS" "Directory structure and permissions set."
 
 #######--- END OF FILE ---#######
-

@@ -2,9 +2,18 @@
 #
 # generate_and_commit_patch.sh - Creates a .patch file from a modified config
 # and commits it to Git.
+# Load configuration
+CONFIG_FILE="$HOME/.config/arch-dev-env.conf"
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+else
+    echo "$(date): ERROR - Config file not found at $CONFIG_FILE"
+    exit 1
+fi
 
-REPO_ROOT="/mnt/c/wsl/wsl_dev_setup"
-LOG_FILE="/mnt/c/wsl/tmp/logs/config_git_sync.log"
+REPO_ROOT="${PERSONAL_REPO_ROOT:-$HOME/.config/dotfiles}"
+LOG_FILE="$HOME/.local/logs/config_git_sync.log"
+
 # --- Do not edit below this line ---
 
 mkdir -p "$(dirname "$LOG_FILE")"

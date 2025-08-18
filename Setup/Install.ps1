@@ -13,6 +13,9 @@ $wslUsername = Read-Host -Prompt "Please enter your desired username for Arch Li
 if ([string]::IsNullOrWhiteSpace($wslUsername)) {
   Write-Host "ERROR: Username cannot be empty." -ForegroundColor Red; exit 1
 }
+$gitUserName = Read-Host -Prompt "Enter your Git username (for commits)"
+$gitUserEmail = Read-Host -Prompt "Enter your Git email (for commits)"
+
 
 # Import modules and create the logger
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -116,6 +119,7 @@ try {
   }
   #  ########################################################################################			
   #  ########################################################################################			
+
   # Phase 6: Main Setup 
   $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup via repository wrapper script")
 

@@ -3,16 +3,16 @@
 ###     dir: /mnt/c/wsl/scripts/lib/config/zxc_nvim.sh
 
 # --- START: Define all paths locally. This makes the script self-contained. ---
-# Directory Creation is done in 2_set_dirs.sh 
-local PRISTINE_DIR="$HOME/.config/dotfiles-pristine/nvim"
-local WORKING_DIR="$HOME/.config/nvim"
+# Directory Creation is done in 2_set_dirs.sh
+PRISTINE_DIR="$HOME/.config/dotfiles-pristine/nvim"
+WORKING_DIR="$HOME/.config/nvim"
 
 # --- Define the list of files to manage ---
-local NVIM_CONFIG_FILES=(
-    "init.lua"
-    "lua/preferences.lua"
-    "lua/plugins.lua"
-    "lua/keymaps.lua"
+NVIM_CONFIG_FILES=(
+  "init.lua"
+  "lua/preferences.lua"
+  "lua/plugins.lua"
+  "lua/keymaps.lua"
 )
 # --- END: Path definitions ---
 
@@ -20,7 +20,7 @@ print_status "NVIM" "Deploying pristine NeoVIM configuration..."
 
 # 1. Always write the pristine config from the repo to our pristine location.
 
-cat > "$PRISTINE_DIR/lua/init.lua" << 'EOF'
+cat >"$PRISTINE_DIR/lua/init.lua" <<'EOF'
 -- ##--init.lua 
 
 -- Set leader key early, as many plugins might use it during setup
@@ -56,8 +56,7 @@ vim.cmd([[colorscheme kanagawa]])
 
 EOF
 
-
-cat >"$PRISTINE_DIR/lua/preferences.lua" << 'EOF'
+cat >"$PRISTINE_DIR/lua/preferences.lua" <<'EOF'
 
 -- This file is required by init.lua before plugins are loaded.
 -- It's for settings that don't depend on any plugins.
@@ -80,8 +79,7 @@ vim.opt.wrap = false
 
 EOF
 
-
-cat > "$PRISTINE_DIR/lua/plugins.lua" << 'EOF'
+cat >"$PRISTINE_DIR/lua/plugins.lua" <<'EOF'
 return {
   -- Appearance
   { "rebelot/kanagawa.nvim", priority = 1000 },
@@ -206,8 +204,7 @@ return {
 
 EOF
 
-
-cat >"$PRISTINE_DIR//lua/keymaps.lua" << 'EOL'
+cat >"$PRISTINE_DIR//lua/keymaps.lua" <<'EOL'
 -- Core keymaps that do not depend on any plugins
 
 print("Loading core keymaps...")
@@ -227,25 +224,24 @@ vim.keymap.set('n', '<Tab>', ':bnext<CR>', { desc = "Next buffer" })
 vim.keymap.set('n', '<S-Tab>', ':bprevious<CR>', { desc = "Previous buffer" })
 EOL
 
-
 # 2. Loop through the file list to copy pristine files and apply patches.
 print_status "NVIM" "Applying patches to working configuration files..."
 
 for file in "${NVIM_CONFIG_FILES[@]}"; do
-    local pristine_file="$PRISTINE_DIR/$file"
-    local working_file="$WORKING_DIR/$file"
-    local patch_file="$working_file.patch"
+  pristine_file="$PRISTINE_DIR/$file"
+  working_file="$WORKING_DIR/$file"
+  patch_file="$working_file.patch"
 
-    # Copy the pristine file to the working location
-    cp "$pristine_file" "$working_file"
+  # Copy the pristine file to the working location
+  cp "$pristine_file" "$working_file"
 
-    # Check if a user patch exists and apply it
-    if [ -f "$patch_file" ]; then
-        print_status "NVIM_PATCH" "Found patch for $file. Applying..."
-        if patch "$working_file" < "$patch_file"; then
-            print_success "NVIM_PATCH" "Successfully applied patch to $file."
-        else
-            print_error "NVIM_PATCH" "Failed to apply patch to $file. Please resolve manually."
-        fi
+  # Check if a user patch exists and apply it
+  if [ -f "$patch_file" ]; then
+    print_status "NVIM_PATCH" "Found patch for $file. Applying..."
+    if patch "$working_file" <"$patch_file"; then
+      print_success "NVIM_PATCH" "Successfully applied patch to $file."
+    else
+      print_error "NVIM_PATCH" "Failed to apply patch to $file. Please resolve manually."
     fi
+  fi
 done

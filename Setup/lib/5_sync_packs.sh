@@ -5,13 +5,20 @@
 
 # In Setup/lib/5_sync_packs.sh
 
-# Hardcode the repository path. This is the path *inside WSL*.
 # It must match the $localClonePath from your Install.ps1 script.
-source /etc/arch-dev-env.conf
+# Load configuration - try multiple locations
 
+if [[ -f "/etc/arch-dev-env.conf" ]]; then
+    source /etc/arch-dev-env.conf
+elif [[ -f "$HOME/.config/arch-dev-env.conf" ]]; then
+    source "$HOME/.config/arch-dev-env.conf"
+else
+    echo "ERROR: No configuration file found"
+    exit 1
+fi
 # Defined paths
 PACKAGE_LIST_FILE="$REPO_ROOT/installed_packages.txt" # This will be in the main repo root
-LOG_DIR="/mnt/c/wsl/tmp/logs"
+LOG_DIR="~/.local/logs"
 LOGFILE="$LOG_DIR/pacman_git_sync.log"
 
 # Get the user who invoked sudo (important for Git operations)
@@ -19,7 +26,7 @@ CURRENT_USER="$SUDO_USER"
 
 # --- Logging setup for this specific script ---
 mkdir -p "$LOG_DIR"
-exec >> "$LOGFILE" 2>&1 # Redirect all output to the log file
+exec >>"$LOGFILE" 2>&1 # Redirect all output to the log file
 
 echo "--- $(date) - Starting package sync hook for user $CURRENT_USER ---"
 
@@ -48,7 +55,7 @@ fi
 # Generate list of explicitly installed packages (excluding base and dependencies)
 # -Q: query, -q: quiet, -e: explicitly installed, -t: not a dependency (leaves)
 echo "Generating new list of explicitly installed packages..."
-if ! pacman -Qqet > "$PACKAGE_LIST_FILE.new" 2>/dev/null; then
+if ! pacman -Qqet >"$PACKAGE_LIST_FILE.new" 2>/dev/null; then
     echo "WARNING: Failed to generate new package list using 'pacman -Qqet'. Skipping update."
     exit 0 # Exit successfully as pacman operation completed, but sync failed
 fi
@@ -59,7 +66,7 @@ if run_as_user "cmp -s \"$PACKAGE_LIST_FILE.new\" \"$PACKAGE_LIST_FILE\""; then
     rm "$PACKAGE_LIST_FILE.new"
 else
     echo "Package list has changed. Updating Git repository..."
-    
+
     # Move the new list to replace the old one
     mv "$PACKAGE_LIST_FILE.new" "$PACKAGE_LIST_FILE"
 

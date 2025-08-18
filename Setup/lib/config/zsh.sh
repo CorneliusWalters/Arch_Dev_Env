@@ -2,22 +2,20 @@
 ###     filename: zsh.sh
 ###     dir: /mnt/c/wsl/scripts/lib/config/zsh.sh
 
-
 #######--- START OF FILE ---#######
-		#Paths Definition
+#Paths Definition
 PRISTINE_DIR="$HOME/.config/dotfiles-pristine/zsh"
 WORKING_FILE="$HOME/.config/zsh/.zshrc"
 PATCH_FILE="$WORKING_FILE.patch"
 mkdir -p "$PRISTINE_DIR"
 mkdir -p "$(dirname "$WORKING_FILE")"
 
-
 setup_zsh() {
   if [[ ! -f ~/.config/zsh/.zshrc ]] || [[ "$FORCE_OVERWRITE" == "true" ]]; then
     print_status "ZSH" "Setting up ZSH configuration..."
     # This part handles the unique ZSH setup (ZDOTDIR, OMZ install)
     if ! grep -q "export ZDOTDIR=\"\$HOME/.config/zsh\"" "$HOME/.zshenv" 2>/dev/null; then
-        echo 'export ZDOTDIR="$HOME/.config/zsh"' >> "$HOME/.zshenv"
+      echo 'export ZDOTDIR="$HOME/.config/zsh"' >>"$HOME/.zshenv"
     fi
     rm -f "$HOME/.zshrc"
     if [ ! -d "$HOME/.local/share/zsh/oh-my-zsh" ]; then
@@ -35,4 +33,3 @@ setup_zsh() {
   fi
 }
 #######--- END OF FILE ---#######
-

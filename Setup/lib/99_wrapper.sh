@@ -13,7 +13,6 @@ export PYTHONUNBUFFERED=1
 export DEBIAN_FRONTEND=noninteractive
 export TERM=xterm-256color
 
-
 stty -icanon min 1 time 0 2>/dev/null || true
 
 echo "### PHASE_BOUNDARY ###"

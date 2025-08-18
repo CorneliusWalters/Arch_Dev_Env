@@ -1,12 +1,10 @@
-
 #!/bin/bash
 ###     file name: zxc_tmux.sh
 ###     dir: /mnt/c/wsl/scripts/lib/config/zxc_tmux.sh
 
-
 #######--- START OF FILE ---#######
 # --- START: Define all paths locally. This makes the script self-contained. ---
-# Directory Creation is done in 2_set_dirs.sh 
+# Directory Creation is done in 2_set_dirs.sh
 local PRISTINE_FILE="$HOME/.config/dotfiles-pristine/tmux/tmux.conf"
 local WORKING_FILE="$HOME/.config/tmux/tmux.conf"
 local PATCH_FILE="$WORKING_FILE.patch"
@@ -15,7 +13,7 @@ local PATCH_FILE="$WORKING_FILE.patch"
 print_status "TMUX_CONF" "Deploying pristine tmux configuration..."
 
 # 1. Always write the pristine config from the repo to our pristine location.
-cat > "$PRISTINE_FILE" << 'EOL'
+cat >"$PRISTINE_FILE" <<'EOL'
 # Change prefix from 'Ctrl+b' to 'Ctrl+a' 
 unbind C-b 
 set-option -g prefix C-a 
@@ -70,7 +68,7 @@ cp "$PRISTINE_FILE" "$WORKING_FILE"
 if [ -f "$PATCH_FILE" ]; then
     print_status "TMUX_CONF" "Found existing patch file. Applying user modifications..."
     # The 'patch' command applies the diff.
-    if patch "$WORKING_FILE" < "$PATCH_FILE"; then
+    if patch "$WORKING_FILE" <"$PATCH_FILE"; then
         print_success "TMUX_CONF" "Successfully applied user patch to tmux.conf."
     else
         print_error "TMUX_CONF" "Failed to apply patch to tmux.conf. The base file may have changed too much. Please resolve manually."

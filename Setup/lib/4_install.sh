@@ -28,22 +28,22 @@ check_dependencies() {
 ##    done
 ##}
 
-test_caller_logging() {
-    print_status "TEST" "Starting logging system test"
-    log_message "INFO" "TEST" "Call stack information:"
-    log_message "INFO" "TEST" "BASH_SOURCE: ${BASH_SOURCE[@]}"
-    log_message "INFO" "TEST" "FUNCNAME: ${FUNCNAME[@]}"
-    log_message "INFO" "TEST" "BASH_LINENO: ${BASH_LINENO[@]}"
-    
-    execute_and_log "false" "Test caller logging" "DEBUG"
-    local test_result=$?
-    
-    if [ $test_result -ne 0 ]; then
-        log_message "TEST" "DEBUG" "Test failed as expected (this is normal for testing)"
-    fi
-    
-    return $test_result
-}
+#test_caller_logging() {
+#    print_status "TEST" "Starting logging system test"
+#    log_message "INFO" "TEST" "Call stack information:"
+#    log_message "INFO" "TEST" "BASH_SOURCE: ${BASH_SOURCE[@]}"
+#    log_message "INFO" "TEST" "FUNCNAME: ${FUNCNAME[@]}"
+#    log_message "INFO" "TEST" "BASH_LINENO: ${BASH_LINENO[@]}"
+#
+#    execute_and_log "false" "Test caller logging" "DEBUG"
+#    local test_result=$?
+#
+#    if [ $test_result -ne 0 ]; then
+#        log_message "TEST" "DEBUG" "Test failed as expected (this is normal for testing)"
+#    fi
+#
+#    return $test_result
+#}
 
 stabilise_keyring() {
     print_status "KEYRING" "Initializing pacman keyring..."
@@ -72,7 +72,7 @@ stabilise_keyring() {
 
 optimise_pacman() {
     print_status "PACMAN" "Optimizing pacman configuration"
-    
+
     # Enable parallel downloads, color, and multilib
     execute_and_log "sudo sed -i \
         -e 's/^#ParallelDownloads = 5/ParallelDownloads = 10/' \
@@ -89,36 +89,36 @@ optimise_pacman() {
 }
 check_filesystem_health() {
     print_status "HEALTH" "Checking filesystem health..."
-    
+
     # Test if we can write to various locations
     local test_locations=("/tmp" "$HOME" "/var/tmp")
     local working_location=""
-    
+
     for location in "${test_locations[@]}"; do
-        if echo "test" > "$location/filesystem_test" 2>/dev/null; then
+        if echo "test" >"$location/filesystem_test" 2>/dev/null; then
             rm "$location/filesystem_test" 2>/dev/null
             working_location="$location"
             break
         fi
     done
-    
+
     if [[ -z "$working_location" ]]; then
         print_error "HEALTH" "Critical: No writable filesystem locations found"
         return 1
     fi
-    
+
     # Update LOGFILE to use working location if needed
     if [[ ! -w "$(dirname "$LOGFILE")" ]]; then
         export LOGFILE="$working_location/wsl_install_$(date +%Y%m%d_%H%M%S).log"
         print_warning "HEALTH" "Switched to fallback log location: $LOGFILE"
     fi
-    
+
     return 0
 }
 
 sync_wsl_time() {
     print_status "TIME" "Synchronizing WSL system time with Windows host..."
-    
+
     # Force time sync from Windows host
     local wintime
     if wintime=$(powershell.exe -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'" 2>/dev/null); then
@@ -127,22 +127,22 @@ sync_wsl_time() {
     else
         print_warning "TIME" "Cannot access Windows PowerShell from WSL, using system time"
     fi
-    
+
     print_status "TIME" "Current system time: $(date)"
 }
 optimise_mirrors() {
     print_status "MIRROR" "Updating mirror list"
-    
+
     # Install reflector if needed
     if ! command_exists reflector; then
         execute_and_log "sudo pacman -S --noconfirm reflector" \
             "Install reflector" \
             "MIRROR" || {
-                # Fallback if reflector install fails
-                print_warning "MIRROR" "Reflector install failed, using manual mirror setup"
-                
-                # Create a basic mirror list with reliable mirrors
-                execute_and_log "sudo bash -c 'cat > /etc/pacman.d/mirrorlist << EOF
+            # Fallback if reflector install fails
+            print_warning "MIRROR" "Reflector install failed, using manual mirror setup"
+
+            # Create a basic mirror list with reliable mirrors
+            execute_and_log "sudo bash -c 'cat > /etc/pacman.d/mirrorlist << EOF
 # Arch Linux mirrorlist
 # Generated with manual fallback
 Server = https://mirror.rackspace.com/archlinux/\$repo/os/\$arch
@@ -150,8 +150,8 @@ Server = https://mirrors.kernel.org/archlinux/\$repo/os/\$arch
 Server = https://arch.mirror.constant.com/\$repo/os/\$arch
 Server = https://mirror.f4st.host/archlinux/\$repo/os/\$arch
 EOF'" "Creating basic mirror list" "MIRROR"
-                return 0
-            }
+            return 0
+        }
     fi
 
     # Backup original mirrorlist
@@ -161,7 +161,7 @@ EOF'" "Creating basic mirror list" "MIRROR"
 
     # Try multiple mirror generation strategies
     local success=0
-    
+
     # Strategy 1: Try with South Africa mirrors first
     if execute_and_log "sudo reflector --country ZA --protocol https --latest 50 --sort rate --save /etc/pacman.d/mirrorlist" \
         "Generating South Africa mirror list" "MIRROR"; then
@@ -177,7 +177,7 @@ EOF'" "Creating basic mirror list" "MIRROR"
     # Final fallback: Create manual list
     else
         print_warning "MIRROR" "All reflector strategies failed, using manual fallback"
-        
+
         execute_and_log "sudo bash -c 'cat > /etc/pacman.d/mirrorlist << EOF
 # Arch Linux mirrorlist
 # Generated with manual fallback
@@ -188,7 +188,7 @@ Server = https://mirror.f4st.host/archlinux/\$repo/os/\$arch
 EOF'" "Creating basic mirror list" "MIRROR"
         success=1
     fi
-    
+
     if [ $success -eq 1 ]; then
         print_success "MIRROR" "Mirror list updated successfully"
         return 0
@@ -200,10 +200,9 @@ EOF'" "Creating basic mirror list" "MIRROR"
 update_system() {
     print_status "UPDT" "Updating system packages..."
     execute_and_log "sudo pacman -Syu --noconfirm" \
-    "Installing Update" \
-    "UPDT" || return 1
+        "Installing Update" \
+        "UPDT" || return 1
 }
-
 
 setup_locale() {
     print_status "LOCALE" "Setting up system-wide locale..."
@@ -246,7 +245,7 @@ install_base_packages() {
 
     # Define a core set of packages that are always installed
     local CORE_BASE_DEPS="base-devel git github-cli bat cmake ninja zsh tmux neovim htop btop duf ncdu bat lsd ripgrep fd fzf zoxide lazygit git-delta jq yq shellcheck tree tree-sitter unzip zip tar wl-clipboard xclip curl wget httpie procs tldr man-db man-pages inotify-tools"
-    
+
     # Path to the dynamically generated package list within the Git repository
     local CUSTOM_PACKAGES_FILE="$REPO_ROOT/installed_packages.txt" # Assuming REPO_ROOT is accessible and correct
 
@@ -276,11 +275,11 @@ setup_systemd_enabler() {
         print_success "SYSTEMD" "Systemd is already active (PID 1)."
         return 0
     fi
-    
+
     print_status "SYSTEMD" "Configuring WSL for native systemd support..."
-    
+
     # Create a clean wsl.conf with systemd enabled
-    sudo tee /etc/wsl.conf > /dev/null << EOF
+    sudo tee /etc/wsl.conf >/dev/null <<EOF
 [user]
 default=$USER
 
@@ -295,7 +294,7 @@ EOF
     print_success "SYSTEMD" "WSL systemd configuration complete."
     print_warning "SYSTEMD" "A full WSL shutdown and restart is required to activate systemd."
     print_warning "SYSTEMD" "The PowerShell script will handle this restart automatically."
-    
+
     return 0
 }
 
@@ -314,7 +313,7 @@ setup_watcher_service() {
     mkdir -p "$HOME/.config/systemd/user/"
 
     # Create the service file
-    cat > "$service_file_path" << EOL
+    cat >"$service_file_path" <<EOL
 [Unit]
 Description=Watches for user config file changes and commits them to Git
 After=graphical-session.target
@@ -331,7 +330,7 @@ WantedBy=default.target
 EOL
 
     # Add enabler to .zshrc that waits for systemd to be ready
-cat >> "$zshrc_file" << 'EOL'
+    cat >>"$zshrc_file" <<'EOL'
 
 # --- One-shot service enabler for config-watcher ---
 # Wait for systemd and enable service on first shell start
@@ -356,7 +355,7 @@ EOL
 #        print_success "SYSTEMD" "Systemd is already active (PID 1)."
 #        return 0
 #    fi
-#    
+#
 #    # If distrod is installed but not active, we might just need to enable it.
 #    if command -v distrod >/dev/null 2>&1; then
 #        print_warning "SYSTEMD" "distrod command exists, but systemd is not PID 1. Attempting to enable..."
@@ -413,7 +412,7 @@ EOL
 #        print_warning "SYSTEMD" "Could not set default user. You may need to log in as root first."
 #        # This is not a fatal error, so we don't return 1.
 #    fi
-#    
+#
 #    print_status "SYSTEMD" "Enabling distrod to take over the init process..."
 #    if ! execute_and_log "sudo '$distrod_binary' enable" \
 #        "Enabling distrod" "SYSTEMD"; then
@@ -428,7 +427,7 @@ EOL
 #    # FIX 4: Add the final, crucial warning about restarting.
 #    print_warning "SYSTEMD" "A FULL WSL SHUTDOWN ('wsl --shutdown') is required to activate systemd."
 #    print_warning "SYSTEMD" "The main PowerShell script should handle this restart."
-#    
+#
 #    return 0
 #}
 
@@ -468,22 +467,22 @@ install_python_environment() {
         "Installing Python packages in virtual environment" \
         "SETPYENV" || return 1
 }
-    install_omz() {
-        sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+install_omz() {
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 }
-    zsh_auto() {
-        git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-autosuggestions
+zsh_auto() {
+    git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-autosuggestions
 }
-    install_omz_syntax() {
-        git clone https://github.com/zsh-users/zsh-syntax-highlighting ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-syntax-highlighting
+install_omz_syntax() {
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-syntax-highlighting
 }
-    install_p10k() {
-        git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$ZSH/custom}/themes/powerlevel10k
+install_p10k() {
+    git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$ZSH/custom}/themes/powerlevel10k
 }
 
 setup_shell() {
     local zsh_path=$(which zsh)
-    
+
     # First set up ZSH and its configurations
     setup_zsh || return 1
 
@@ -505,47 +504,47 @@ setup_shell() {
     fi
 }
 
-# #Create Config Watcher 
+# #Create Config Watcher
 # setup_watcher_service() {
 #     print_status "WATCHER" "Setting up config file watcher service..."
-# 
+#
 #     local watcher_script="$REPO_ROOT/Setup/lib/config/watcher.sh"
 #     # This assumes you've renamed the script as I recommended earlier.
 #     # If not, change generate_and_commit_patch.sh to 6_commit_config.sh
 #     local commit_script="$REPO_ROOT/Setup/lib/generate_and_commit_patch.sh"
 #     local service_file_path="$HOME/.config/systemd/user/config-watcher.service"
 #     local zshrc_file="$HOME/.config/zsh/.zshrc"
-# 
+#
 #     # Make scripts executable
 #     chmod +x "$watcher_script" "$commit_script"
-# 
+#
 #     # Create systemd user directory
 #     mkdir -p "$HOME/.config/systemd/user/"
-# 
+#
 #     # Create the service file
 #     # This part is unchanged
 #     cat > "$service_file_path" << EOL
 # [Unit]
 # Description=Watches for user config file changes and commits them to Git.
 # After=network-online.target
-# 
+#
 # [Service]
 # Type=simple
 # ExecStart=/usr/bin/bash $watcher_script
 # Restart=always
 # RestartSec=10
-# 
+#
 # [Install]
 # WantedBy=default.target
 # EOL
-# 
+#
 #     # --- NEW LOGIC: Add a one-shot enabler to .zshrc ---
 #     print_status "WATCHER" "Adding one-shot service enabler to .zshrc"
-# 
+#
 #     # This block of code will be added to the end of the user's .zshrc.
 #     # It runs once, enables the service, and then does nothing on subsequent shell starts.
 #     cat >> "$zshrc_file" << 'EOL'
-# 
+#
 # # --- One-shot service enabler for config-watcher ---
 # # This block will run only once after the initial setup.
 # if ! systemctl --user is-enabled -q config-watcher.service; then
@@ -555,13 +554,13 @@ setup_shell() {
 # fi
 # # --- End one-shot enabler ---
 # EOL
-# 
+#
 #     print_success "WATCHER" "Config watcher service file created. It will be enabled automatically on the next shell start."
 # }
 
 setup_winyank() {
     print_status "CLIPBOARD" "Setting up win32yank for Neovim clipboard..."
-    
+
     # Create directory for win32yank
     execute_and_log "mkdir -p ~/.local/bin" \
         "Creating local bin directory" \
@@ -628,5 +627,87 @@ EOL" \
 
     print_success "HOOK_SETUP" "Pacman Git sync hook setup complete."
 }
-#######--- END OF FILE ---#######
 
+setup_git_config() {
+    print_status "GIT_CONFIG" "Setting up Git configuration..."
+
+    local git_name=$(git config --global user.name 2>/dev/null)
+    local git_email=$(git config --global user.email 2>/dev/null)
+
+    if [[ -z "$git_name" ]] || [[ -z "$git_email" ]] || [[ "$FORCE_OVERWRITE" == "true" ]]; then
+        print_status "GIT_CONFIG" "Git configuration needed..."
+
+        # Try to get from environment variables set by PowerShell
+        if [[ -n "$GIT_USER_NAME" ]] && [[ -n "$GIT_USER_EMAIL" ]]; then
+            execute_and_log "git config --global user.name '$GIT_USER_NAME'" \
+                "Setting git user name from environment" "GIT_CONFIG" || return 1
+
+            execute_and_log "git config --global user.email '$GIT_USER_EMAIL'" \
+                "Setting git user email from environment" "GIT_CONFIG" || return 1
+        else
+            # Fallback to default values
+            print_warning "GIT_CONFIG" "No git credentials provided, using defaults"
+            execute_and_log "git config --global user.name 'WSL User'" \
+                "Setting default git user name" "GIT_CONFIG" || return 1
+
+            execute_and_log "git config --global user.email 'user@example.com'" \
+                "Setting default git user email" "GIT_CONFIG" || return 1
+        fi
+
+        # Set useful defaults
+        execute_and_log "git config --global init.defaultBranch main" \
+            "Setting default branch" "GIT_CONFIG" || return 1
+        execute_and_log "git config --global pull.rebase false" \
+            "Setting pull strategy" "GIT_CONFIG" || return 1
+        execute_and_log "git config --global core.autocrlf input" \
+            "Setting line endings for WSL" "GIT_CONFIG" || return 1
+    else
+        print_success "GIT_CONFIG" "Git already configured for $git_name <$git_email>"
+    fi
+}
+
+setup_personal_config_repo() {
+    print_status "PERSONAL_REPO" "Setting up personal configuration repository..."
+
+    local personal_repo_dir="$HOME/.config/dotfiles"
+    local config_file="$HOME/.config/arch-dev-env.conf"
+
+    # Create personal config directory
+    mkdir -p "$personal_repo_dir"
+    cd "$personal_repo_dir"
+
+    if [[ ! -d ".git" ]]; then
+        execute_and_log "git init" \
+            "Initializing personal config repository" "PERSONAL_REPO" || return 1
+
+        execute_and_log "git branch -M main" \
+            "Setting main branch" "PERSONAL_REPO" || return 1
+
+        # Create initial structure
+        mkdir -p patches/{zsh,tmux,nvim}
+
+        # Create README
+        cat >DIR_STRUCT.md <<'EOF'
+# Personal Arch Linux Configuration
+
+This repository contains my personal configuration patches and package lists.
+
+## Structure
+- `patches/` - Configuration file patches
+- `installed_packages.txt` - List of explicitly installed packages
+- `config_sync_log.md` - Change history
+EOF
+
+        # Create initial commit
+        execute_and_log "git add ." \
+            "Adding initial files" "PERSONAL_REPO" || return 1
+        execute_and_log "git commit -m 'Initial personal config repository'" \
+            "Initial commit" "PERSONAL_REPO" || return 1
+    fi
+
+    # Store repo location in config file
+    echo "PERSONAL_REPO_ROOT=\"$personal_repo_dir\"" >"$config_file"
+
+    print_success "PERSONAL_REPO" "Personal config repo initialized at $personal_repo_dir"
+}
+#######--- END OF FILE ---#######
