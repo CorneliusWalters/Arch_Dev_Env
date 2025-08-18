@@ -17,9 +17,8 @@ else
     exit 1
 fi
 # Defined paths
-PACKAGE_LIST_FILE="$REPO_ROOT/installed_packages.txt" # This will be in the main repo root
-LOG_DIR="~/.local/logs"
-LOGFILE="$LOG_DIR/pacman_git_sync.log"
+REPO_ROOT="${PERSONAL_REPO_ROOT:-$HOME/.config/dotfiles}"
+PACKAGE_LIST_FILE="$REPO_ROOT/installed_packages.txt"
 
 # Get the user who invoked sudo (important for Git operations)
 CURRENT_USER="$SUDO_USER"

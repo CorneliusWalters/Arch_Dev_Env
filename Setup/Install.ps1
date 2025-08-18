@@ -15,6 +15,21 @@ if ([string]::IsNullOrWhiteSpace($wslUsername)) {
 }
 $gitUserName = Read-Host -Prompt "Enter your Git username (for commits)"
 $gitUserEmail = Read-Host -Prompt "Enter your Git email (for commits)"
+$personalRepoUrl = Read-Host -Prompt "Enter your personal dotfiles GitHub repo URL (optional - press Enter to skip)"
+
+# Validate git inputs
+if ([string]::IsNullOrWhiteSpace($gitUserName)) {
+  $gitUserName = "WSL User"
+  Write-Host "Using default git username: $gitUserName" -ForegroundColor Yellow
+}
+if ([string]::IsNullOrWhiteSpace($gitUserEmail)) {
+  $gitUserEmail = "user@example.com" 
+  Write-Host "Using default git email: $gitUserEmail" -ForegroundColor Yellow
+}
+if ([string]::IsNullOrWhiteSpace($personalRepoUrl)) {
+  $personalRepoUrl = "https://github.com/$gitUserName/Arch_Dev_Env.git" 
+  Write-Host "generating repo from your git-mail" -ForegroundColor Red
+}
 
 
 # Import modules and create the logger
@@ -123,9 +138,19 @@ try {
   # Phase 6: Main Setup 
   $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup via repository wrapper script")
 
+  # exporting git variables
+  $environmentVars = "export GIT_USER_NAME='$gitUserName' && export GIT_USER_EMAIL='$gitUserEmail'"
+
+  if (-not [string]::IsNullOrWhiteSpace($personalRepoUrl)) {
+    $environmentVars += " && export PERSONAL_REPO_URL='$personalRepoUrl'"
+  }
+  
   # Use the WSLProcessCapture instance we already created for the user
   $wrapperPath = "$wslRepoPath/Setup/lib/99_wrapper.sh"
-  if (-not $wslCapture.ExecuteCommand("bash '$wrapperPath'", "Execute main setup script")) {
+  $fullCommand = "$environmentVars && bash '$wrapperPath'"
+  
+
+  if (-not $wslCapture.ExecuteCommand("bash '$fullCommand'", "Execute main setup script")) {
     throw "Main setup script execution failed"
   }
 

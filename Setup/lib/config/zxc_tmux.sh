@@ -5,9 +5,9 @@
 #######--- START OF FILE ---#######
 # --- START: Define all paths locally. This makes the script self-contained. ---
 # Directory Creation is done in 2_set_dirs.sh
-local PRISTINE_FILE="$HOME/.config/dotfiles-pristine/tmux/tmux.conf"
-local WORKING_FILE="$HOME/.config/tmux/tmux.conf"
-local PATCH_FILE="$WORKING_FILE.patch"
+PRISTINE_FILE="$HOME/.config/dotfiles-pristine/tmux/tmux.conf"
+WORKING_FILE="$HOME/.config/tmux/tmux.conf"
+PATCH_FILE="$WORKING_FILE.patch"
 # --- END: Path definitions ---
 
 print_status "TMUX_CONF" "Deploying pristine tmux configuration..."

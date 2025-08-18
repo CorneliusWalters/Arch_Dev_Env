@@ -4,8 +4,8 @@
 # To be run as a background service.
 
 # The root of the Git repository inside WSL.
-# IMPORTANT: This path must be correct.
-REPO_ROOT="/mnt/c/wsl/wsl-dev-setup"
+REPO_ROOT="${PERSONAL_REPO_ROOT:-$HOME/.config/dotfiles}"
+PATCH_GENERATOR_SCRIPT="$REPO_ROOT/generate_patch.sh"
 
 # An array of configuration files to watch.
 # These paths are relative to the user's HOME directory.

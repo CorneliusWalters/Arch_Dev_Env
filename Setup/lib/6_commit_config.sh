@@ -17,7 +17,7 @@ LOG_FILE="$HOME/.local/logs/config_git_sync.log"
 # --- Do not edit below this line ---
 
 mkdir -p "$(dirname "$LOG_FILE")"
-exec >> "$LOG_FILE" 2>&1
+exec >>"$LOG_FILE" 2>&1
 
 WORKING_FILE="$1"
 if [ -z "$WORKING_FILE" ]; then
@@ -26,7 +26,7 @@ if [ -z "$WORKING_FILE" ]; then
 fi
 
 # Derive the pristine and patch file paths
-RELATIVE_PATH=${WORKING_FILE#$HOME/} # e.g., .config/tmux/tmux.conf
+RELATIVE_PATH=${WORKING_FILE#$HOME/}                                # e.g., .config/tmux/tmux.conf
 PRISTINE_FILE="$HOME/.config/dotfiles-pristine/${RELATIVE_PATH#*/}" # e.g., .../tmux/tmux.conf
 PATCH_FILE="$WORKING_FILE.patch"
 FILENAME=$(basename "$WORKING_FILE")
@@ -43,7 +43,7 @@ fi
 # -u: unified format (standard for patches)
 # The labels 'a/' and 'b/' are conventional for diff.
 echo "Generating patch for $FILENAME..."
-diff -u "$PRISTINE_FILE" "$WORKING_FILE" > "$PATCH_FILE"
+diff -u "$PRISTINE_FILE" "$WORKING_FILE" >"$PATCH_FILE"
 
 # Check if the patch file is empty (meaning no changes)
 if [ ! -s "$PATCH_FILE" ]; then
@@ -52,7 +52,10 @@ if [ ! -s "$PATCH_FILE" ]; then
     exit 0
 fi
 
-cd "$REPO_ROOT" || { echo "ERROR: Could not cd to $REPO_ROOT"; exit 1; }
+cd "$REPO_ROOT" || {
+    echo "ERROR: Could not cd to $REPO_ROOT"
+    exit 1
+}
 
 echo "Staging patch file: $PATCH_FILE"
 git add "$PATCH_FILE"
