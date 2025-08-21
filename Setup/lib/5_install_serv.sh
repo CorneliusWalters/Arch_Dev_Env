@@ -1,0 +1,201 @@
+#!/bin/bash
+
+setup_systemd_enabler() {
+  print_status "SYSTEMD" "Setting up native WSL2 systemd support..."
+
+  # Check if systemd is already the init process (PID 1)
+  if [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    print_success "SYSTEMD" "Systemd is already active (PID 1)."
+    return 0
+  fi
+
+  print_status "SYSTEMD" "Configuring WSL for native systemd support..."
+
+  # Create a clean wsl.conf with systemd enabled
+  sudo tee /etc/wsl.conf >/dev/null <<EOF
+[user]
+default=$USER
+
+[boot]
+systemd=true
+
+[interop]
+enabled=true
+appendWindowsPath=true
+EOF
+
+  print_success "SYSTEMD" "WSL systemd configuration complete."
+  print_warning "SYSTEMD" "A full WSL shutdown and restart is required to activate systemd."
+  print_warning "SYSTEMD" "The PowerShell script will handle this restart automatically."
+
+  return 0
+}
+
+setup_watcher_service() {
+  print_status "WATCHER" "Setting up config file watcher service..."
+
+  local watcher_script="$REPO_ROOT/Setup/lib/config/watcher.sh"
+  local commit_script="$REPO_ROOT/Setup/lib/6_commit_config.sh"
+  local service_file_path="$HOME/.config/systemd/user/config-watcher.service"
+  local zshrc_file="$HOME/.config/zsh/.zshrc"
+
+  # Make scripts executable
+  chmod +x "$watcher_script" "$commit_script"
+
+  # Create systemd user directory
+  mkdir -p "$HOME/.config/systemd/user/"
+
+  # Create the service file
+  cat >"$service_file_path" <<EOL
+[Unit]
+Description=Watches for user config file changes and commits them to Git
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bash $watcher_script
+Restart=always
+RestartSec=10
+Environment=HOME=$HOME
+
+[Install]
+WantedBy=default.target
+EOL
+
+  # Add enabler to .zshrc that waits for systemd to be ready
+  cat >>"$zshrc_file" <<'EOL'
+
+# --- One-shot service enabler for config-watcher ---
+# Wait for systemd and enable service on first shell start
+if command -v systemctl >/dev/null 2>&1 && ! systemctl --user is-enabled -q config-watcher.service 2>/dev/null; then
+    echo "Setting up config watcher service..."
+    systemctl --user daemon-reload
+    systemctl --user enable --now config-watcher.service 2>/dev/null && \
+        echo "Config watcher service enabled." || \
+        echo "Config watcher will be enabled after systemd is fully initialized."
+fi
+# --- End one-shot enabler ---
+EOL
+
+  print_success "WATCHER" "Config watcher service configured."
+}
+
+setup_pacman_git_hook() {
+  print_status "HOOK_SETUP" "Setting up pacman hook for Git repository synchronization..."
+
+  local sync_script_source="$SCRIPT_DIR/lib/5_sync_packs.sh"
+  local sync_script_target="/usr/local/bin/5_sync_packs.sh"
+  local hook_file="/etc/pacman.d/hooks/auto-git-sync.hook"
+  local hook_dir="/etc/pacman.d/hooks"
+
+  # Create the hooks directory if it doesn't exist
+  execute_and_log "sudo mkdir -p \"$hook_dir\"" \
+    "Creating pacman hooks directory" "HOOK_SETUP" || return 1
+
+  # Copy the sync script and make it executable
+  execute_and_log "sudo cp \"$sync_script_source\" \"$sync_script_target\"" \
+    "Copying package sync script to $sync_script_target" "HOOK_SETUP" || return 1
+  execute_and_log "sudo chmod +x \"$sync_script_target\"" \
+    "Making package sync script executable" "HOOK_SETUP" || return 1
+
+  # Create the pacman hook file
+  execute_and_log "sudo tee \"$hook_file\" > /dev/null << 'EOL'
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Syncing installed packages to Git repository...
+When = PostTransaction
+Exec = $sync_script_target
+EOL" \
+    "Creating pacman hook file $hook_file" "HOOK_SETUP" || return 1
+
+  print_success "HOOK_SETUP" "Pacman Git sync hook setup complete."
+}
+
+setup_git_config() {
+  print_status "GIT_CONFIG" "Setting up Git configuration..."
+
+  local git_name=$(git config --global user.name 2>/dev/null)
+  local git_email=$(git config --global user.email 2>/dev/null)
+
+  if [[ -z "$git_name" ]] || [[ -z "$git_email" ]] || [[ "$FORCE_OVERWRITE" == "true" ]]; then
+    print_status "GIT_CONFIG" "Git configuration needed..."
+
+    # Try to get from environment variables set by PowerShell
+    if [[ -n "$GIT_USER_NAME" ]] && [[ -n "$GIT_USER_EMAIL" ]]; then
+      execute_and_log "git config --global user.name '$GIT_USER_NAME'" \
+        "Setting git user name from environment" "GIT_CONFIG" || return 1
+
+      execute_and_log "git config --global user.email '$GIT_USER_EMAIL'" \
+        "Setting git user email from environment" "GIT_CONFIG" || return 1
+    else
+      # Fallback to default values
+      print_warning "GIT_CONFIG" "No git credentials provided, using defaults"
+      execute_and_log "git config --global user.name 'WSL User'" \
+        "Setting default git user name" "GIT_CONFIG" || return 1
+
+      execute_and_log "git config --global user.email 'user@example.com'" \
+        "Setting default git user email" "GIT_CONFIG" || return 1
+    fi
+
+    # Set useful defaults
+    execute_and_log "git config --global init.defaultBranch main" \
+      "Setting default branch" "GIT_CONFIG" || return 1
+    execute_and_log "git config --global pull.rebase false" \
+      "Setting pull strategy" "GIT_CONFIG" || return 1
+    execute_and_log "git config --global core.autocrlf input" \
+      "Setting line endings for WSL" "GIT_CONFIG" || return 1
+  else
+    print_success "GIT_CONFIG" "Git already configured for $git_name <$git_email>"
+  fi
+}
+
+setup_personal_config_repo() {
+  print_status "PERSONAL_REPO" "Setting up personal configuration repository..."
+
+  local personal_repo_dir="$HOME/.config/dotfiles"
+  local config_file="$HOME/.config/arch-dev-env.conf"
+
+  # Create personal config directory
+  mkdir -p "$personal_repo_dir"
+  cd "$personal_repo_dir"
+
+  if [[ ! -d ".git" ]]; then
+    execute_and_log "git init" \
+      "Initializing personal config repository" "PERSONAL_REPO" || return 1
+
+    execute_and_log "git branch -M main" \
+      "Setting main branch" "PERSONAL_REPO" || return 1
+
+    # Create initial structure
+    mkdir -p patches/{zsh,tmux,nvim}
+
+    # Create README
+    cat >DIR_STRUCT.md <<'EOF'
+# Personal Arch Linux Configuration
+
+This repository contains my personal configuration patches and package lists.
+
+## Structure
+- `patches/` - Configuration file patches
+- `installed_packages.txt` - List of explicitly installed packages
+- `config_sync_log.md` - Change history
+EOF
+
+    # Create initial commit
+    execute_and_log "git add ." \
+      "Adding initial files" "PERSONAL_REPO" || return 1
+    execute_and_log "git commit -m 'Initial personal config repository'" \
+      "Initial commit" "PERSONAL_REPO" || return 1
+  fi
+
+  # Store repo location in config file
+  echo "PERSONAL_REPO_ROOT=\"$personal_repo_dir\"" >"$config_file"
+
+  print_success "PERSONAL_REPO" "Personal config repo initialized at $personal_repo_dir"
+}

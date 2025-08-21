@@ -150,7 +150,7 @@ try {
   $fullCommand = "$environmentVars && bash '$wrapperPath'"
   
 
-  if (-not $wslCapture.ExecuteCommand("bash '$fullCommand'", "Execute main setup script")) {
+  if (-not $wslCapture.ExecuteCommand($fullCommand, "Execute main setup script")) {
     throw "Main setup script execution failed"
   }
 

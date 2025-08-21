@@ -34,10 +34,6 @@ set -e
 
 # set directory source
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-#Export windows accessable Base path
-export WSL_BASE_PATH="/mnt/c/wsl"
-export CONFIG_BASE_PATH="$WSL_BASE_PATH/config"
 export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 # Source all library functions
@@ -115,6 +111,11 @@ check_dependencies || exit 1
     setup_neovim || exit 1
 
     print_phase_end "CONFIGS" "SUCCESS"
+
+    print_phase_start "GIT_Setup" "Setting up Git configuration..."
+    setup_git_config || exit 1
+    setup_personal_config_repo || exit 1
+    print_phase_end "GIT_CONFIG" "SUCCESS"
 
     print_phase_start "HOOKS" "Setting up system hooks..."
     setup_pacman_git_hook || exit 1

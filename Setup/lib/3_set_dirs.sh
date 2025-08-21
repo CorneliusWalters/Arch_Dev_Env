@@ -3,6 +3,12 @@
 
 print_status "DIRS" "Creating base directory structure..."
 
+#Export windows accessable Base path
+export WSL_BASE_PATH="/mnt/c/wsl"
+export CONFIG_BASE_PATH="$WSL_BASE_PATH/config"
+export PERSONAL_REPO_ROOT="$HOME/.config/dotfiles"
+export SETUP_REPO_ROOT="$REPO_ROOT"
+
 # Create base XDG and local directories
 mkdir -p \
   ~/.config \
@@ -27,14 +33,6 @@ mkdir -p "$HOME/.config/dotfiles-pristine/zsh"
 mkdir -p "$HOME/.config/nvim/lua/config"
 mkdir -p "$HOME/.config/dotfiles-pristine/nvim"
 
-print_status "PERMS" "Setting directory permissions..."
-
-# Make all library scripts executable
-#chmod +x "$SCRIPT_DIR/lib/"*.sh
-#chmod +x "$SCRIPT_DIR/lib/config/"*.sh
-#chmod +x "$SCRIPT_DIR/lib/config/watcher.sh"
-#chmod +x "$SCRIPT_DIR/lib/6_commit_config.sh"
-print_warning "PERMS" "Skipped chmod operations due to Windows filesystem limitations"
 # Set directory permissions (700 for config dirs, 755 for others)
 find ~/.config -type d -exec chmod 700 {} \;
 chmod 755 ~/.local/* ~/.cache
