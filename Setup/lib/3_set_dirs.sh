@@ -9,6 +9,8 @@ export CONFIG_BASE_PATH="$WSL_BASE_PATH/config"
 export PERSONAL_REPO_ROOT="$HOME/.config/dotfiles"
 export SETUP_REPO_ROOT="$REPO_ROOT"
 
+mkdir -p "$PERSONAL_REPO_ROOT"
+
 # Create base XDG and local directories
 mkdir -p \
   ~/.config \

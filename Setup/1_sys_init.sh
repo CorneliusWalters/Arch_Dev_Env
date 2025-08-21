@@ -84,7 +84,8 @@ check_dependencies || exit 1
     setup_locale || exit 1
     print_phase_end "SYSTEM_UPDATE" "SUCCESS"
 
-    print_phase_start "BASE_PACKAGES" "Installing base packages..."
+    print_phase_start "BASE_PACKAGES" "Installing base packages and setting GIT config path..."
+    setup_environment_paths || exit 1
     install_base_packages || exit 1
     print_phase_end "BASE_PACKAGES" "SUCCESS"
 

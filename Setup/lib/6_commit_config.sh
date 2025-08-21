@@ -11,9 +11,6 @@ else
     exit 1
 fi
 
-REPO_ROOT="${PERSONAL_REPO_ROOT:-$HOME/.config/dotfiles}"
-LOG_FILE="$HOME/.local/logs/config_git_sync.log"
-
 # --- Do not edit below this line ---
 
 mkdir -p "$(dirname "$LOG_FILE")"
