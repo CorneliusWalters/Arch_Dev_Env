@@ -5,7 +5,7 @@
 print_status "TMUX_CONF" "Deploying pristine tmux configuration..."
 
 # 1. Always write the pristine config from the repo to our pristine location.
-cat >"$PRISTINE_FILE" <<'EOL'
+cat >"$TMUX_PRISTINE_FILE" <<'EOL'
 # Change prefix from 'Ctrl+b' to 'Ctrl+a' 
 unbind C-b 
 set-option -g prefix C-a 
@@ -54,13 +54,13 @@ set -g focus-events on
 EOL
 
 # 2. Copy the pristine file to the working location.
-cp "$PRISTINE_FILE" "$WORKING_FILE"
+cp "$TMUX_PRISTINE_FILE" "$TMUX_WORKING_FILE"
 
 # 3. Check if a user patch exists in the repo and apply it.
-if [ -f "$PATCH_FILE" ]; then
+if [ -f "$TMUX_PATCH_FILE" ]; then
     print_status "TMUX_CONF" "Found existing patch file. Applying user modifications..."
     # The 'patch' command applies the diff.
-    if patch "$WORKING_FILE" <"$PATCH_FILE"; then
+    if patch "$TMUX_WORKING_FILE" <"$TMUX_PATCH_FILE"; then
         print_success "TMUX_CONF" "Successfully applied user patch to tmux.conf."
     else
         print_error "TMUX_CONF" "Failed to apply patch to tmux.conf. The base file may have changed too much. Please resolve manually."

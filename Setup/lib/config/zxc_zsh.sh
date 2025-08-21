@@ -4,7 +4,7 @@
 
 print_status "ZSH_CONF" "Setting up zsh configuration..."
 
-cat >"$PRISTINE_FILE" <<'EOL'
+cat >"$ZSH_PRISTINE_FILE" <<'EOL'
 # p10k instant prompt
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
@@ -102,12 +102,12 @@ alias nvimconf='${EDITOR:-nvim} ~/.config/nvim/init.lua'
 EOL
 
 # 2. Copy the pristine file to the working location.
-cp "$PRISTINE_FILE" "$WORKING_FILE"
+cp "$ZSH_PRISTINE_FILE" "$ZSH_WORKING_FILE"
 
 # 3. Check if a user patch exists and apply it.
-if [ -f "$PATCH_FILE" ]; then
+if [ -f "$ZSH_PATCH_FILE" ]; then
     print_status "ZSH_PATCH" "Found patch for .zshrc. Applying..."
-    if patch "$WORKING_FILE" <"$PATCH_FILE"; then
+    if patch "$ZSH_WORKING_FILE" <"$ZSH_PATCH_FILE"; then
         print_success "ZSH_PATCH" "Successfully applied user patch to .zshrc."
     else
         print_error "ZSH_PATCH" "Failed to apply patch to .zshrc. Please resolve manually."

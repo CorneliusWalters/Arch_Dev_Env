@@ -119,59 +119,41 @@ EOL" \
   print_success "HOOK_SETUP" "Pacman Git sync hook setup complete."
 }
 
-setup_personal_config_repo() {
-  print_status "PERSONAL_REPO" "Setting up personal configuration repository..."
-
-  local personal_repo_dir="$PERSONAL_REPO_ROOT"
-
-  if [[ ! -d "$personal_repo_dir/.git" ]]; then
-    cd "$personal_repo_dir" || exit 1
-
-    # Create initial structure
-    mkdir -p patches/{zsh,tmux,nvim}
-    echo "# Personal Arch Configuration" >README.md
-
-    execute_and_log "git add ." "Add initial files" "PERSONAL_REPO"
-    execute_and_log "git commit -m 'Initial personal config repository'" "Initial commit" "PERSONAL_REPO"
-  fi
-
-  print_success "PERSONAL_REPO" "Personal config repo ready at $personal_repo_dir"
-}
-
 setup_git_config() {
   print_status "GIT_CONFIG" "Setting up Git configuration..."
 
+  # --- Configure Global Git Settings ---
   local git_name=$(git config --global user.name 2>/dev/null)
   local git_email=$(git config --global user.email 2>/dev/null)
 
   if [[ -z "$git_name" ]] || [[ -z "$git_email" ]] || [[ "$FORCE_OVERWRITE" == "true" ]]; then
-    print_status "GIT_CONFIG" "Git configuration needed..."
-
-    # Try to get from environment variables set by PowerShell
+    print_status "GIT_CONFIG" "Git user info needed..."
     if [[ -n "$GIT_USER_NAME" ]] && [[ -n "$GIT_USER_EMAIL" ]]; then
-      execute_and_log "git config --global user.name '$GIT_USER_NAME'" \
-        "Setting git user name from environment" "GIT_CONFIG" || return 1
-
-      execute_and_log "git config --global user.email '$GIT_USER_EMAIL'" \
-        "Setting git user email from environment" "GIT_CONFIG" || return 1
+      execute_and_log "git config --global user.name '$GIT_USER_NAME'" "Setting git user name" "GIT_CONFIG" || return 1
+      execute_and_log "git config --global user.email '$GIT_USER_EMAIL'" "Setting git user email" "GIT_CONFIG" || return 1
     else
-      # Fallback to default values
       print_warning "GIT_CONFIG" "No git credentials provided, using defaults"
-      execute_and_log "git config --global user.name 'WSL User'" \
-        "Setting default git user name" "GIT_CONFIG" || return 1
-
-      execute_and_log "git config --global user.email 'user@example.com'" \
-        "Setting default git user email" "GIT_CONFIG" || return 1
+      execute_and_log "git config --global user.name 'WSL User'" "Setting default git user name" "GIT_CONFIG" || return 1
+      execute_and_log "git config --global user.email 'user@example.com'" "Setting default git user email" "GIT_CONFIG" || return 1
     fi
-
-    # Set useful defaults
-    execute_and_log "git config --global init.defaultBranch main" \
-      "Setting default branch" "GIT_CONFIG" || return 1
-    execute_and_log "git config --global pull.rebase false" \
-      "Setting pull strategy" "GIT_CONFIG" || return 1
-    execute_and_log "git config --global core.autocrlf input" \
-      "Setting line endings for WSL" "GIT_CONFIG" || return 1
+    execute_and_log "git config --global init.defaultBranch main" "Setting default branch" "GIT_CONFIG" || return 1
+    execute_and_log "git config --global pull.rebase false" "Setting pull strategy" "GIT_CONFIG" || return 1
+    execute_and_log "git config --global core.autocrlf input" "Setting line endings" "GIT_CONFIG" || return 1
   else
     print_success "GIT_CONFIG" "Git already configured for $git_name <$git_email>"
+  fi
+
+  # --- Clone Personal Dotfiles Repository ---
+  print_status "PERSONAL_REPO" "Setting up personal dotfiles repository..."
+  if [[ -n "$PERSONAL_REPO_URL" ]]; then
+    if [ -z "$(ls -A "$PERSONAL_REPO_ROOT")" ] || [ ! -d "$PERSONAL_REPO_ROOT/.git" ]; then
+      print_status "PERSONAL_REPO" "Cloning from $PERSONAL_REPO_URL..."
+      execute_and_log "git clone '$PERSONAL_REPO_URL' '$PERSONAL_REPO_ROOT'" \
+        "Cloning personal dotfiles repo" "PERSONAL_REPO" || return 1
+    else
+      print_warning "PERSONAL_REPO" "Directory $PERSONAL_REPO_ROOT is not empty. Skipping clone."
+    fi
+  else
+    print_warning "PERSONAL_REPO" "No personal repository URL provided. Skipping clone."
   fi
 }

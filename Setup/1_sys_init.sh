@@ -115,7 +115,6 @@ check_dependencies || exit 1
 
     print_phase_start "GIT_Setup" "Setting up Git configuration..."
     setup_git_config || exit 1
-    setup_personal_config_repo || exit 1
     print_phase_end "GIT_CONFIG" "SUCCESS"
 
     print_phase_start "HOOKS" "Setting up system hooks..."
@@ -133,5 +132,3 @@ check_dependencies || exit 1
     print_error "MAIN" "Installation failed. Check logs at: $LOGFILE"
     exit 1
 }
-
-#######--- END OF FILE ---#######
