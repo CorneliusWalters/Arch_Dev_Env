@@ -114,11 +114,9 @@ try {
     throw "User context verification failed."
   }
   
-  ########################################################################################			
-  ########################################################################################			
-  $logger.WritePhaseStatus("DEBUG", "STARTING", "Testing WSL basic functionality")
+  $logger.WritePhaseStatus("CONF_Status", "STARTING", "Testing WSL basic functionality")
 
-  $debugCommands = @(
+  $confCommands = @(
     "whoami",
     "pwd", 
     "echo `$HOME",
@@ -127,13 +125,11 @@ try {
     "ls -la '$wslRepoPath/Setup/' | head -5"
   )
 
-  foreach ($cmd in $debugCommands) {
+  foreach ($cmd in $confCommands) {
     $result = wsl -d $wslDistroName -u $wslUsername bash -c $cmd
-    $logger.WriteLog("DEBUG", "Command: $cmd", "Gray")
-    $logger.WriteLog("DEBUG", "Result: $result", "Gray")
+    $logger.WriteLog("Conf_Status", "Command: $cmd", "Gray")
+    $logger.WriteLog("Conf_Status", "Result: $result", "Gray")
   }
-  #  ########################################################################################			
-  #  ########################################################################################			
 
   # Phase 6: Main Setup 
   $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup via repository wrapper script")

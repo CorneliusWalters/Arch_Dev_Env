@@ -21,7 +21,7 @@ for file in "${FILES_TO_WATCH[@]}"; do
 done
 
 # The Git action script
-PATCH_GENERATOR_SCRIPT="$REPO_ROOT/Setup/lib/6_commit_config.sh"
+PATCH_GENERATOR_SCRIPT="$SETUP_REPO_ROOT/lib/7_commit_config.sh"
 
 # The inotifywait loop
 inotifywait -m -q -e close_write --format '%w' "${ABSOLUTE_PATHS[@]}" | while read -r CHANGED_FILE; do

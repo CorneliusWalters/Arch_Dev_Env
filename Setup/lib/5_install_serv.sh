@@ -37,7 +37,7 @@ setup_watcher_service() {
   print_status "WATCHER" "Setting up config file watcher service..."
 
   local watcher_script="$REPO_ROOT/Setup/lib/config/watcher.sh"
-  local commit_script="$REPO_ROOT/Setup/lib/6_commit_config.sh"
+  local commit_script="$REPO_ROOT/Setup/lib/7_commit_config.sh"
   local service_file_path="$HOME/.config/systemd/user/config-watcher.service"
   local zshrc_file="$HOME/.config/zsh/.zshrc"
 
@@ -117,6 +117,25 @@ EOL" \
     "Creating pacman hook file $hook_file" "HOOK_SETUP" || return 1
 
   print_success "HOOK_SETUP" "Pacman Git sync hook setup complete."
+}
+
+setup_personal_config_repo() {
+  print_status "PERSONAL_REPO" "Setting up personal configuration repository..."
+
+  local personal_repo_dir="$PERSONAL_REPO_ROOT"
+
+  if [[ ! -d "$personal_repo_dir/.git" ]]; then
+    cd "$personal_repo_dir" || exit 1
+
+    # Create initial structure
+    mkdir -p patches/{zsh,tmux,nvim}
+    echo "# Personal Arch Configuration" >README.md
+
+    execute_and_log "git add ." "Add initial files" "PERSONAL_REPO"
+    execute_and_log "git commit -m 'Initial personal config repository'" "Initial commit" "PERSONAL_REPO"
+  fi
+
+  print_success "PERSONAL_REPO" "Personal config repo ready at $personal_repo_dir"
 }
 
 setup_git_config() {
