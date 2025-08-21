@@ -8,8 +8,9 @@ export WSL_BASE_PATH="/mnt/c/wsl"
 export CONFIG_BASE_PATH="$WSL_BASE_PATH/config"
 export PERSONAL_REPO_ROOT="$HOME/.config/dotfiles"
 export SETUP_REPO_ROOT="$REPO_ROOT"
-
-mkdir -p "$PERSONAL_REPO_ROOT"
+export PRISTINE_DIR="$HOME/.config/dotfiles-pristine/zsh"
+export WORKING_FILE="$HOME/.config/zsh/.zshrc"
+export PATCH_FILE="$WORKING_FILE.patch"
 
 # Create base XDG and local directories
 mkdir -p \
@@ -22,6 +23,7 @@ mkdir -p \
 # --- Centralized Directory Creation for Dotfiles ---
 # Create the main pristine directory
 mkdir -p "$HOME/.config/dotfiles-pristine"
+mkdir -p "$PERSONAL_REPO_ROOT"
 
 # Create directories for TMUX
 mkdir -p "$HOME/.config/tmux"

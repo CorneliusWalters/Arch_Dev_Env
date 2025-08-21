@@ -4,9 +4,7 @@
 
 #######--- START OF FILE ---#######
 #Paths Definition
-PRISTINE_DIR="$HOME/.config/dotfiles-pristine/zsh"
-WORKING_FILE="$HOME/.config/zsh/.zshrc"
-PATCH_FILE="$WORKING_FILE.patch"
+
 mkdir -p "$PRISTINE_DIR"
 mkdir -p "$(dirname "$WORKING_FILE")"
 
