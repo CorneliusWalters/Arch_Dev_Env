@@ -1,4 +1,6 @@
 #!/bin/bash
+###     file name: 6_sync_packs.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/6_sync_packs.sh
 
 # This script is intended to be run by a pacman hook.
 # It should perform Git operations as the user who invoked sudo pacman.

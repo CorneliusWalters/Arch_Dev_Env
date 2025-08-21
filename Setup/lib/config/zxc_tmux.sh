@@ -2,14 +2,6 @@
 ###     file name: zxc_tmux.sh
 ###     dir: /mnt/c/wsl/scripts/lib/config/zxc_tmux.sh
 
-#######--- START OF FILE ---#######
-# --- START: Define all paths locally. This makes the script self-contained. ---
-# Directory Creation is done in 2_set_dirs.sh
-PRISTINE_FILE="$HOME/.config/dotfiles-pristine/tmux/tmux.conf"
-WORKING_FILE="$HOME/.config/tmux/tmux.conf"
-PATCH_FILE="$WORKING_FILE.patch"
-# --- END: Path definitions ---
-
 print_status "TMUX_CONF" "Deploying pristine tmux configuration..."
 
 # 1. Always write the pristine config from the repo to our pristine location.
@@ -76,4 +68,3 @@ if [ -f "$PATCH_FILE" ]; then
 else
     print_status "TMUX_CONF" "No user patch found for tmux.conf. Using pristine version."
 fi
-#######--- END OF FILE ---#######

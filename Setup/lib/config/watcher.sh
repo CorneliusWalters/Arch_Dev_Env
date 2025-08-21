@@ -1,14 +1,9 @@
 #!/bin/bash
-#
-# Watcher.sh - Watches for config file changes and triggers a git commit.
-# To be run as a background service.
-
-# The root of the Git repository inside WSL.
-REPO_ROOT="${PERSONAL_REPO_ROOT:-$HOME/.config/dotfiles}"
-PATCH_GENERATOR_SCRIPT="$REPO_ROOT/generate_patch.sh"
+###     file name: watcher.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/config/watcher.sh
 
 # An array of configuration files to watch.
-# These paths are relative to the user's HOME directory.
+# These paths are relative to the HOME directory.
 FILES_TO_WATCH=(
 	".config/zsh/.zshrc"
 	".config/zsh/.p10k.zsh"
@@ -18,8 +13,6 @@ FILES_TO_WATCH=(
 	".config/nvim/keymaps.lua"
 	".config/nvim/preferences.lua"
 )
-
-# --- Do not edit below this line ---
 
 # Convert to absolute paths
 declare -a ABSOLUTE_PATHS

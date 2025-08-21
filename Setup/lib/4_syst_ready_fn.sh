@@ -1,9 +1,12 @@
 #!/bin/bash
+###     file name: 4_syst_ready_fn.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/4_syst_ready_fn.sh
 
 # Function to check if a command exists
 command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
+
 # Check Dependencies
 setup_environment_paths() {
   print_status "PATHS" "Setting up environment paths..."

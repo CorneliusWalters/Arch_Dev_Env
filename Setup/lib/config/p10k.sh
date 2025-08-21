@@ -1,8 +1,6 @@
 #!/bin/bash
 ###     file name: p10k.sh
-###     dir: /mnt/c/wsl/scripts/lib/config/p10k.sh
-
-#######--- START OF FILE ---#######
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/config/p10k.sh
 
 setup_p10k() {
   if [[ ! -f ~/.config/zsh/.p10k.zsh ]] || [[ "$FORCE_OVERWRITE" == "true" ]]; then
@@ -13,4 +11,3 @@ setup_p10k() {
     print_warning "P10K" "P10k config already exists and Force Overwrite is disabled. Skipping."
   fi
 }
-#######--- END OF FILE ---#######

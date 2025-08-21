@@ -1,5 +1,6 @@
 #!/bin/bash
-#######--- START OF FILE ---#######
+###     file name: 3_set_dirs.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/3_set_dirs.sh
 
 print_status "DIRS" "Creating base directory structure..."
 
@@ -45,5 +46,3 @@ chmod 755 ~/.local/* ~/.cache
 chown -R "$USER:$USER" ~/.config ~/.local ~/.cache
 
 print_success "DIRS" "Directory structure and permissions set."
-
-#######--- END OF FILE ---#######

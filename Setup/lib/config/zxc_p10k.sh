@@ -1,14 +1,6 @@
 #!/bin/bash
-###     fname: zxc_p10k.sh
-###     dir: /mnt/c/wsl/scripts/lib/config/zxc_p10k.sh
-
-#######--- START OF FILE ---#######
-# --- START: Define all paths locally. This makes the script self-contained. ---
-# Directory Creation is done in 2_set_dirs.sh
-PRISTINE_FILE="$HOME/.config/dotfiles-pristine/zsh/.p10k.zsh"
-WORKING_FILE="$HOME/.config/zsh/.p10k.zsh"
-PATCH_FILE="$WORKING_FILE.patch"
-# --- END: Path definitions ---
+###     file name: zxc_p10k.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/config/zxc_p10k.sh
 
 print_status "P10K_WORKER" "Deploying pristine .p10k.zsh..."
 
@@ -149,4 +141,3 @@ if [ -f "$PATCH_FILE" ]; then
     print_error "P10K_PATCH" "Failed to apply patch to .p10k.zsh. Please resolve manually."
   fi
 fi
-#######--- END OF FILE ---#######

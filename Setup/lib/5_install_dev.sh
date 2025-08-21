@@ -1,4 +1,6 @@
 #!/bin/bash
+###     file name: 5_install_dev.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/5_install_dev.sh
 
 install_db_tools() {
   print_status "DB" "Installing database tools..."

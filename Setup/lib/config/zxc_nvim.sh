@@ -1,11 +1,6 @@
 #!/bin/bash
 ###     file name: zxc_nvim.sh
-###     dir: /mnt/c/wsl/scripts/lib/config/zxc_nvim.sh
-
-# --- START: Define all paths locally. This makes the script self-contained. ---
-# Directory Creation is done in 2_set_dirs.sh
-PRISTINE_DIR="$HOME/.config/dotfiles-pristine/nvim"
-WORKING_DIR="$HOME/.config/nvim"
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/config/zxc_nvim.sh
 
 # --- Define the list of files to manage ---
 NVIM_CONFIG_FILES=(
@@ -204,7 +199,7 @@ return {
 
 EOF
 
-cat >"$PRISTINE_DIR//lua/keymaps.lua" <<'EOL'
+cat >"$PRISTINE_DIR/lua/keymaps.lua" <<'EOL'
 -- Core keymaps that do not depend on any plugins
 
 print("Loading core keymaps...")

@@ -1,12 +1,6 @@
 #!/bin/bash
-###     filename: zsh.sh
-###     dir: /mnt/c/wsl/scripts/lib/config/zsh.sh
-
-#######--- START OF FILE ---#######
-#Paths Definition
-
-mkdir -p "$PRISTINE_DIR"
-mkdir -p "$(dirname "$WORKING_FILE")"
+###     file name: zsh.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/config/zsh.sh
 
 setup_zsh() {
   if [[ ! -f ~/.config/zsh/.zshrc ]] || [[ "$FORCE_OVERWRITE" == "true" ]]; then
@@ -30,4 +24,3 @@ setup_zsh() {
     print_warning "ZSH" "ZSH config already exists and Force Overwrite is disabled. Skipping."
   fi
 }
-#######--- END OF FILE ---#######

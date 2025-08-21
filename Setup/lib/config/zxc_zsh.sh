@@ -2,14 +2,6 @@
 ###     file name: zxc_zsh.sh
 ###     dir: /mnt/c/wsl/scripts/lib/config/zxc_zsh.sh
 
-#######--- START OF FILE ---#######
-# --- START: Define all paths locally. This makes the script self-contained. ---
-# Directory Creation is done in 2_set_dirs.sh
-PRISTINE_FILE="$HOME/.config/dotfiles-pristine/zsh/.zshrc"
-WORKING_FILE="$HOME/.config/zsh/.zshrc"
-PATCH_FILE="$WORKING_FILE.patch"
-# --- END: Path definitions ---
-
 print_status "ZSH_CONF" "Setting up zsh configuration..."
 
 cat >"$PRISTINE_FILE" <<'EOL'
@@ -121,5 +113,3 @@ if [ -f "$PATCH_FILE" ]; then
         print_error "ZSH_PATCH" "Failed to apply patch to .zshrc. Please resolve manually."
     fi
 fi
-
-#######--- END OF FILE ---#######
