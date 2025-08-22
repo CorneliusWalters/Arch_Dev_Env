@@ -26,7 +26,7 @@ if (-not $gitUserName) {
 
 $gitUserEmail = Read-Host -Prompt "Enter your Git email (for commits)"
 if (-not $gitUserEmail) {
-  $gitUserEmailDefault
+  $personalRepoUrlDefault
 }
 
 $personalRepoUrl = Read-Host -Prompt "Enter your personal dotfiles GitHub repo URL (optional - press Enter to skip)"
