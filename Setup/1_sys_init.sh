@@ -62,7 +62,7 @@ check_dependencies || exit 1
 # Main installation flow
 {
     print_status "MAIN" "Starting system initialization..."
-
+    update_system || exit 1
     # System update and base dependencies
     # After check_dependencies
     print_phase_start "MIRRORS" "Optimizing package mirrors..."
@@ -84,7 +84,6 @@ check_dependencies || exit 1
     optimise_pacman || exit 1
 
     print_phase_start "SYSTEM_UPDATE" "Updating system packages..."
-    update_system || exit 1
     setup_locale || exit 1
     print_phase_end "SYSTEM_UPDATE" "SUCCESS"
 
