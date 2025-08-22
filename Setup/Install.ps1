@@ -7,15 +7,17 @@ $wslDistroName = "Arch"
 $cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar"
 $configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar"
 $ForceOverwrite = $true
+$gitUserNameDefault = "CorneliusWalters" # Replace with your default
+$gitUserEmailDefault = "seven.nomad@gmail.com" # Replace with your default
+$personalRepoUrlDefault = "https://github.com/CorneliusWalters/Arch_Dev_Env" # Replace or leave empty
+$wslUsernameDefault = "chw"
 
 # --- INTERACTIVE USERNAME PROMPT ---
 $wslUsername = Read-Host -Prompt "Please enter your desired username for Arch Linux (e.g., 'UNAME')"
 if ([string]::IsNullOrWhiteSpace($wslUsername)) {
-  Write-Host "ERROR: Username cannot be empty." -ForegroundColor Red; exit 1
+  $wslUsername = $wslUsernameDefault
+  #Write-Host "ERROR: Username cannot be empty." -ForegroundColor Red; exit 1
 }
-$gitUserNameDefault = "CorneliusWalters" # Replace with your default
-$gitUserEmailDefault = "seven.nomad@gmail.com" # Replace with your default
-$personalRepoUrlDefault = "https://github.com/CorneliusWalters/Arch_Dev_Env" # Replace or leave empty
 
 $gitUserName = Read-Host -Prompt "Enter your Git username (for commits)"
 if (-not $gitUserName) {
