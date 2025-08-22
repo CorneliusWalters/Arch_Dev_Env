@@ -38,7 +38,7 @@ export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
 # Source all library functions
 source "$SCRIPT_DIR/lib/2_logging.sh" || exit 1
-source "$SCRIPT_DIR/lib/4_install.sh" || exit 1
+source "$SCRIPT_DIR/lib/4_syst_ready_fn.sh" || exit 1
 
 # Export Repo
 export REPO_ROOT="$(dirname "$SCRIPT_DIR")" # Define and export REPO_ROOT
@@ -48,6 +48,10 @@ init_logging || exit 1
 
 # Source Directory setup
 source "$SCRIPT_DIR/lib/3_set_dirs.sh"
+
+# Source instaltion Functions
+source "$SCRIPT_DIR/lib/5_install_dev.sh"
+source "$SCRIPT_DIR/lib/5_install_serv.sh"
 
 #test_caller_logging
 #exit
