@@ -117,38 +117,41 @@ sync_wsl_time() {
 optimise_mirrors() {
   print_status "MIRROR" "Optimizing mirror list for best performance..."
 
-  # Install reflector if it's not already present.
+  # Check Python Deps
+  # before installing reflector, which depends on it.
+  execute_and_log "sudo pacman -S --noconfirm --needed python" "Ensuring Python is installed" "MIRROR" || return 1
+
+  # Step 2: Install reflector.
   if ! command_exists reflector; then
     execute_and_log "sudo pacman -S --noconfirm reflector" "Install reflector" "MIRROR" || return 1
   fi
 
-  # Backup the current mirrorlist.
+  # Step 3: Backup the current, known-working mirrorlist.
   execute_and_log "sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup" \
-    "Backup mirrorlist" "MIRROR" || return 1
+    "Backup current mirrorlist" "MIRROR" || return 1
 
-  # --- Resilient Strategy ---
-  # Find the fastest, most up-to-date mirrors from a global pool.
-  print_status "MIRROR" "Searching for the fastest available mirrors globally..."
+  # Step 4: Attempt to generate a faster mirrorlist.
+  print_status "MIRROR" "Attempting to generate a faster mirror list with reflector..."
   local reflector_cmd="sudo reflector --protocol https --latest 50 --age 12 --sort rate --save /etc/pacman.d/mirrorlist --download-timeout 15"
 
-  if execute_and_log "$reflector_cmd" "Generating globally optimized mirror list" "MIRROR"; then
-    print_success "MIRROR" "Globally optimized mirror list generated successfully."
-    return 0
+  # We run this command but don't exit if it fails.
+  eval "$reflector_cmd"
+  local exit_code=$?
+
+  # Step 5: Check the result and recover safely if needed.
+  if [ $exit_code -eq 0 ]; then
+    print_success "MIRROR" "Reflector successfully generated an optimized mirror list."
+  else
+    print_warning "MIRROR" "Reflector failed to generate a new list (Exit Code: $exit_code)."
+    print_warning "MIRROR" "This is non-fatal. Restoring the previous working mirrorlist."
+    # --- THE CRITICAL FIX ---
+    # Restore the known-good mirrorlist instead of writing a bad one.
+    execute_and_log "sudo cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist" \
+      "Restoring backup mirrorlist" "MIRROR"
   fi
 
-  # --- Fallback Strategy ---
-  print_warning "MIRROR" "Reflector failed. Using a manual fallback list."
-
-  execute_and_log "sudo bash -c 'cat > /etc/pacman.d/mirrorlist << EOF
-# Arch Linux mirrorlist (Manual Fallback)
-Server = https://mirror.rackspace.com/archlinux/\$repo/os/\$arch
-Server = https://mirrors.kernel.org/archlinux/\$repo/os/\$arch
-EOF'" "Creating basic mirror list" "MIRROR" || {
-    print_error "MIRROR" "Failed to create manual fallback mirror list. Aborting."
-    return 1
-  }
-
-  print_success "MIRROR" "Manual fallback mirror list created."
+  # This function should always succeed, as having a working-but-unoptimized
+  # mirrorlist is an acceptable outcome.
   return 0
 }
 
