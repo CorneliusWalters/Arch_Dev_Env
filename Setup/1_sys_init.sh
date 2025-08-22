@@ -62,20 +62,14 @@ check_dependencies || exit 1
 # Main installation flow
 {
     print_status "MAIN" "Starting system initialization..."
-    update_system || exit 1
+
     # System update and base dependencies
+    update_system || exit 1
     # After check_dependencies
+
     print_phase_start "MIRRORS" "Optimizing package mirrors..."
     optimise_mirrors || exit 1
     print_phase_end "MIRRORS" "Success"
-    print_status "MIRROR_TEST" "Testing mirrors..."
-
-    if execute_and_log_with_retry "sudo pacman -Sy archlinux-keyring --noconfirm" 3 5 "MIRROR_TEST"; then
-        print_success "MIRROR_TEST" "Mirrors are working properly"
-    else
-        print_error "MIRROR_TEST" "Mirror test failed, cannot continue"
-        exit 1
-    fi
 
     check_filesystem_health || {
         print_error "MAIN" "Filesystem health check failed, cannot continue"

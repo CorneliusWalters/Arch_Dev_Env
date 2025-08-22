@@ -156,20 +156,24 @@ update_system() {
   print_status "UPDT" "Performing critical system update..."
 
   # Step 1: Force a refresh of all package databases. -yy is critical.
-  print_status "UPDT" "Step 1/4: Forcing package database refresh..."
+  print_status "UPDT" "Step 1/5: Forcing package database refresh..."
   execute_and_log_with_retry "sudo pacman -Syy" 3 5 "UPDT" || return 1
 
   # Step 2: Update the keyring to ensure we have the latest signing keys.
-  print_status "UPDT" "Step 2/4: Updating archlinux-keyring..."
+  print_status "UPDT" "Step 2/5: Updating archlinux-keyring..."
   execute_and_log_with_retry "sudo pacman -S --noconfirm archlinux-keyring" 3 5 "UPDT" || return 1
 
   # Step 3: Update pacman itself. This is essential to handle repo structure changes.
-  print_status "UPDT" "Step 3/4: Updating pacman package manager..."
+  print_status "UPDT" "Step 3/5: Updating pacman package manager..."
   execute_and_log_with_retry "sudo pacman -S --noconfirm pacman" 3 5 "UPDT" || return 1
 
   # Step 4: Now, perform the full system upgrade.
-  print_status "UPDT" "Step 4/4: Performing full system upgrade..."
+  print_status "UPDT" "Step 4/5: Performing full system upgrade..."
   execute_and_log_with_retry "sudo pacman -Syu --noconfirm" 3 5 "UPDT" || return 1
+
+  # Step 5: Explicitly rebuild the system's certificate trust store.
+  print_status "UPDT" "Step 5/5: Rebuilding certificate trust store..."
+  execute_and_log "sudo update-ca-trust" "Rebuilding CA trust" "UPDT" || return 1
 
   print_success "UPDT" "System update sequence completed successfully."
 }
