@@ -113,80 +113,66 @@ sync_wsl_time() {
 
   print_status "TIME" "Current system time: $(date)"
 }
+
 optimise_mirrors() {
-  print_status "MIRROR" "Updating mirror list"
+  print_status "MIRROR" "Optimizing mirror list for best performance..."
 
-  # Install reflector if needed
+  # Install reflector if it's not already present.
   if ! command_exists reflector; then
-    execute_and_log "sudo pacman -S --noconfirm reflector" \
-      "Install reflector" \
-      "MIRROR" || {
-      # Fallback if reflector install fails
-      print_warning "MIRROR" "Reflector install failed, using manual mirror setup"
-
-      # Create a basic mirror list with reliable mirrors
-      execute_and_log "sudo bash -c 'cat > /etc/pacman.d/mirrorlist << EOF
-# Arch Linux mirrorlist
-# Generated with manual fallback
-Server = https://mirror.rackspace.com/archlinux/\$repo/os/\$arch
-Server = https://mirrors.kernel.org/archlinux/\$repo/os/\$arch
-Server = https://arch.mirror.constant.com/\$repo/os/\$arch
-Server = https://mirror.f4st.host/archlinux/\$repo/os/\$arch
-EOF'" "Creating basic mirror list" "MIRROR"
-      return 0
-    }
+    execute_and_log "sudo pacman -S --noconfirm reflector" "Install reflector" "MIRROR" || return 1
   fi
 
-  # Backup original mirrorlist
+  # Backup the current mirrorlist.
   execute_and_log "sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup" \
-    "Backup mirrorlist" \
-    "MIRROR" || return 1
+    "Backup mirrorlist" "MIRROR" || return 1
 
-  # Try multiple mirror generation strategies
-  local success=0
+  # --- Resilient Strategy ---
+  # Find the fastest, most up-to-date mirrors from a global pool.
+  print_status "MIRROR" "Searching for the fastest available mirrors globally..."
+  local reflector_cmd="sudo reflector --protocol https --latest 50 --age 12 --sort rate --save /etc/pacman.d/mirrorlist --download-timeout 15"
 
-  # Strategy 1: Try with South Africa mirrors first
-  if execute_and_log "sudo reflector --country ZA --protocol https --latest 50 --sort rate --save /etc/pacman.d/mirrorlist" \
-    "Generating South Africa mirror list" "MIRROR"; then
-    success=1
-  # Strategy 2: Try global mirrors
-  elif execute_and_log "sudo reflector --protocol https --latest 100 --sort rate --save /etc/pacman.d/mirrorlist" \
-    "Generating global mirror list" "MIRROR"; then
-    success=1
-  # Strategy 3: Try specific reliable mirrors
-  elif execute_and_log "sudo reflector --country US,GB,DE --protocol https --latest 50 --sort rate --save /etc/pacman.d/mirrorlist" \
-    "Generating US/GB/DE mirror list" "MIRROR"; then
-    success=1
-  # Final fallback: Create manual list
-  else
-    print_warning "MIRROR" "All reflector strategies failed, using manual fallback"
+  if execute_and_log "$reflector_cmd" "Generating globally optimized mirror list" "MIRROR"; then
+    print_success "MIRROR" "Globally optimized mirror list generated successfully."
+    return 0
+  fi
 
-    execute_and_log "sudo bash -c 'cat > /etc/pacman.d/mirrorlist << EOF
-# Arch Linux mirrorlist
-# Generated with manual fallback
+  # --- Fallback Strategy ---
+  print_warning "MIRROR" "Reflector failed. Using a manual fallback list."
+
+  execute_and_log "sudo bash -c 'cat > /etc/pacman.d/mirrorlist << EOF
+# Arch Linux mirrorlist (Manual Fallback)
 Server = https://mirror.rackspace.com/archlinux/\$repo/os/\$arch
 Server = https://mirrors.kernel.org/archlinux/\$repo/os/\$arch
-Server = https://arch.mirror.constant.com/\$repo/os/\$arch
-Server = https://mirror.f4st.host/archlinux/\$repo/os/\$arch
-EOF'" "Creating basic mirror list" "MIRROR"
-    success=1
-  fi
-
-  if [ $success -eq 1 ]; then
-    print_success "MIRROR" "Mirror list updated successfully"
-    return 0
-  else
-    print_error "MIRROR" "Failed to generate any working mirror list"
+EOF'" "Creating basic mirror list" "MIRROR" || {
+    print_error "MIRROR" "Failed to create manual fallback mirror list. Aborting."
     return 1
-  fi
-}
-update_system() {
-  print_status "UPDT" "Updating system packages..."
-  execute_and_log "sudo pacman -Syu --noconfirm" \
-    "Installing Update" \
-    "UPDT" || return 1
+  }
+
+  print_success "MIRROR" "Manual fallback mirror list created."
+  return 0
 }
 
+update_system() {
+  print_status "UPDT" "Performing critical system update..."
+
+  # Step 1: Force a refresh of all package databases. -yy is critical.
+  print_status "UPDT" "Step 1/4: Forcing package database refresh..."
+  execute_and_log_with_retry "sudo pacman -Syy" 3 5 "UPDT" || return 1
+
+  # Step 2: Update the keyring to ensure we have the latest signing keys.
+  print_status "UPDT" "Step 2/4: Updating archlinux-keyring..."
+  execute_and_log_with_retry "sudo pacman -S --noconfirm archlinux-keyring" 3 5 "UPDT" || return 1
+
+  # Step 3: Update pacman itself. This is essential to handle repo structure changes.
+  print_status "UPDT" "Step 3/4: Updating pacman package manager..."
+  execute_and_log_with_retry "sudo pacman -S --noconfirm pacman" 3 5 "UPDT" || return 1
+
+  # Step 4: Now, perform the full system upgrade.
+  print_status "UPDT" "Step 4/4: Performing full system upgrade..."
+  execute_and_log_with_retry "sudo pacman -Syu --noconfirm" 3 5 "UPDT" || return 1
+
+  print_success "UPDT" "System update sequence completed successfully."
+}
 setup_locale() {
   print_status "LOCALE" "Setting up system-wide locale..."
 

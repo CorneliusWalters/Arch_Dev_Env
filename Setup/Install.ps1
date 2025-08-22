@@ -13,9 +13,24 @@ $wslUsername = Read-Host -Prompt "Please enter your desired username for Arch Li
 if ([string]::IsNullOrWhiteSpace($wslUsername)) {
   Write-Host "ERROR: Username cannot be empty." -ForegroundColor Red; exit 1
 }
+$gitUserNameDefault = "CorneliusWalters" # Replace with your default
+$gitUserEmailDefault = "seven.nomad@gmail.com" # Replace with your default
+$personalRepoUrlDefault = "https://github.com/CorneliusWalters/Arch_Dev_Env" # Replace or leave empty
+
 $gitUserName = Read-Host -Prompt "Enter your Git username (for commits)"
+if (-not $gitUserName) {
+  $gitUserNameDefault
+}
+
 $gitUserEmail = Read-Host -Prompt "Enter your Git email (for commits)"
+if (-not $gitUserEmail) {
+  $gitUserEmailDefault
+}
+
 $personalRepoUrl = Read-Host -Prompt "Enter your personal dotfiles GitHub repo URL (optional - press Enter to skip)"
+if (-not $gitUserEmail) {
+  $gitUserEmailDefault
+}
 
 # Validate git inputs
 if ([string]::IsNullOrWhiteSpace($gitUserName)) {
