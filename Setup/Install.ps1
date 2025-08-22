@@ -42,6 +42,10 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $logger = [WslLogger]::new("C:\wsl")
 
 try {
+  if ((Get-Location).Path -like $PSScriptRoot) {
+    set-neutral-dir
+  }
+
   $logger.WritePhaseStatus("INIT", "STARTING", "WSL Arch Linux Configuration for user '$wslUsername'")
 	  
   # Phase 1: Prerequisites and Import
