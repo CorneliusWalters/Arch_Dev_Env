@@ -26,15 +26,15 @@ if (-not $gitUserName) {
 
 $gitUserEmail = Read-Host -Prompt "Enter your Git email (for commits)"
 if (-not $gitUserEmail) {
-  $personalRepoUrlDefault
-}
-
-$personalRepoUrl = Read-Host -Prompt "Enter your personal dotfiles GitHub repo URL (optional - press Enter to skip)"
-if (-not $gitUserEmail) {
   $gitUserEmailDefault
 }
 
-# Validate git inputs
+$personatelRepoUrl = Read-Host -Prompt "Enter your personal dotfiles GitHub repo URL (optional - press Enter to skip)"
+if (-not $personalRepoUrl) {
+  $personalRepoUrlDefault
+}
+
+# Valida git inputs
 if ([string]::IsNullOrWhiteSpace($gitUserName)) {
   $gitUserName = "WSL User"
   Write-Host "Using default git username: $gitUserName" -ForegroundColor Yellow
