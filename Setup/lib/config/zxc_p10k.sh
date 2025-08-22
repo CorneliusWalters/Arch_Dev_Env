@@ -15,114 +15,93 @@ cat >"$P10K_PRISTINE_FILE" <<'EOL'
 () {
   emulate -L zsh -o extended_glob
 
-  # Kanagawa-inspired colors
-  local dark_sumiInk='#1F1F28'
+  # --- Kanagawa Color Palette ---
+  local sumiInk1='#1F1F28'
+  local sumiInk2='#242430'
+  local sumiInk3='#2A2A37'
   local fujiWhite='#DCD7BA'
+  local fujiGray='#727169'
+  local carpYellow='#938056'
   local springViolet='#938AA9'
   local oniViolet='#957FB8'
   local crystalBlue='#7E9CD8'
   local springGreen='#98BB6C'
-  local autumnGreen='#76946A'
   local autumnRed='#C34043'
   local autumnYellow='#DCA561'
-  local boatYellow='#938056'
-  local fujiGray='#727169'
 
-  # Customize prompt
+  # --- General Prompt Settings ---
   typeset -g POWERLEVEL9K_MODE=nerdfont-complete
   typeset -g POWERLEVEL9K_PROMPT_ADD_NEWLINE=true
-  typeset -g POWERLEVEL9K_PROMPT_ON_NEWLINE=true
-  typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX=""
-  typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_PREFIX="%F{$springViolet}❯%f "
+  typeset -g POWERLEVEL9K_LEFT_PROMPT_SEPARATOR='\uE0B0'
+  typeset -g POWERLEVEL9K_RIGHT_PROMPT_SEPARATOR='\uE0B2'
+  typeset -g POWERLEVEL9K_VISUAL_IDENTIFIER_EXPANSION='${P9K_VISUAL_IDENTIFIER// }'
 
-  # Left prompt segments
+  # --- Left Prompt Segments (What you actually see) ---
   typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
-    dir                     # current directory
-    vcs                     # git status
-    virtualenv             # python virtual environment
-    command_execution_time  # duration of the last command
+    context
+    dir
+    vcs
+    vi_mode
   )
 
-  # Right prompt segments
+  # --- Right Prompt Segments (What you actually see) ---
   typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
-    status               # exit code of the last command
-    background_jobs      # presence of background jobs
-    direnv               # direnv status
-    asdf                 # asdf version manager
-    virtualenv           # python virtual environment
-    anaconda             # conda environment
-    pyenv                # python environment
-    nodenv               # node.js version
-    nvm                  # node.js version
-    nodeenv              # node.js environment
-    node_version         # node.js version
-    go_version           # go version
-    rust_version         # rustc version
-    dotnet_version       # .net version
-    php_version          # php version
-    laravel_version      # laravel php framework version
-    java_version         # java version
-    package              # name@version from package.json
-    rbenv                # ruby version
-    rvm                  # ruby version
-    fvm                  # flutter version
-    luaenv               # lua version
-    jenv                 # java version
-    plenv                # perl version
-    phpenv               # php version
-    haskell_stack        # haskell version
-    kubecontext          # current kubernetes context
-    terraform            # terraform workspace
-    aws                  # aws profile
-    aws_eb_env           # aws elastic beanstalk environment
-    azure                # azure account name
-    gcloud               # google cloud profile
-    google_app_cred      # google application credentials
-    context              # user@hostname
-    ranger               # ranger shell
-    nnn                  # nnn shell
-    vim_shell            # vim shell indicator
-    midnight_commander   # midnight commander shell
-    nix_shell            # nix shell
-    vi_mode              # vi mode (you might want to remove this if you don't use vi mode)
-    # Load and customize the prompt
-    prompt_char          # prompt symbol
+    status
+    command_execution_time
+    virtualenv
+    go_version
+    rust_version
+    node_version
+    time
   )
+
+  # --- Segment Styling ---
+
+  # Context (user@hostname)
+  typeset -g POWERLEVEL9K_CONTEXT_BACKGROUND=$sumiInk3
+  typeset -g POWERLEVEL9K_CONTEXT_FOREGROUND=$fujiWhite
 
   # Directory
-  typeset -g POWERLEVEL9K_DIR_BACKGROUND=$dark_sumiInk
+  typeset -g POWERLEVEL9K_DIR_BACKGROUND=$sumiInk2
   typeset -g POWERLEVEL9K_DIR_FOREGROUND=$crystalBlue
-  typeset -g POWERLEVEL9K_SHORTEN_STRATEGY=truncate_to_unique
-  typeset -g POWERLEVEL9K_SHORTEN_DELIMITER=
-  typeset -g POWERLEVEL9K_DIR_SHORTENED_FOREGROUND=$autumnYellow
+  typeset -g POWERLEVEL9K_DIR_SHORTENED_FOREGROUND=$springViolet
+  typeset -g POWERLEVEL9K_DIR_ANCHOR_FOREGROUND=$fujiGray
+  typeset -g POWERLEVEL9K_DIR_ANCHOR_BOLD=true
 
-  # VCS
-  typeset -g POWERLEVEL9K_VCS_CLEAN_BACKGROUND=$dark_sumiInk
+  # VCS (Git)
+  typeset -g POWERLEVEL9K_VCS_BACKGROUND=$sumiInk3
   typeset -g POWERLEVEL9K_VCS_CLEAN_FOREGROUND=$springGreen
-  typeset -g POWERLEVEL9K_VCS_MODIFIED_BACKGROUND=$dark_sumiInk
   typeset -g POWERLEVEL9K_VCS_MODIFIED_FOREGROUND=$autumnYellow
-  typeset -g POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND=$dark_sumiInk
   typeset -g POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND=$autumnRed
+  typeset -g POWERLEVEL9K_VCS_BRANCH_ICON='\uF126'
 
-  # Command execution time
-  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_BACKGROUND=$dark_sumiInk
-  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_FOREGROUND=$boatYellow
+  # Vi Mode (Normal/Insert)
+  typeset -g POWERLEVEL9K_VI_MODE_NORMAL_BACKGROUND=$crystalBlue
+  typeset -g POWERLEVEL9K_VI_MODE_NORMAL_FOREGROUND=$sumiInk1
+  typeset -g POWERLEVEL9K_VI_MODE_INSERT_BACKGROUND=$springGreen
+  typeset -g POWERLEVEL9K_VI_MODE_INSERT_FOREGROUND=$sumiInk1
 
-  # Status
-  typeset -g POWERLEVEL9K_STATUS_OK_BACKGROUND=$dark_sumiInk
+  # Status (exit code)
   typeset -g POWERLEVEL9K_STATUS_OK_FOREGROUND=$springGreen
-  typeset -g POWERLEVEL9K_STATUS_ERROR_BACKGROUND=$dark_sumiInk
   typeset -g POWERLEVEL9K_STATUS_ERROR_FOREGROUND=$autumnRed
 
-  # Prompt character
-  typeset -g POWERLEVEL9K_PROMPT_CHAR_OK_{VIINS,VICMD,VIVIS,VIOWR}_FOREGROUND=$oniViolet
-  typeset -g POWERLEVEL9K_PROMPT_CHAR_ERROR_{VIINS,VICMD,VIVIS,VIOWR}_FOREGROUND=$autumnRed
+  # Command Execution Time
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_FOREGROUND=$fujiGray
 
-  # Other settings
-  typeset -g POWERLEVEL9K_BACKGROUND_JOBS_BACKGROUND=$dark_sumiInk
-  typeset -g POWERLEVEL9K_BACKGROUND_JOBS_FOREGROUND=$springViolet
-  typeset -g POWERLEVEL9K_VIRTUALENV_BACKGROUND=$dark_sumiInk
-  typeset -g POWERLEVEL9K_VIRTUALENV_FOREGROUND=$crystalBlue
+  # Language Versions
+  typeset -g POWERLEVEL9K_VIRTUALENV_FOREGROUND=$springGreen
+  typeset -g POWERLEVEL9K_GO_VERSION_FOREGROUND=$crystalBlue
+  typeset -g POWERLEVEL9K_RUST_VERSION_FOREGROUND=$autumnYellow
+  typeset -g POWERLEVEL9K_NODE_VERSION_FOREGROUND=$springGreen
+
+  # Time
+  typeset -g POWERLEVEL9K_TIME_FOREGROUND=$fujiGray
+  typeset -g POWERLEVEL9K_TIME_FORMAT='%D{%H:%M}'
+
+  # Prompt Character
+  typeset -g POWERLEVEL9K_PROMPT_CHAR_OK_FOREGROUND=$oniViolet
+  typeset -g POWERLEVEL9K_PROMPT_CHAR_ERROR_FOREGROUND=$autumnRed
+  typeset -g POWERLEVEL9K_PROMPT_CHAR_SYMBOL='❯'
 }
 
 (( ${#p10k_config_opts} )) && setopt ${p10k_config_opts[@]}
