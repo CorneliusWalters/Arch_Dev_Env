@@ -74,7 +74,6 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $logger = [WslLogger]::new("C:\wsl")
 
 try {
-  Add-VSCodeToPath | Out-Null # Call the function, suppress non-essential output
 
   if ((Get-Location).Path -like $PSScriptRoot) {
     set-neutral-dir
