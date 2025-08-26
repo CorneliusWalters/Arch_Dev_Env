@@ -1,5 +1,6 @@
 #!/bin/bash
-# Setup/lib/99_wrapper.sh - PowerShell execution wrapper
+###     file name: 99_wrapper.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
 
 set -e
 

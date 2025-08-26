@@ -7,6 +7,7 @@
 FILES_TO_WATCH=(
 	".config/zsh/.zshrc"
 	".config/zsh/.p10k.zsh"
+	".config/lsd/config.yaml"
 	".config/tmux/tmux.conf"
 	".config/nvim/init.lua"
 	".config/nvim/plugins.lua"

@@ -1,6 +1,6 @@
 #!/bin/bash
 ###     file name: 0_prepare_root.sh
-###     dir: /mnt/c/wsl/wsl_dev_setup/lib/0_prepare_root.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
 
 set -e # Exit on any error
 

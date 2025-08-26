@@ -1,6 +1,6 @@
 #!/bin/bash
 ###     file name: 2_logging.sh
-###     dir: /mnt/c/wsl/wsl_dev_setup/lib/2_logging.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
 
 # Force unbuffered output for real-time display
 export PYTHONUNBUFFERED=1

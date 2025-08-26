@@ -1,0 +1,29 @@
+# Kanagawa theme for lsd
+classic: false
+colors:
+  user: 117
+  group: 142
+  permission:
+    read: yellow
+    write: red
+    exec: green
+    exec-sticky: 5
+    no-access: 243
+  date:
+    hour-old: 142
+    day-old: 142
+    older: 142
+  size:
+    none: 142
+    small: 142
+    medium: 142
+    large: 142
+  directory: 110
+  file: 223
+  pipe: yellow
+  symlink: cyan
+  block-device: yellow
+  char-device: yellow
+  socket: magenta
+  special: magenta
+  tree-edge: 243

@@ -1,6 +1,6 @@
 #!/bin/bash
 ###     file name: 4_syst_ready_fn.sh
-###     dir: /mnt/c/wsl/wsl_dev_setup/lib/4_syst_ready_fn.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
 
 # Function to check if a command exists
 command_exists() {
@@ -26,6 +26,14 @@ check_dependencies() {
       return 1
     fi
   done
+}
+
+get_packages_from_file() {
+  local file_path=$1
+  if [ -f "$file_path" ]; then
+    # Filter out comments and empty lines, then join with spaces.
+    grep -Ev '^#|^$' "$file_path" | tr '\n' ' '
+  fi
 }
 
 stabilise_keyring() {
@@ -217,30 +225,29 @@ EOL" \
 }
 
 install_base_packages() {
-  print_status "Packages" "Installing base dependencies..."
+  print_status "PACKAGES" "Installing base dependencies..."
 
-  # Define a core set of packages that are always installed
-  local CORE_BASE_DEPS="base-devel git github-cli bat cmake ninja zsh tmux neovim htop btop duf ncdu bat lsd ripgrep fd fzf zoxide lazygit git-delta jq yq shellcheck tree tree-sitter unzip zip tar wl-clipboard xclip curl wget httpie procs tldr man-db man-pages inotify-tools"
+  # Read the core package list from its file.
+  local base_pkgs=$(_get_packages_from_file "$PACKAGE_LISTS_SRC/base.installs")
 
-  # Path to the dynamically generated package list within the Git repository
-  local CUSTOM_PACKAGES_FILE="$REPO_ROOT/installed_packages.txt" # Assuming REPO_ROOT is accessible and correct
+  # --- MODIFIED: Read additional packages from 'add.installs' ---
+  local additional_pkgs_file="$PACKAGE_LISTS_SRC/add.installs"
+  local additional_pkgs=$(_get_packages_from_file "$additional_pkgs_file")
 
-  local ALL_DEPS="$CORE_BASE_DEPS"
-
-  # Check if the custom package list exists and add its content
-  if [ -f "$CUSTOM_PACKAGES_FILE" ]; then
-    # Read the file line by line and add to ALL_DEPS, handling newlines
-    local additional_pkgs
-    additional_pkgs=$(cat "$CUSTOM_PACKAGES_FILE" | tr '\n' ' ')
-    ALL_DEPS="$ALL_DEPS $additional_pkgs"
-    print_status "Packages" "Including additional packages from $CUSTOM_PACKAGES_FILE."
-  else
-    print_warning "Packages" "No custom package list found at $CUSTOM_PACKAGES_FILE. Installing only core base dependencies."
+  if [ -n "$additional_pkgs" ]; then
+    print_status "PACKAGES" "Including additional packages from '$additional_pkgs_file'."
   fi
 
-  execute_and_log "sudo pacman -S --needed --noconfirm $ALL_DEPS" \
-    "Installing core and custom dependencies" \
-    "Packages" || return 1
+  # Combine the lists.
+  local all_pkgs="$base_pkgs $additional_pkgs"
+
+  if [ -z "$all_pkgs" ]; then
+    print_warning "PACKAGES" "No packages to install."
+    return 0
+  fi
+
+  execute_and_log "sudo pacman -S --needed --noconfirm $all_pkgs" \
+    "Installing base and additional dependencies" "PACKAGES" || return 1
 }
 
 setup_winyank() {

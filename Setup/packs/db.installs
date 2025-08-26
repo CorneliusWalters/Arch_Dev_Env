@@ -1,0 +1,3 @@
+# Client libraries for common databases.
+postgresql-libs
+sqlite

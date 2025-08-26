@@ -1,10 +1,3 @@
-#!/bin/bash
-###     file name: zxc_zsh.sh
-###     dir: /mnt/c/wsl/scripts/lib/config/zxc_zsh.sh
-
-print_status "ZSH_CONF" "Setting up zsh configuration..."
-
-cat >"$ZSH_PRISTINE_FILE" <<'EOL'
 # p10k instant prompt
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
@@ -97,19 +90,3 @@ alias wrk='cd ~/work'
 alias zshconf='${EDITOR:-nvim} ~/.config/zsh/.zshrc'
 alias tmuxconf='${EDITOR:-nvim} ~/.config/tmux/tmux.conf'
 alias nvimconf='${EDITOR:-nvim} ~/.config/nvim/init.lua'
-
-    
-EOL
-
-# 2. Copy the pristine file to the working location.
-cp "$ZSH_PRISTINE_FILE" "$ZSH_WORKING_FILE"
-
-# 3. Check if a user patch exists and apply it.
-if [ -f "$ZSH_PATCH_FILE" ]; then
-    print_status "ZSH_PATCH" "Found patch for .zshrc. Applying..."
-    if patch "$ZSH_WORKING_FILE" <"$ZSH_PATCH_FILE"; then
-        print_success "ZSH_PATCH" "Successfully applied user patch to .zshrc."
-    else
-        print_error "ZSH_PATCH" "Failed to apply patch to .zshrc. Please resolve manually."
-    fi
-fi
