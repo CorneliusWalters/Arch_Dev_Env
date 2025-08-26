@@ -24,13 +24,7 @@
 
         try {
             $this.Logger.WriteLog("INFO", "Starting: $Description", "Cyan")
-
-            # Always use file-based approach for better reliability
-            $this.Logger.WriteLog(
-                "INFO",
-                "Using file-based streaming approach",
-                "Cyan"
-            )
+            $this.Logger.WriteLog("INFO", "Using file-based streaming approach", "Cyan")
             return $this.ExecuteWithFileTailing($Command, $Description)
         }
         catch {
@@ -49,20 +43,21 @@
         $windowsOutputFile = "\\wsl$\$($this.DistroName)$outputFile"
         $tailJob = $null
         $wslProcess = $null
+        # Removed: $scriptBlockPhaseStartTime = $null (This was the unused variable)
 
         try {
             $this.Logger.WriteLog("INFO", "Using enhanced file-based streaming: $outputFile", "Gray")
 
-            # Start the background job to tail the log file. This part is correct.
             $tailJob = Start-Job -ScriptBlock {
-                # ... (The entire ScriptBlock for the tailing job remains unchanged) ...
                 param($FilePath, $FinishPath, $LogPath, $DistroName)
 
                 $lastSize = 0
-                $maxWaitTime = 900 # Increased timeout for longer installs
+                $maxWaitTime = 900
                 $startTime = Get-Date
                 $consecutiveEmptyReads = 0
-                $maxConsecutiveEmpty = 150 # Increased for longer pauses like package downloads
+                # PSUseDeclaredVarsMoreThanAssignments:False Positive. This variable is used.
+                $maxConsecutiveEmpty = 150 
+                $currentPhaseStartTime = $null # Local variable for duration calculation inside job
 
                 while (((Get-Date) - $startTime).TotalSeconds -lt $maxWaitTime) {
                     if (Test-Path $FilePath) {
@@ -72,56 +67,141 @@
                                 $consecutiveEmptyReads = 0
                                 $newContent = $content.Substring($lastSize)
                                 $lines = $newContent -split "`r?`n" | Where-Object { $_ -ne "" }
-                        
+                            
                                 foreach ($line in $lines) {
                                     if (-not [string]::IsNullOrWhiteSpace($line.Trim())) {
                                         $timestamp = Get-Date -Format "HH:mm:ss"
                                         $trimmedLine = $line.Trim()
-                                
-                                        # --- All your existing Write-Host formatting logic goes here ---
-                                        # (This entire section is correct and does not need to be changed)
+                                        $wasCustomColorized = $false
+
                                         if ($trimmedLine -match '^### PHASE_BOUNDARY ###') {
                                             Write-Host ""
                                             Write-Host ("=" * 80) -ForegroundColor Cyan
-                                            continue
+                                            $wasCustomColorized = $true
                                         }
                                         elseif ($trimmedLine -match '^>>> PHASE_START: (.+)') {
                                             $currentPhase = $matches[1]
-                                            $phaseStartTime = Get-Date
+                                            $currentPhaseStartTime = Get-Date
                                             Write-Host ""
                                             Write-Host "🚀 STARTING PHASE: " -NoNewline -ForegroundColor Green
                                             Write-Host "$currentPhase" -ForegroundColor Yellow -BackgroundColor DarkBlue
                                             Write-Host ("=" * 80) -ForegroundColor Green
-                                            continue
+                                            $wasCustomColorized = $true
                                         }
                                         elseif ($trimmedLine -match '^<<< PHASE_END: (.+)') {
                                             $endPhase = $matches[1]
-                                            $phaseDuration = ((Get-Date) - $phaseStartTime).TotalSeconds
+                                            $phaseDuration = $null
+                                            if ($currentPhaseStartTime) {
+                                                $phaseDuration = ((Get-Date) - $currentPhaseStartTime).TotalSeconds
+                                                $currentPhaseStartTime = $null
+                                            }
                                             Write-Host ("=" * 80) -ForegroundColor Green
                                             Write-Host "✅ COMPLETED PHASE: " -NoNewline -ForegroundColor Green
                                             Write-Host "$endPhase" -ForegroundColor Yellow -BackgroundColor DarkGreen
-                                            Write-Host "⏱️  Duration: $([math]::Round($phaseDuration, 1))s" -ForegroundColor Cyan
+                                            if ($phaseDuration -ne $null) {
+                                                Write-Host "⏱️  Duration: $([math]::Round($phaseDuration, 1))s" -ForegroundColor Cyan
+                                            }
                                             Write-Host ("=" * 80) -ForegroundColor Green
                                             Write-Host ""
-                                            continue
+                                            $wasCustomColorized = $true
                                         }
-                                        # ... all other elseif blocks for formatting ...
-                                        else { 
-                                            Write-Host "[$timestamp] " -NoNewline -ForegroundColor Gray
-                                            Write-Host $line -ForegroundColor White
+                                        elseif ($trimmedLine -match '^>>> PROGRESS: \[(\d+)/(\d+)\] (.+) - (.+)') {
+                                            $current = [int]$matches[1]
+                                            $total = [int]$matches[2]
+                                            $phase = $matches[3]
+                                            $action = $matches[4]
+                                            $percentage = [math]::Round(($current / $total) * 100, 1)
+                                            Write-Host ""
+                                            Write-Host "📊 PROGRESS: " -NoNewline -ForegroundColor Magenta
+                                            $progressText = "[$current/$total] ($percentage)percent"
+                                            Write-Host $progressText -NoNewline -ForegroundColor Cyan
+                                            Write-Host " $phase - $action" -ForegroundColor White
+                                            $wasCustomColorized = $true
                                         }
-                                
+                                        elseif ($trimmedLine -match '^>>> PHASE_SEPARATOR <<<') {
+                                            Write-Host ""
+                                            Write-Host (("-" * 40) + " PHASE BREAK " + ("-" * 40)) -ForegroundColor DarkGray
+                                            Write-Host ""
+                                            $wasCustomColorized = true
+                                        }
+                                        elseif ($trimmedLine -match '^================== (EXECUTING|COMPLETED): (.+) ==================') {
+                                            $action = $matches[1]
+                                            $phaseName = $matches[2]
+                                            if ($action -eq "EXECUTING") {
+                                                Write-Host "🔧 $action" + ": " -NoNewline -ForegroundColor Blue
+                                                Write-Host "$phaseName" -ForegroundColor White -BackgroundColor DarkBlue
+                                            }
+                                            else {
+                                                Write-Host "✅ $action" + ": " -NoNewline -ForegroundColor Green
+                                                Write-Host "$phaseName" -ForegroundColor White -BackgroundColor DarkGreen
+                                            }
+                                            $wasCustomColorized = $true
+                                        }
+                                        elseif ($trimmedLine -match '^=== PHASE:.*START ===') {
+                                            Write-Host ""
+                                            Write-Host "🚀 " -NoNewline -ForegroundColor Green
+                                            Write-Host "$trimmedLine" -ForegroundColor Magenta
+                                            $wasCustomColorized = $true
+                                        }
+                                        elseif ($trimmedLine -match '^=== PHASE:.*SUCCESS ===') {
+                                            Write-Host "✅ " -NoNewline -ForegroundColor Green
+                                            Write-Host "$trimmedLine" -ForegroundColor Green
+                                            Write-Host ""
+                                            $wasCustomColorized = $true
+                                        }
+                                        elseif ($trimmedLine -match '^\[ERROR\]') { 
+                                            Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                                            Write-Host "$line" -ForegroundColor Red
+                                            $wasCustomColorized = $true
+                                        }
+                                        elseif ($trimmedLine -match '^\[SUCCESS\]') { 
+                                            Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                                            Write-Host "$line" -ForegroundColor Green
+                                            $wasCustomColorized = true
+                                        }
+                                        elseif ($trimmedLine -match '^\[STATUS\]') { 
+                                            Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                                            Write-Host "$line" -ForegroundColor Cyan
+                                            $wasCustomColorized = true
+                                        }
+                                        elseif ($trimmedLine -match '^\[WARNING\]') { 
+                                            Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                                            Write-Host "$line" -ForegroundColor Yellow
+                                            $wasCustomColorized = true
+                                        }
+                                        elseif ($trimmedLine -match '^\[COMMAND\]') {
+                                            Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+                                            Write-Host "$line" -ForegroundColor DarkGray
+                                            $wasCustomColorized = true
+                                        }
+                                        elseif ($trimmedLine -match '^===.*===') {
+                                            Write-Host "$line" -ForegroundColor Cyan
+                                            $wasCustomColorized = $true
+                                        }
+
+                                        if (-not $wasCustomColorized) {
+                                            Write-Host "[$timestamp] WSL: $line"
+                                        }
+                                    
                                         [Console]::Out.Flush()
+                                        
                                         try {
                                             Add-Content -Path $LogPath -Value "[$timestamp] WSL: $line" -ErrorAction SilentlyContinue -Encoding UTF8
                                         }
-                                        catch {}
+                                        catch { 
+                                            # Ignore logging errors
+                                        }
                                     }
                                 }
                                 $lastSize = $content.Length
                             }
                             else {
                                 $consecutiveEmptyReads++
+                                if ($consecutiveEmptyReads -gt $maxConsecutiveEmpty) {
+                                    if (Test-Path $FinishPath) {
+                                        break
+                                    }
+                                }
                             }
                         }
                         catch {
@@ -131,62 +211,45 @@
                     else {
                         $consecutiveEmptyReads++
                     }
-            
+                
                     if (Test-Path $FinishPath) {
-                        Start-Sleep -Milliseconds 500 # Final sleep to catch last lines
+                        Start-Sleep -Milliseconds 500
                         break
                     }
-                                
+                                    
                     if ($consecutiveEmptyReads -lt 10) { Start-Sleep -Milliseconds 100 }
                     else { Start-Sleep -Milliseconds 300 }
                 }
-                # Final read to ensure nothing is missed
-                if (Test-Path $FilePath) {
-                    # ... (You can add a final Get-Content here if needed) ...
-                }
                 Write-Host ""
                 Write-Host "📋 Background log tailing job finished for $DistroName." -ForegroundColor Gray
-            } -ArgumentList $windowsOutputFile, "\\wsl$\$($this.DistroName)$finishFile", $this.Logger.LogFile, $this.DistroName
+            } -ArgumentList $windowsOutputFile, "\\wsl$\$($this.DistroName)$finishFile", $this.Logger.LogFile
 
-            # Give the tail job a moment to start up
             Start-Sleep -Milliseconds 500
         
-            # Define the command to be run inside WSL
             $wrappedCommand = @"
 {
-    # Ensure all output goes to the log file
     exec > >(tee '$outputFile') 2>&1
-    
-    # Execute the actual command passed to the function
     $Command
-    
-    # Create the .finished file on success or failure to signal completion
 } && touch '$finishFile' || { 
-    echo '[ERROR] Command execution failed with a non-zero exit code.'
+    echo '[ERROR] Command execution failed with a non-zero exit code.' >&2
     touch '$finishFile'
 }
 "@
         
             $this.Logger.WriteLog("INFO", "Executing command asynchronously...", "Cyan")
         
-            # --- CORE FIX: Execute WSL asynchronously using Start-Process ---
             $processArgs = "-d $($this.DistroName) -u $($this.Username) bash -c `"$wrappedCommand`""
             $wslProcess = Start-Process -FilePath "wsl" -ArgumentList $processArgs -NoNewWindow -PassThru
         
-            # --- CORE FIX: Wait for the asynchronous process to exit ---
-            # This loop allows the tailing job to run in the background while we wait.
             $this.Logger.WriteLog("INFO", "Waiting for WSL process to complete. Tailing logs in real-time...", "Gray")
             while (-not $wslProcess.HasExited) {
-                # The tailJob is already printing to the console, so we just wait.
                 Start-Sleep -Seconds 1
             }
         
             $exitCode = $wslProcess.ExitCode
         
-            # Give the tailing job a moment to process the final output and the .finished file
-            Start-Sleep -Seconds 2 
+            Start-Sleep -Seconds 2
         
-            # Final status check
             if ($exitCode -eq 0) {
                 $this.Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
             }
@@ -197,18 +260,21 @@
             return ($exitCode -eq 0)
         }
         catch {
-            # ... (catch block remains the same) ...
-            throw
-        }
-        finally {
-            # --- Cleanup ---
             if ($tailJob) {
-                # Stop and remove the background job
                 Stop-Job $tailJob -ErrorAction SilentlyContinue
                 Remove-Job $tailJob -Force -ErrorAction SilentlyContinue
             }
-        
-            # Clean up the temporary files inside WSL
+            try {
+                wsl -d $this.DistroName -u $this.Username bash -c "rm -f '$outputFile' '$finishFile'" 2>&1 | Out-Null
+            }
+            catch { }
+            throw
+        }
+        finally {
+            if ($tailJob) {
+                Stop-Job $tailJob -ErrorAction SilentlyContinue
+                Remove-Job $tailJob -Force -ErrorAction SilentlyContinue
+            }
             try {
                 wsl -d $this.DistroName -u $this.Username bash -c "rm -f '$outputFile' '$finishFile'" 2>&1 | Out-Null
             }
@@ -216,8 +282,6 @@
         }
     }
 
-
-    # Method without return type annotation
     Cleanup() {
         if (Test-Path $this.OutputLogFile) {
             $this.Logger.WriteLog(
@@ -312,7 +376,7 @@ class WslLogger {
             $psi.RedirectStandardOutput = $true
             $psi.RedirectStandardError = $true
             $psi.UseShellExecute = $false
-            $psi.CreateNoWindow = $true
+            $psi.CreateNoWindow = true
 
             $process = New-Object System.Diagnostics.Process
             $process.StartInfo = $psi

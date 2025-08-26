@@ -2,6 +2,7 @@
 ###     file name: 2_logging.sh
 ###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
 # shellcheck disable=SC2155
+# shellcheck disable=SC2034
 
 # Force unbuffered output for real-time display
 export PYTHONUNBUFFERED=1
@@ -25,9 +26,11 @@ PHASE_START_MARKER=">>> PHASE_START"
 PHASE_END_MARKER="<<< PHASE_END"
 
 init_logging() {
-	# Create the header directly with command substitution
+	local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+	# Create the header in the log file
 	cat >>"$LOGFILE" <<EOF
-=== Installation Log Started at $(date) ===
+=== Installation Log Started at $timestamp ===
 === System Information ===
 User: $(whoami)
 Hostname: $(hostname)
@@ -43,66 +46,53 @@ Working Directory: $(pwd)
 Script Directory: $SCRIPT_DIR
 ==========================
 EOF
-	# Also output to stdout for PowerShell capture (with forced flush)
-	{
-		echo "=== Installation Log Started at $(date) ==="
-		echo "=== System Information ==="
-		echo "User: $(whoami)"
-		echo "Hostname: $(hostname)"
-		echo "Working Directory: $(pwd)"
-		echo "Script Directory: $SCRIPT_DIR"
-		echo "=========================="
-		sync
-	}
-
-	# Force flush all output streams
+	# Output to stderr for PowerShell capture (single stream for consistency)
+	echo "=== Installation Log Started at $timestamp ===" >&2
+	echo "=== System Information ===" >&2
+	echo "User: $(whoami)" >&2
+	echo "Hostname: $(hostname)" >&2
+	echo "Working Directory: $(pwd)" >&2
+	echo "Script Directory: $SCRIPT_DIR" >&2
+	echo "==========================" >&2
 	sync
 }
 
-# Add a phase marker function
 print_phase_start() {
 	local phase=$1
 	local description=$2
 	local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
-	# Multiple output methods to ensure visibility
-	{
-		echo ""
-		echo "$PHASE_MARKER_PREFIX"
-		echo "$PHASE_START_MARKER: $phase"
-		echo "TIMESTAMP: $timestamp"
-		echo "DESCRIPTION: $description"
-		echo "$PHASE_MARKER_PREFIX"
-		echo ""
-		sync
-	}
-	# Aggressive flushing
-	sync
-	sleep 0.2
-	printf "\n" >&2 # Extra newline to stderr
+	echo "" >&2                     # Blank line before phase
+	echo "$PHASE_MARKER_PREFIX" >&2 # ### PHASE_BOUNDARY ###
+	echo "$PHASE_START_MARKER: $phase" >&2
+	echo "TIMESTAMP: $timestamp" >&2
+	echo "DESCRIPTION: $description" >&2
+	echo "$PHASE_MARKER_PREFIX" >&2 # ### PHASE_BOUNDARY ###
+	echo "" >&2                     # Blank line after phase
 	sync
 }
 
 print_phase_end() {
 	local phase=$1
 	local status=$2
-	# --- FIX: Only echo markers to stdout/stderr for PowerShell ---
-	echo ""
-	echo "$PHASE_MARKER_PREFIX"
-	echo "$PHASE_END_MARKER: $phase"
-	echo "STATUS: $status"
-	echo "$PHASE_MARKER_PREFIX"
-	echo ""
+	local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+	echo "" >&2                     # Blank line before phase
+	echo "$PHASE_MARKER_PREFIX" >&2 # ### PHASE_BOUNDARY ###
+	echo "$PHASE_END_MARKER: $phase" >&2
+	echo "STATUS: $status" >&2
+	echo "TIMESTAMP: $timestamp" >&2
+	echo "$PHASE_MARKER_PREFIX" >&2 # ### PHASE_BOUNDARY ###
+	echo "" >&2                     # Blank line after phase
 	sync
 }
 
-# Add a progress indicator function
 print_progress() {
 	local current=$1
 	local total=$2
 	local phase=$3
 	local action=$4
-	echo ">>> PROGRESS: [$current/$total] $phase - $action"
+	echo ">>> PROGRESS: [$current/$total] $phase - $action" >&2 # Send to stderr
 	sync
 }
 
@@ -126,8 +116,8 @@ log_message() {
 		echo "$log_entry" >>"/tmp/fallback_install.log" 2>/dev/null
 	fi
 
-	# Standard output for PowerShell capture. Use specific prefixes.
-	echo "[$level] [$category] $message" >&2 # Send to stderr for PowerShell's OutputDataReceived
+	# Send all formatted log_message output to PowerShell's stderr (OutputDataReceived)
+	echo "[$timestamp] [$level] [$category] $message" >&2
 	sync
 }
 
@@ -158,25 +148,25 @@ execute_and_log() {
 	local category="${3:-COMMAND}"
 	local func="${FUNCNAME[1]:-main}"
 
-	print_status "$category" "Executing: $desc"
+	log_message "STATUS" "$category" "Executing: $desc"
 	log_message "COMMAND" "$category" "[$func] \$ $cmd"
 
 	local start_time=$(date +%s)
 
-	# Execute the command directly, allowing output to stream.
-	eval "$cmd"
+	# Execute the command directly, allowing its stdout/stderr to stream.
+	eval "$cmd" >&2 # Direct raw command output to stderr so PowerShell captures it.
 	local exit_code=$?
 
 	local end_time=$(date +%s)
 	local duration=$((end_time - start_time))
 
 	if [ $exit_code -eq 0 ]; then
-		print_success "$category" "$desc completed successfully (${duration}s)."
-		log_message "SUCCESS" "$category" "[$func] Command finished. Exit Code: 0, Duration: ${duration}s"
+		log_message "SUCCESS" "$category" "$desc completed successfully (${duration}s)."
+		log_message "TIMING" "$category" "[$func] Command finished. Exit Code: 0, Duration: ${duration}s"
 		return 0
 	else
-		print_error "$category" "FAILED: $desc (Exit Code: $exit_code, Duration: ${duration}s)."
-		log_message "ERROR" "$category" "[$func] Command failed. Exit Code: $exit_code, Duration: ${duration}s"
+		log_message "ERROR" "$category" "FAILED: $desc (Exit Code: $exit_code, Duration: ${duration}s)."
+		log_message "TIMING" "$category" "[$func] Command failed. Exit Code: $exit_code, Duration: ${duration}s"
 		return $exit_code
 	fi
 }
@@ -191,27 +181,25 @@ execute_and_log_with_retry() {
 	local func="${FUNCNAME[1]:-main}"
 
 	while [ $attempt -le $max_attempts ]; do
-		print_status "$category" "[$func] Attempt $attempt of $max_attempts for: $cmd"
+		log_message "STATUS" "$category" "[$func] Attempt $attempt of $max_attempts for: $cmd"
 
-		# --- FIX: Execute command directly for streaming output ---
-		eval "$cmd"
+		# Execute command directly for streaming output
+		eval "$cmd" >&2 # Direct raw command output to stderr so PowerShell captures it.
 		exit_code=$?
 
 		if [ $exit_code -eq 0 ]; then
-			print_success "$category" "[$func] Succeeded on attempt $attempt."
+			log_message "SUCCESS" "$category" "[$func] Succeeded on attempt $attempt."
 			return 0
 		fi
 
 		if [ $attempt -lt $max_attempts ]; then
-			print_warning "$category" "[$func] Attempt $attempt failed. Retrying in $delay seconds..."
+			log_message "WARNING" "$category" "[$func] Attempt $attempt failed. Retrying in $delay seconds..."
 			sleep "$delay"
 		fi
 
 		attempt=$((attempt + 1))
 	done
 
-	print_error "$category" "[$func] Command failed after $max_attempts attempts."
+	log_message "ERROR" "$category" "[$func] Command failed after $max_attempts attempts."
 	return $exit_code
 }
-
-#######--- END OF FILE ---#######
