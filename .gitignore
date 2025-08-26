@@ -26,10 +26,16 @@ repo_contents_*.txt
 .DS_Store
 Thumbs.db
 
-# Ignore user-modified dotfiles that are managed by patches
-/Setup/lib/config/dotfiles-pristine/
+# Ignore user-modified dotfiles that are managed by patches.
+# The actual patches (*.patch) ARE tracked, but the live config files are not,
+# as they will be re-generated from pristine + patch.
+# This list prevents local changes to live config files from being accidentally staged.
 /home/*/.config/zsh/.zshrc
 /home/*/.config/zsh/.p10k.zsh
 /home/*/.config/tmux/tmux.conf
+/home/*/.config/lsd/config.yaml
 /home/*/.config/nvim/init.lua
-# etc. for all managed files
+/home/*/.config/nvim/lua/keymaps.lua
+/home/*/.config/nvim/lua/plugins.lua
+/home/*/.config/nvim/lua/preferences.lua
+/home/*/.config/nvim/.luacheckrc # Even if removed, good to keep here as a "known ignored" if it ever comes back

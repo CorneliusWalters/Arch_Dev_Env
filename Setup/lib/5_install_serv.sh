@@ -37,8 +37,9 @@ EOF
 setup_watcher_service() {
   print_status "WATCHER" "Setting up config file watcher service..."
 
-  local watcher_script="$REPO_ROOT/Setup/lib/config/watcher.sh"
-  local commit_script="$REPO_ROOT/Setup/lib/7_commit_config.sh"
+  # FIX: watcher.sh is now in lib/, not lib/config/
+  local watcher_script="$REPO_ROOT/lib/watcher.sh"
+  local commit_script="$REPO_ROOT/lib/7_commit_config.sh" # This path was already correct
   local service_file_path="$HOME/.config/systemd/user/config-watcher.service"
   local zshrc_file="$HOME/.config/zsh/.zshrc"
 
@@ -86,23 +87,24 @@ EOL
 setup_pacman_git_hook() {
   print_status "HOOK_SETUP" "Setting up pacman hook for Git repository synchronization..."
 
-  local sync_script_source="$SCRIPT_DIR/lib/5_sync_packs.sh"
-  local sync_script_target="/usr/local/bin/5_sync_packs.sh"
+  # Source script remains its original name.
+  local sync_script_source="$REPO_ROOT/lib/5_sync_packs.sh"
+  # Destination script gets the descriptive name.
+  local sync_script_target="/usr/local/bin/pacman-git-sync"
   local hook_file="/etc/pacman.d/hooks/auto-git-sync.hook"
   local hook_dir="/etc/pacman.d/hooks"
 
-  # Create the hooks directory if it doesn't exist
   execute_and_log "sudo mkdir -p \"$hook_dir\"" \
     "Creating pacman hooks directory" "HOOK_SETUP" || return 1
 
-  # Copy the sync script and make it executable
+  # This 'cp' command copies the original file but renames it at the destination.
   execute_and_log "sudo cp \"$sync_script_source\" \"$sync_script_target\"" \
     "Copying package sync script to $sync_script_target" "HOOK_SETUP" || return 1
   execute_and_log "sudo chmod +x \"$sync_script_target\"" \
     "Making package sync script executable" "HOOK_SETUP" || return 1
 
   # Create the pacman hook file
-  execute_and_log "sudo tee \"$hook_file\" > /dev/null << 'EOL'
+  execute_and_log "sudo tee \"$hook_file\" > /dev/null << EOL
 [Trigger]
 Operation = Install
 Operation = Upgrade
