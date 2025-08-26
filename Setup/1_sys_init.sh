@@ -53,6 +53,9 @@ source "$SCRIPT_DIR/lib/3_set_dirs.sh"
 source "$SCRIPT_DIR/lib/5_install_dev.sh"
 source "$SCRIPT_DIR/lib/5_install_serv.sh"
 
+# Source Tools setup & Configuration
+source "$SCRIPT_DIR/lib/6_setup_tools.sh"
+
 #test_caller_logging
 #exit
 sync_wsl_time || exit 1

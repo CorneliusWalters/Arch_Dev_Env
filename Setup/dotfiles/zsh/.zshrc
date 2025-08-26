@@ -1,5 +1,16 @@
+# shellcheck disable=SC2206
+# shellcheck disable=SC1090
+# shellcheck disable=SC2296
+# shellcheck disable=SC2164
+# shellcheck disable=SC2086
+# shellcheck disable=SC1091
+# shellcheck disable=SC2034
+
+
+
 # p10k instant prompt
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+# shellcheck disable=SC1090
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 

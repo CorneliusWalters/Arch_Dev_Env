@@ -228,11 +228,11 @@ install_base_packages() {
   print_status "PACKAGES" "Installing base dependencies..."
 
   # Read the core package list from its file.
-  local base_pkgs=$(_get_packages_from_file "$PACKAGE_LISTS_SRC/base.installs")
+  local base_pkgs=$(get_packages_from_file "$PACKAGE_LISTS_SRC/base.installs")
 
   # --- MODIFIED: Read additional packages from 'add.installs' ---
   local additional_pkgs_file="$PACKAGE_LISTS_SRC/add.installs"
-  local additional_pkgs=$(_get_packages_from_file "$additional_pkgs_file")
+  local additional_pkgs=$(get_packages_from_file "$additional_pkgs_file")
 
   if [ -n "$additional_pkgs" ]; then
     print_status "PACKAGES" "Including additional packages from '$additional_pkgs_file'."
