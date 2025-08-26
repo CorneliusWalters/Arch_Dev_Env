@@ -1,6 +1,7 @@
 #!/bin/bash
 ###     file name: 7_commit_config.sh
 ###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+# shellcheck disable=SC1090
 
 # generate_and_commit_patch.sh - Creates a .patch file from a modified config
 # and commits it to Git.

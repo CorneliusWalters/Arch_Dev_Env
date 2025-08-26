@@ -1,6 +1,7 @@
 #!/bin/bash
 ###     file name: 5_install_dev.sh
 ###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+# shellcheck disable=SC2155
 
 install_db_tools() {
   print_status "DB" "Installing database tools..."

@@ -1,31 +1,6 @@
 #!/bin/bash
-
-##------Structure
-##      Git/Setup/
-##      ├── 1_sys_init.sh           # Main script
-##      ├── Install.ps1             # Power Shell Install Script
-##      ├── PowerShell
-##      │   ├── Export-Image.ps1    # Exports WSL distro image after install for easy redo
-##      │   ├── Import-Distro.ps1   # Import the distro image
-##      │   ├── Logging.ps1         # Logging functions
-##      │   ├── Test.ps1            # Checks your WSL version
-##      │   └── Utils.ps1           # Setup Utilities
-##      ├── lib
-##      │   ├── 2_logging.sh        # Logging functions
-##      │   ├── 3_set_dirs.sh       # create directories and set scripts as executable
-##      │   ├── 4_install.sh        # Package/Main installation functions
-##      │   ├── 5_sync_packs.sh     # hooks and script patch functionality
-##      │   ├── 6_commit_config.sh  # git functionality to make changes to your repo
-##      │   ├── 99_wrapper.sh       # Wrapper function to execute from powershell to kick off seemless instalation
-##      │   ├── config
-##      │   │   ├── nvim.sh         # Neovim configurations
-##      │   │   ├── tmux.sh         # Tmux configurations
-##      │   │   ├── zsh.sh          # Zsh configurations
-##      │   │   ├── p10k.sh         # P10k configurations
-##      │   │   ├── zxc_nvim.sh     #cat configuration files for NVIM
-##      │   │   ├── zxc_tmux.sh     #cat configuration files for TMUX
-##      │   │   ├── zxc_zsh.sh      #cat configuration files for ZSH
-##      └   └   └── zxc_p10k.sh     #cat configuration files for ZSH p10K
+###     file name: 1_sys_init.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/.
 
 #######--- START OF FILE ---#######
 # Main initialization script for WSL Arch Linux setup

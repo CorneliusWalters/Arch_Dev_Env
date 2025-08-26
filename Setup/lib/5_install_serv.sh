@@ -1,6 +1,7 @@
 #!/bin/bash
 ###     file name: 5_install_serv.sh
 ###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+# shellcheck disable=SC2155
 
 setup_systemd_enabler() {
   print_status "SYSTEMD" "Setting up native WSL2 systemd support..."

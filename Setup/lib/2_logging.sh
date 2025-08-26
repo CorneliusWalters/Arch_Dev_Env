@@ -1,6 +1,7 @@
 #!/bin/bash
 ###     file name: 2_logging.sh
 ###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+# shellcheck disable=SC2155
 
 # Force unbuffered output for real-time display
 export PYTHONUNBUFFERED=1

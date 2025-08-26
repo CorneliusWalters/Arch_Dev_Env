@@ -1,6 +1,11 @@
 #!/bin/bash
 ###     file name: 4_syst_ready_fn.sh
 ###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+# shellcheck disable=SC2206
+# shellcheck disable=SC1090
+# shellcheck disable=SC2296
+# shellcheck disable=SC2155
+# shellcheck disable=SC2164
 
 # Function to check if a command exists
 command_exists() {
