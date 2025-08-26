@@ -74,9 +74,14 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $logger = [WslLogger]::new("C:\wsl")
 
 try {
+  $repoPathToManage = Split-Path -Parent $PSScriptRoot
+  # The current working directory of the PowerShell terminal
+  $currentWorkingDir = (Get-Location).Path
 
-  if ((Get-Location).Path -like $PSScriptRoot) {
-    set-neutral-dir
+  # If the current directory is inside (or equal to) the repo that needs to be managed (cloned/deleted)...
+  if ($currentWorkingDir -like "$repoPathToManage*" -or $currentWorkingDir -eq $repoPathToManage) {
+    Write-Host "Current directory ('$currentWorkingDir') is inside or equal to the target repository path ('$repoPathToManage'). Setting a neutral directory..." -ForegroundColor Yellow
+    Set-NeutralDirectory # Call the parameter-less function
   }
 
   $logger.WritePhaseStatus("INIT", "STARTING", "WSL Arch Linux Configuration for user '$wslUsername'")

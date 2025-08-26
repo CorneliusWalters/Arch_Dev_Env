@@ -5,8 +5,7 @@
 set -e
 
 # Environment setup
-export FORCE_OVERWRITE='true'
-export SYSTEM_LOCALE='en_US.UTF-8'
+export SYSTEM_LOCALE='en_ZA.UTF-8'
 export POWERSHELL_EXECUTION='true'
 
 # Force unbuffered output for real-time streaming
