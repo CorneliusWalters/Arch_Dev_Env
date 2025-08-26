@@ -39,14 +39,6 @@ export TERM="xterm-256color"
 export PERSONAL_REPO_ROOT="$HOME/.config/dotfiles"
 export SETUP_REPO_ROOT="/mnt/c/wsl/wsl_dev_setup"
 	
-# Ensure personal repo exists
-if [[ ! -d "$PERSONAL_REPO_ROOT" ]]; then
-    mkdir -p "$PERSONAL_REPO_ROOT"
-    cd "$PERSONAL_REPO_ROOT"
-    git init >/dev/null 2>&1
-    git branch -M main >/dev/null 2>&1
-fi
-
 ZSH_THEME="powerlevel10k/powerlevel10k"
 
 plugins=(

@@ -76,3 +76,87 @@ setup_p10k() {
   print_success "P10K" "configuration complete."
 
 }
+
+setup_lsd_theme() {
+  print_status "LSD" "Setting up Super LS ..."
+
+  # 1. Copy the pristine file directly from the repo.
+  cp "$PRISTINE_DOTFILES_SRC/config.yaml" "$LSD_WORKING_FILE"
+  # 2. Apply the patch.
+  if [ -f "$LSD_PATCH_FILE" ]; then
+    print_status "LSD_PATCH" "Applying patch for LSD config.yaml ..."
+    patch "$LSD_WORKING_FILE" <"$LSD_PATCH_FILE"
+  fi
+  print_success "LSD" "configuration complete."
+
+}
+
+setup_winyank() {
+  print_status "CLIPBOARD" "Setting up win32yank for Neovim clipboard..."
+
+  # Create directory for win32yank
+  execute_and_log "mkdir -p ~/.local/bin" \
+    "Creating local bin directory" \
+    "CLIPBOARD" || return 1
+
+  # Download win32yank
+  execute_and_log "curl -sLo /tmp/win32yank.zip https://github.com/equalsraf/win32yank/releases/download/v0.0.4/win32yank-x64.zip" \
+    "Downloading win32yank" \
+    "CLIPBOARD" || return 1
+
+  # Extract win32yank
+  execute_and_log "unzip -o /tmp/win32yank.zip -d /tmp/" \
+    "Extracting win32yank" \
+    "CLIPBOARD" || return 1
+
+  # Move to local bin and make executable
+  execute_and_log "mv /tmp/win32yank.exe ~/.local/bin/" \
+    "Installing win32yank" \
+    "CLIPBOARD" || return 1
+
+  execute_and_log "chmod +x ~/.local/bin/win32yank.exe" \
+    "Making win32yank executable" \
+    "CLIPBOARD" || return 1
+
+  # Clean up
+  execute_and_log "rm /tmp/win32yank.zip" \
+    "Cleaning up" \
+    "CLIPBOARD" || return 1
+}
+
+install_omz() {
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+}
+zsh_auto() {
+  git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-autosuggestions
+}
+install_omz_syntax() {
+  git clone https://github.com/zsh-users/zsh-syntax-highlighting ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-syntax-highlighting
+}
+install_p10k() {
+  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$ZSH/custom}/themes/powerlevel10k
+}
+
+setup_shell() {
+  local zsh_path=$(which zsh)
+
+  # First set up ZSH and its configurations
+  setup_zsh || return 1
+
+  # Set it as default shell if needed
+  if [ "$SHELL" != "$zsh_path" ]; then
+    print_status "DEF_SHELL" "Setting zsh as default shell..."
+    execute_and_log "sudo chsh -s $zsh_path $USER" \
+      "Setting ZSH as default shell" \
+      "DEF_SHELL" || return 1
+
+    # Add verification here
+    print_status "DEF_SHELL" "Verifying shell change..."
+    if grep -q "$zsh_path" /etc/passwd; then
+      print_success "DEF_SHELL" "Shell change verified in /etc/passwd"
+    else
+      print_error "DEF_SHELL" "Shell change verification failed"
+      return 1
+    fi
+  fi
+}

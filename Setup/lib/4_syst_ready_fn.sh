@@ -12,6 +12,14 @@ command_exists() {
   command -v "$1" >/dev/null 2>&1
 }
 
+get_packages_from_file() {
+  local file_path=$1
+  if [ -f "$file_path" ]; then
+    # Filter out comments and empty lines, then join with spaces.
+    grep -Ev '^#|^$' "$file_path" | tr '\n' ' '
+  fi
+}
+
 # Check Dependencies
 setup_environment_paths() {
   print_status "PATHS" "Setting up environment paths..."
@@ -31,14 +39,6 @@ check_dependencies() {
       return 1
     fi
   done
-}
-
-get_packages_from_file() {
-  local file_path=$1
-  if [ -f "$file_path" ]; then
-    # Filter out comments and empty lines, then join with spaces.
-    grep -Ev '^#|^$' "$file_path" | tr '\n' ' '
-  fi
 }
 
 stabilise_keyring() {
@@ -193,6 +193,7 @@ update_system() {
 
   print_success "UPDT" "System update sequence completed successfully."
 }
+
 setup_locale() {
   print_status "LOCALE" "Setting up system-wide locale..."
 
@@ -253,37 +254,4 @@ install_base_packages() {
 
   execute_and_log "sudo pacman -S --needed --noconfirm $all_pkgs" \
     "Installing base and additional dependencies" "PACKAGES" || return 1
-}
-
-setup_winyank() {
-  print_status "CLIPBOARD" "Setting up win32yank for Neovim clipboard..."
-
-  # Create directory for win32yank
-  execute_and_log "mkdir -p ~/.local/bin" \
-    "Creating local bin directory" \
-    "CLIPBOARD" || return 1
-
-  # Download win32yank
-  execute_and_log "curl -sLo /tmp/win32yank.zip https://github.com/equalsraf/win32yank/releases/download/v0.0.4/win32yank-x64.zip" \
-    "Downloading win32yank" \
-    "CLIPBOARD" || return 1
-
-  # Extract win32yank
-  execute_and_log "unzip -o /tmp/win32yank.zip -d /tmp/" \
-    "Extracting win32yank" \
-    "CLIPBOARD" || return 1
-
-  # Move to local bin and make executable
-  execute_and_log "mv /tmp/win32yank.exe ~/.local/bin/" \
-    "Installing win32yank" \
-    "CLIPBOARD" || return 1
-
-  execute_and_log "chmod +x ~/.local/bin/win32yank.exe" \
-    "Making win32yank executable" \
-    "CLIPBOARD" || return 1
-
-  # Clean up
-  execute_and_log "rm /tmp/win32yank.zip" \
-    "Cleaning up" \
-    "CLIPBOARD" || return 1
 }

@@ -39,39 +39,3 @@ install_python_environment() {
     "Installing Python packages in virtual environment" \
     "SETPYENV" || return 1
 }
-install_omz() {
-  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-}
-zsh_auto() {
-  git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-autosuggestions
-}
-install_omz_syntax() {
-  git clone https://github.com/zsh-users/zsh-syntax-highlighting ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-syntax-highlighting
-}
-install_p10k() {
-  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$ZSH/custom}/themes/powerlevel10k
-}
-
-setup_shell() {
-  local zsh_path=$(which zsh)
-
-  # First set up ZSH and its configurations
-  setup_zsh || return 1
-
-  # Set it as default shell if needed
-  if [ "$SHELL" != "$zsh_path" ]; then
-    print_status "DEF_SHELL" "Setting zsh as default shell..."
-    execute_and_log "sudo chsh -s $zsh_path $USER" \
-      "Setting ZSH as default shell" \
-      "DEF_SHELL" || return 1
-
-    # Add verification here
-    print_status "DEF_SHELL" "Verifying shell change..."
-    if grep -q "$zsh_path" /etc/passwd; then
-      print_success "DEF_SHELL" "Shell change verified in /etc/passwd"
-    else
-      print_error "DEF_SHELL" "Shell change verification failed"
-      return 1
-    fi
-  fi
-}

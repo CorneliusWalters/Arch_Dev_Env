@@ -61,4 +61,5 @@ echo "### PHASE_BOUNDARY ###"
 sync
 
 # Use unbuffered execution
-exec stdbuf -oL -eL bash Setup/1_sys_init.sh
+stdbuf -oL -eL bash Setup/1_sys_init.sh
+exit 0

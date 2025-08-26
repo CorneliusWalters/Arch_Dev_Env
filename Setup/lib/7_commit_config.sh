@@ -2,7 +2,6 @@
 ###     file name: 7_commit_config.sh
 ###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
 # shellcheck disable=SC1090
-
 # generate_and_commit_patch.sh - Creates a .patch file from a modified config
 # and commits it to Git.
 # Load configuration
@@ -15,6 +14,14 @@ else
 fi
 
 # --- Do not edit below this line ---
+source "$CONFIG_FILE" || {
+    echo "$(date): ERROR - Config file not found at $CONFIG_FILE. Exiting."
+    exit 1
+}
+source "$SETUP_REPO_ROOT/lib/3_set_dirs.sh" || {
+    echo "$(date): ERROR - Central directory definitions not found. Exiting."
+    exit 1
+}
 
 mkdir -p "$(dirname "$LOG_FILE")"
 exec >>"$LOG_FILE" 2>&1

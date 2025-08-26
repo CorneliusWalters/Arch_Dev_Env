@@ -9,7 +9,7 @@
 # Derive REPO_ROOT and PACKAGE_LISTS_SRC as these may not be directly inherited by the hook.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")" # E.g., /mnt/c/wsl/wsl_dev_setup
-PACKAGE_LISTS_SRC="$REPO_ROOT/Setup/packs"
+PACKAGE_LISTS_SRC="$REPO_ROOT/Setup/packages"
 
 # Path to the manual additions file, now managed by the hook.
 ADD_INSTALLS_FILE="$PACKAGE_LISTS_SRC/add.installs"

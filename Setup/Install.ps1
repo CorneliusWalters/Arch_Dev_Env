@@ -7,10 +7,16 @@ $wslDistroName = "Arch"
 $cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar"
 $configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar"
 $ForceOverwrite = $true
+
+#######REMOVE WHEN DONE WITH DEVELOPMENT###########################
+###################################################################
 $gitUserNameDefault = "CorneliusWalters" # Replace with your default
 $gitUserEmailDefault = "seven.nomad@gmail.com" # Replace with your default
 $personalRepoUrlDefault = "https://github.com/CorneliusWalters/Arch_Dev_Env" # Replace or leave empty
 $wslUsernameDefault = "chw"
+###################################################################
+###################################################################
+
 
 # --- INTERACTIVE USERNAME PROMPT ---
 $wslUsername = Read-Host -Prompt "Please enter your desired username for Arch Linux (e.g., 'UNAME')"
@@ -29,12 +35,21 @@ if (-not $gitUserEmail) {
   $gitUserEmailDefault
 }
 
-$personatelRepoUrl = Read-Host -Prompt "Enter your personal dotfiles GitHub repo URL (optional - press Enter to skip)"
-if (-not $personalRepoUrl) {
-  $personalRepoUrlDefault
+$personalRepoUrlInput = Read-Host -Prompt "Enter your personal dotfiles GitHub repo URL (optional - default: '$personalRepoUrlDefault' or generated)"
+$personalRepoUrl = if ([string]::IsNullOrWhiteSpace($personalRepoUrlInput)) {
+  # Generate default URL if the user didn't provide one
+  if ([string]::IsNullOrWhiteSpace($gitUserName)) {
+    Write-Host "WARNING: Git username is empty. Cannot generate default personal repo URL." -ForegroundColor Yellow
+    $personalRepoUrlDefault
+  }
+  else {
+    "https://github.com/$gitUserName/Arch_Dev_Env.git" # Use the actual $gitUserName here
+  }
 }
+else { $personalRepoUrlInput }
 
-# Valida git inputs
+
+# Validate git inputs
 if ([string]::IsNullOrWhiteSpace($gitUserName)) {
   $gitUserName = "WSL User"
   Write-Host "Using default git username: $gitUserName" -ForegroundColor Yellow
@@ -59,6 +74,8 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $logger = [WslLogger]::new("C:\wsl")
 
 try {
+  Add-VSCodeToPath | Out-Null # Call the function, suppress non-essential output
+
   if ((Get-Location).Path -like $PSScriptRoot) {
     set-neutral-dir
   }
@@ -106,17 +123,18 @@ try {
     throw "WSL shutdown timeout"
   }
   $logger.WritePhaseStatus("WSL_RESTART", "SUCCESS", "WSL restarted successfully")
-	  
-  # Phase 5: Config File Creation 
-  $logger.WritePhaseStatus("CONFIG", "STARTING", "Creating WSL configuration file")
-  $configCommand = "echo 'REPO_ROOT=`"$wslRepoPath`"' | sudo tee /etc/arch-dev-env.conf > /dev/null"
-  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $configCommand -Description "Config file creation" -Logger $logger)) {
-    throw "Config file creation failed"
-  }
-  $logger.WritePhaseStatus("CONFIG", "SUCCESS", "Config file created")
 
-  # FULL WSL shutdown (not just terminate)
-  $logger.WritePhaseStatus("USER_CONFIG", "STARTING", "Shutting down WSL to apply user settings")
+  # Phase 5: Config File Creation (for REPO_ROOT export)
+  $logger.WritePhaseStatus("CONFIG", "STARTING", "Creating WSL configuration file for REPO_ROOT")
+  # Use the generic Invoke-WSLCommand for this short, non-interactive root command
+  $configCommand = "echo 'REPO_ROOT=`"$wslRepoPath`"' | sudo tee /etc/arch-dev-env.conf > /dev/null"
+  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $configCommand -Description "Config file creation (REPO_ROOT)" -Logger $logger)) {
+    throw "Config file creation failed (REPO_ROOT)"
+  }
+  
+  $logger.WritePhaseStatus("CONFIG", "SUCCESS", "Config file created for REPO_ROOT")
+  # WSL shutdown (not just terminate)
+  $logger.WritePhaseStatus("CONFIG", "STARTING", "Shutting down WSL to apply user settings")
   wsl --shutdown
   Start-Sleep -Seconds 5
   
@@ -125,10 +143,11 @@ try {
   $wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
   # The command to be executed *as the target user*
  
-
   $verifyUserCommand = "whoami && pwd && echo 'User verification complete'"
-
-
+  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $verifyUserCommand -Description "Verify user context" -Logger $logger)) {
+    throw "User context verification failed."
+  }
+  $logger.WritePhaseStatus("USER_VERIFY", "SUCCESS", "User context verified")
   # We re-use the $wslCaptureRoot object which is already configured to run as root
   
   if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $verifyUserCommand -Description "Verify user context" -Logger $logger)) {
@@ -137,6 +156,7 @@ try {
   
   $logger.WritePhaseStatus("CONF_Status", "STARTING", "Testing WSL basic functionality")
 
+  $logger.WritePhaseStatus("CONF_STATUS", "STARTING", "Testing WSL basic functionality and repository access")
   $confCommands = @(
     "whoami",
     "pwd", 
@@ -145,32 +165,31 @@ try {
     "test -f '$wslRepoPath/Setup/1_sys_init.sh' && echo 'SCRIPT_EXISTS' || echo 'SCRIPT_MISSING'",
     "ls -la '$wslRepoPath/Setup/' | head -5"
   )
-
   foreach ($cmd in $confCommands) {
-    $result = wsl -d $wslDistroName -u $wslUsername bash -c $cmd
-    $logger.WriteLog("Conf_Status", "Command: $cmd", "Gray")
-    $logger.WriteLog("Conf_Status", "Result: $result", "Gray")
+    # Use Invoke-WSLCommand for consistent logging and error handling
+    if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $cmd -Description "Debug command: $cmd" -Logger $logger)) {
+      # Log failure but don't necessarily throw, as debug commands are for info
+      $logger.WriteLog("Conf_Status", "Debug command FAILED: $cmd", "Red")
+    }
   }
+  
+  $logger.WritePhaseStatus("CONF_STATUS", "SUCCESS", "Basic WSL functionality tests completed")
 
-  # Phase 6: Main Setup 
-  $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup via repository wrapper script")
+  # Phase 6: Main Setup (using the robust WSLProcessCapture for long-running script)
+  $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script via repository wrapper")
 
-  # exporting git variables
+  # Exporting git and personal repo variables to the WSL environment for the wrapper script.
   $environmentVars = "export GIT_USER_NAME='$gitUserName' && export GIT_USER_EMAIL='$gitUserEmail'"
-
   if (-not [string]::IsNullOrWhiteSpace($personalRepoUrl)) {
     $environmentVars += " && export PERSONAL_REPO_URL='$personalRepoUrl'"
   }
   
-  # Use the WSLProcessCapture instance we already created for the user
   $wrapperPath = "$wslRepoPath/Setup/lib/99_wrapper.sh"
   $fullCommand = "$environmentVars && bash '$wrapperPath'"
   
-
   if (-not $wslCapture.ExecuteCommand($fullCommand, "Execute main setup script")) {
     throw "Main setup script execution failed"
   }
-
   $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed")
 	
   # Phase 7: Export (optional)
@@ -179,7 +198,7 @@ try {
   $logger.WritePhaseStatus("COMPLETE", "SUCCESS", "Setup completed successfully")
   $logger.WriteHeader("Setup Complete! Shutting down WSL to apply changes.")
   Start-Sleep -Seconds 10
-  wsl --shutdown
+  wsl --shutdown # Final shutdown
 	    
 }
 catch {
