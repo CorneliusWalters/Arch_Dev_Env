@@ -32,17 +32,26 @@ function Invoke-WSLCommand {
 	}
 }
 function Set-NeutralDirectory {
+ # Using canonical capitalization
 	try {
-		$scriptFile = $MyInvocation.MyCommand.Path
-		$setupDir = Split-Path -Parent $scriptFile
+		$setupDir = $PSScriptRoot
 		$repoDir = Split-Path -Parent $setupDir
-		$neutralBaseDir = Split-Path -Parent $repoDir
+		$neutralBaseDir = Split-Path -Parent $repoDir 
 
-		Set-Location -Path $neutralBaseDir
+		# Ensure the path exists before attempting to set location
+		if (-not (Test-Path $neutralBaseDir -PathType Container)) {
+			throw "Neutral directory path '$neutralBaseDir' does not exist or is not a container."
+		}
+		# This handles cases where PowerShell might be in a non-filesystem provider path.
+		Set-Location -Path $neutralBaseDir -Provider FileSystem -ErrorAction Stop -PassThru | Out-Null
+        
 		Write-Host "Working directory set to '$neutralBaseDir' to prevent file locks." -ForegroundColor Green
 	}
 	catch {
-		Write-Host "WARNING: Could not automatically change directory. Please ensure you are running this script from a directory OUTSIDE of 'wsl_dev_setup'." -ForegroundColor Yellow
+		# This prevents the script from proceeding if it cannot successfully change directory,
+		# which would inevitably lead to the 'Remove-Item' failing due to a file lock.
+		Write-Host "ERROR: Critical failure to set neutral directory. $($_.Exception.Message)" -ForegroundColor Red
+		throw "Failed to set neutral directory: $($_.Exception.Message). Please ensure C:\wsl exists and is writable, and that no other process is locking it."
 	}
 }
 function Wait-WSLShutdown {
