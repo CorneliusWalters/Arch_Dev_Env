@@ -35,7 +35,7 @@ function Test-GitFunctionality {
 	$testStderrFile = Join-Path $env:TEMP "git_test_stderr_$((Get-Random)).log"
 
 	try {
-		Start-Process -FilePath "git" -ArgumentList "clone", "https://github.com/git/hello-world.git", $testGitCloneDir `
+		Start-Process -FilePath "git" -ArgumentList "clone", "https://github.com/octocat/Spoon-Knife.git", $testGitCloneDir `
 			-RedirectStandardOutput $testStdoutFile -RedirectStandardError $testStderrFile -NoNewWindow -Wait `
 			-ErrorAction Stop # Ensure any Start-Process errors are caught
 		$testExitCode = $LASTEXITCODE
