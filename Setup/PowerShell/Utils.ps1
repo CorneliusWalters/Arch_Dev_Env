@@ -31,14 +31,15 @@ function Invoke-WSLCommand {
 		return $false
 	}
 }
-function set-neutral-dir {    
+function Set-NeutralDirectory {
 	try {
-		$setupDir = $PSScriptRoot
+		$scriptFile = $MyInvocation.MyCommand.Path
+		$setupDir = Split-Path -Parent $scriptFile
 		$repoDir = Split-Path -Parent $setupDir
-		$neutralDir = Split-Path -Parent $repoDir
+		$neutralBaseDir = Split-Path -Parent $repoDir
 
-		Set-Location -Path $neutralDir
-		Write-Host "Working directory set to '$($neutralDir)' to prevent file locks." -ForegroundColor Green
+		Set-Location -Path $neutralBaseDir
+		Write-Host "Working directory set to '$neutralBaseDir' to prevent file locks." -ForegroundColor Green
 	}
 	catch {
 		Write-Host "WARNING: Could not automatically change directory. Please ensure you are running this script from a directory OUTSIDE of 'wsl_dev_setup'." -ForegroundColor Yellow
@@ -76,6 +77,40 @@ function Wait-WSLShutdown {
 	return $false
 }
 
+function Set-WslConfDefaults {
+	param (
+		[PSCustomObject]$Logger,
+		[string]$DistroName,
+		[string]$Username,
+		[string]$WslRepoPath # Need this for context, although not used in wsl.conf directly
+	)
+
+	$Logger.WritePhaseStatus("WSL_CONF", "STARTING", "Creating initial /etc/wsl.conf with user and systemd defaults...")
+
+	# The content for /etc/wsl.conf
+	$wslConfContent = @"
+[user]
+default=$Username
+
+[boot]
+systemd=true
+
+[interop]
+enabled=true
+appendWindowsPath=true
+"@
+
+	# Construct the command to write wsl.conf as root inside WSL
+	# Use printf for safety against special characters in $Username, though not strictly needed here
+	$writeWslConfCommand = "printf '%s' '$wslConfContent' | sudo tee /etc/wsl.conf > /dev/null"
+
+	# Execute this command as root using Invoke-WSLCommand
+	if (-not (Invoke-WSLCommand -DistroName $DistroName -Username "root" -Command $writeWslConfCommand -Description "Write initial /etc/wsl.conf" -Logger $Logger)) {
+		throw "Failed to write initial /etc/wsl.conf."
+	}
+	$Logger.WritePhaseStatus("WSL_CONF", "SUCCESS", "Initial /etc/wsl.conf created with user '$Username' and systemd enabled.")
+	return $true
+}
 #function Test-WSLDistroExists {
 #    param([string]$DistroName)
 #    

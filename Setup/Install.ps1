@@ -90,7 +90,6 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $logger = [WslLogger]::new("C:\wsl")
 
 try {
-  # --- FIX: Check for and resolve self-locking directory issue ---
   # The repository root directory that will be cloned/deleted (e.g., C:\wsl\wsl_dev_setup)
   $repoPathToManage = Split-Path -Parent $PSScriptRoot
   # The current working directory of the PowerShell terminal
@@ -101,16 +100,15 @@ try {
     Write-Host "Current directory ('$currentWorkingDir') is inside or equal to the target repository path ('$repoPathToManage'). Setting a neutral directory..." -ForegroundColor Yellow
     Set-NeutralDirectory # Call the parameter-less function
   }
-  # --- END FIX ---
 
   $logger.WritePhaseStatus("INIT", "STARTING", "WSL Arch Linux Configuration for user '$wslUsername'")
 	  
   # Phase 1: Prerequisites and Import
-  if (-not (Test-WSLPrerequisites -Logger $logger -WslDistroName $wslDistroName)) {
-    throw "Prerequisites check failed"
+  if (-not (Test-GitFunctionality -Logger $logger)) {
+    # Call the new function
+    throw "Git for Windows is not functional."
   }
-  $logger.WritePhaseStatus("PREREQ", "SUCCESS", "Prerequisites validated")
-	  
+
   if (-not (Import-ArchDistro -Logger $logger -WslDistroName $wslDistroName -WslUsername $wslUsername -DefaultTarballPath $cleanArchTarballDefaultPath)) {
     throw "Distro import failed"
   }
@@ -138,8 +136,15 @@ try {
     throw "Root preparation failed"
   }
   $logger.WritePhaseStatus("ROOT_PREP", "SUCCESS", "Root preparation completed")
-	  
-  # Phase 4: WSL Restart to apply core WSL settings (e.g., /etc/wsl.conf changes)
+
+  # Phase 4: Initial WSL Configuration ---
+  # This sets the default user and enables systemd, which requires a WSL restart.
+  if (-not (Set-WslConfDefaults -Logger $logger -DistroName $wslDistroName -Username $wslUsername -WslRepoPath $wslRepoPath)) {
+    throw "Initial WSL configuration in /etc/wsl.conf failed."
+  }
+  $logger.WritePhaseStatus("WSL_CONF", "SUCCESS", "Initial /etc/wsl.conf set.")
+
+  # Phase 5: WSL Restart to apply core WSL settings (e.g., /etc/wsl.conf changes)
   $logger.WritePhaseStatus("WSL_RESTART", "STARTING", "Applying initial WSL settings (terminating distro)...")
   wsl --terminate $wslDistroName
   if (-not (Wait-WSLShutdown -DistroName $wslDistroName -Logger $logger)) {
@@ -147,7 +152,7 @@ try {
   }
   $logger.WritePhaseStatus("WSL_RESTART", "SUCCESS", "WSL restarted successfully")
 
-  # Phase 5: Export REPO_ROOT to a /etc/ file for Bash scripts
+  # Phase 6: Export REPO_ROOT to a /etc/ file for Bash scripts
   $logger.WritePhaseStatus("EXPORT_REPO_PATH", "STARTING", "Creating /etc/arch-dev-env.conf for REPO_ROOT export...")
   $configCommand = "echo 'REPO_ROOT=`"$wslRepoPath`"' | sudo tee /etc/arch-dev-env.conf > /dev/null"
   if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $configCommand -Description "Config file creation (REPO_ROOT)" -Logger $logger)) {
@@ -155,11 +160,12 @@ try {
   }
   $logger.WritePhaseStatus("EXPORT_REPO_PATH", "SUCCESS", "/etc/arch-dev-env.conf created with REPO_ROOT")
 
-  # Phase 6: Final WSL shutdown for config application and user verification setup
+  # Phase 7: Final WSL shutdown for config application and user verification setup
   $logger.WritePhaseStatus("WSL_RESTART_FINAL", "STARTING", "Shutting down WSL to apply wsl.conf settings and prepare for user verification...")
   wsl --shutdown
   Start-Sleep -Seconds 5 # Give ample time for shutdown
   
+  # -- Phase 8: User Verification ---
   $logger.WritePhaseStatus("USER_VERIFY", "STARTING", "Verifying user context and sudo permissions after wsl.conf changes...")
   $verifyUserCommand = "whoami && pwd && echo 'User verification complete'"
   if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $verifyUserCommand -Description "Verify user context" -Logger $logger)) {
@@ -167,7 +173,7 @@ try {
   }
   $logger.WritePhaseStatus("USER_VERIFY", "SUCCESS", "User context verified. Running as '$wslUsername'.")
 
-  # Phase 7: Debug commands (to confirm environment is ready)
+  # Phase 9: Debug commands (to confirm environment is ready)
   $logger.WritePhaseStatus("CONF_STATUS", "STARTING", "Running basic WSL functionality and repository access tests...")
   $confCommands = @(
     "whoami",
@@ -184,7 +190,7 @@ try {
   }
   $logger.WritePhaseStatus("CONF_STATUS", "SUCCESS", "Basic WSL functionality tests completed.")
 
-  # Phase 8: Main Setup (using the robust WSLProcessCapture for the long-running Bash script)
+  # Phase 10: Main Setup (using the robust WSLProcessCapture for the long-running Bash script)
   $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script via repository wrapper...")
 
   # Exporting git and personal repo variables to the WSL environment for the wrapper script.
@@ -201,7 +207,7 @@ try {
   }
   $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed.")
 	
-  # Phase 9: Export Configured Image (optional)
+  # Phase 11: Export Configured Image (optional)
   Export-WSLImage -Logger $logger -WslDistroName $wslDistroName -ExportPath $configuredArchTarballExportPath
 	
   $logger.WritePhaseStatus("COMPLETE", "SUCCESS", "Setup completed successfully.")
