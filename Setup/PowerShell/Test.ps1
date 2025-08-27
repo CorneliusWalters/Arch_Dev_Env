@@ -28,11 +28,11 @@ function Test-GitFunctionality {
 	param (
 		[PSCustomObject]$Logger
 	)
-
+	$gittestdir = mkdir C:\wsl_test
 	$Logger.WritePhaseStatus("GIT_CHECK", "STARTING", "Verifying Git for Windows functionality...")
-	$testGitCloneDir = Join-Path $env:TEMP "git_test_clone_$((Get-Random))"
-	$testStdoutFile = Join-Path $env:TEMP "git_test_stdout_$((Get-Random)).log"
-	$testStderrFile = Join-Path $env:TEMP "git_test_stderr_$((Get-Random)).log"
+	$testGitCloneDir = Join-Path $gittestdir "git_test_clone_$((Get-Random))"
+	$testStdoutFile = Join-Path $gittestdir "git_test_stdout_$((Get-Random)).log"
+	$testStderrFile = Join-Path $gittestdir "git_test_stderr_$((Get-Random)).log"
 
 	try {
 		Start-Process -FilePath "git" -ArgumentList "clone", "https://github.com/octocat/Spoon-Knife.git", $testGitCloneDir `
