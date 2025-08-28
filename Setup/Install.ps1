@@ -60,12 +60,17 @@ try {
   }
   $logger.WritePhaseStatus("IMPORT", "SUCCESS", "Distro imported successfully")
 	  
-  $logger.WritePhaseStatus("GIT_SECURITY", "STARTING", "Configuring Git 'safe.directory' exception for C:\wsl\git...")
-  # Make sure the path uses forward slashes as Git prefers, even on Windows
+  $logger.WritePhaseStatus("GIT_SECURITY", "STARTING", "Configuring Git 'safe.directory' exceptions for C:\wsl\git and its subdirectories...")
+  # Add the base path explicitly
   Start-Process -FilePath "git" -ArgumentList "config", "--global", "--add", "safe.directory", "C:/wsl/git" `
     -NoNewWindow -Wait -ErrorAction Stop | Out-Null
-  $logger.WritePhaseStatus("GIT_SECURITY", "SUCCESS", "'C:/wsl/git' added to Git's safe.directory list.")
+  $logger.WriteLog("INFO", "Added 'C:/wsl/git' to Git's safe.directory list.", "DarkGreen")
 
+  # Add the wildcard path to cover all subdirectories
+  Start-Process -FilePath "git" -ArgumentList "config", "--global", "--add", "safe.directory", "C:/wsl/git/*" `
+    -NoNewWindow -Wait -ErrorAction Stop | Out-Null
+  $logger.WritePhaseStatus("GIT_SECURITY", "SUCCESS", "'C:/wsl/git/*' also added to Git's safe.directory list (for subdirectories).")
+  
   
   # Phase 2: Repository Clone (This clones the setup repo itself)
   $logger.WritePhaseStatus("CLONE", "STARTING", "Cloning setup repository into Windows path...")
