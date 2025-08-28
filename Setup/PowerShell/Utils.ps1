@@ -31,6 +31,98 @@ function Invoke-WSLCommand {
 		return $false
 	}
 }
+
+function Get-InstallationUserConfig {
+	param(
+		[string]$WslUsernameDefault,
+		[string]$GitUserNameDefault,
+		[string]$GitUserEmailDefault,
+		[string]$PersonalRepoUrlDefault
+	)
+
+	Write-Host "`n--- Collecting User Configuration ---" -ForegroundColor Yellow
+
+	# Collect WSL Username
+	$wslUsernameInput = Read-Host -Prompt "Please enter your desired username for Arch Linux (default: '$WslUsernameDefault')"
+	$finalWslUsername = if ([string]::IsNullOrWhiteSpace($wslUsernameInput)) { $WslUsernameDefault } else { $wslUsernameInput }
+	Write-Host "Using WSL Username: $finalWslUsername" -ForegroundColor DarkGreen
+
+	# Collect Git Username
+	$gitUserNameInput = Read-Host -Prompt "Enter your GitHub username (for commits and repo detection, default: '$GitUserNameDefault')"
+	$finalGitUserName = if ([string]::IsNullOrWhiteSpace($gitUserNameInput)) { $GitUserNameDefault } else { $gitUserNameInput }
+	Write-Host "Using Git Username: $finalGitUserName" -ForegroundColor DarkGreen
+
+	# Collect Git Email
+	$gitUserEmailInput = Read-Host -Prompt "Enter your Git email (for commits, default: '$GitUserEmailDefault')"
+	$finalGitUserEmail = if ([string]::IsNullOrWhiteSpace($gitUserEmailInput)) { $GitUserEmailDefault } else { $gitUserEmailInput }
+	Write-Host "Using Git Email: $finalGitUserEmail" -ForegroundColor DarkGreen
+
+	$finalPersonalRepoUrl = $null # Initialize to null, we'll try to detect or ask
+
+	# Try to auto-detect the forked repository using GitHub CLI
+	Write-Host "`nAttempting to auto-detect your forked repository on GitHub..." -ForegroundColor Cyan
+	if (Get-Command gh -ErrorAction SilentlyContinue) {
+		$ghStatus = gh auth status --hostname github.com 2>&1
+		if ($ghStatus -match 'Logged in as') {
+			Write-Host "GitHub CLI detected and authenticated." -ForegroundColor DarkGreen
+			$originalRepoOwner = (Split-Path -Parent $PersonalRepoUrlDefault).Replace("https://github.com/", "")
+			$originalRepoName = (Split-Path $PersonalRepoUrlDefault -Leaf).Replace(".git", "")
+
+			try {
+				$userForksJson = gh repo list $finalGitUserName --source --fork --json name, url, parent 2>$null | ConvertFrom-Json
+				$foundFork = $userForksJson | Where-Object { $_.parent.nameWithOwner -eq "$originalRepoOwner/$originalRepoName" }
+
+				if ($foundFork) {
+					$finalPersonalRepoUrl = $foundFork.url
+					Write-Host "Auto-detected forked repository: $($finalPersonalRepoUrl)" -ForegroundColor Green
+				}
+				else {
+					Write-Host "No fork of '$originalRepoOwner/$originalRepoName' found under '$finalGitUserName'." -ForegroundColor Yellow
+				}
+			}
+			catch {
+				Write-Host "WARNING: Failed to query GitHub for forks. Error: $($_.Exception.Message)" -ForegroundColor Yellow
+			}
+		}
+		else {
+			Write-Host "GitHub CLI detected but not authenticated. Run 'gh auth login' first." -ForegroundColor Yellow
+		}
+	}
+ else {
+		Write-Host "GitHub CLI ('gh' command) not found. Cannot auto-detect forks." -ForegroundColor Yellow
+	}
+
+	# If auto-detection failed, prompt the user manually
+	if ([string]::IsNullOrWhiteSpace($finalPersonalRepoUrl)) {
+		$personalRepoUrlInput = Read-Host -Prompt "Enter your personal dotfiles GitHub repo URL (optional - default: '$PersonalRepoUrlDefault' or generated based on your GitHub username')"
+		if ([string]::IsNullOrWhiteSpace($personalRepoUrlInput)) {
+			# Fallback to default generated URL if manual input is also empty
+			if ([string]::IsNullOrWhiteSpace($finalGitUserName)) {
+				Write-Host "WARNING: Git username is empty. Cannot generate default personal repo URL, using hardcoded default." -ForegroundColor Yellow
+				$finalPersonalRepoUrl = $PersonalRepoUrlDefault # Final fallback to hardcoded default
+			}
+			else {
+				# Generated from user's GH name, ensuring $originalRepoName is available.
+				$originalRepoName = (Split-Path $PersonalRepoUrlDefault -Leaf).Replace(".git", "")
+				$finalPersonalRepoUrl = "https://github.com/$finalGitUserName/$originalRepoName.git"
+			}
+		}
+		else {
+			$finalPersonalRepoUrl = $personalRepoUrlInput
+		}
+	}
+	Write-Host "`nUsing personal dotfiles repository: $($finalPersonalRepoUrl)" -ForegroundColor Green # Confirm final URL
+
+	# Return all collected values as a custom object
+	return [PSCustomObject]@{
+		WslUsername     = $finalWslUsername
+		GitUserName     = $finalGitUserName
+		GitUserEmail    = $finalGitUserEmail
+		PersonalRepoUrl = $finalPersonalRepoUrl
+	}
+}
+
+
 function Set-NeutralDirectory {
  # Using canonical capitalization
 	try {

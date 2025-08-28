@@ -14,72 +14,6 @@ $gitUserNameDefault = "CorneliusWalters"
 $gitUserEmailDefault = "seven.nomad@gmail.com"
 $personalRepoUrlDefault = "https://github.com/CorneliusWalters/Arch_Dev_Env.git" # Your upstream repo
 
-# --- INTERACTIVE USERNAME PROMPT (Corrected Logic) ---
-$wslUsernameInput = Read-Host -Prompt "Please enter your desired username for Arch Linux (default: '$wslUsernameDefault')"
-$wslUsername = if ([string]::IsNullOrWhiteSpace($wslUsernameInput)) { $wslUsernameDefault } else { $wslUsernameInput }
-
-$gitUserNameInput = Read-Host -Prompt "Enter your GitHub username (for commits and repo detection, default: '$gitUserNameDefault')"
-$gitUserName = if ([string]::IsNullOrWhiteSpace($gitUserNameInput)) { $gitUserNameDefault } else { $gitUserNameInput }
-
-$gitUserEmailInput = Read-Host -Prompt "Enter your Git email (for commits, default: '$gitUserEmailDefault')"
-$gitUserEmail = if ([string]::IsNullOrWhiteSpace($gitUserEmailInput)) { $gitUserEmailDefault } else { $gitUserEmailInput }
-
-$personalRepoUrl = $null # Initialize to null, we'll try to detect or ask
-
-# Try to auto-detect the forked repository
-Write-Host "`nAttempting to auto-detect your forked repository on GitHub..." -ForegroundColor Cyan
-if (Get-Command gh -ErrorAction SilentlyContinue) {
-  # Check if github-cli is installed
-  $ghStatus = gh auth status --hostname github.com 2>&1
-  if ($ghStatus -match 'Logged in as') {
-    Write-Host "GitHub CLI detected and authenticated." -ForegroundColor DarkGreen
-    $originalRepoOwner = (Split-Path -Parent $personalRepoUrlDefault).Replace("https://github.com/", "")
-    $originalRepoName = (Split-Path $personalRepoUrlDefault -Leaf).Replace(".git", "")
-
-    try {
-      $userForksJson = gh repo list $gitUserName --source --fork --json name, url, parent 2>$null | ConvertFrom-Json
-      $foundFork = $userForksJson | Where-Object { $_.parent.nameWithOwner -eq "$originalRepoOwner/$originalRepoName" }
-
-      if ($foundFork) {
-        $personalRepoUrl = $foundFork.url
-        Write-Host "Auto-detected forked repository: $($personalRepoUrl)" -ForegroundColor Green
-      }
-      else {
-        Write-Host "No fork of '$originalRepoOwner/$originalRepoName' found under '$gitUserName'." -ForegroundColor Yellow
-      }
-    }
-    catch {
-      Write-Host "WARNING: Failed to query GitHub for forks. Error: $($_.Exception.Message)" -ForegroundColor Yellow
-    }
-  }
-  else {
-    Write-Host "GitHub CLI detected but not authenticated. Run 'gh auth login' first." -ForegroundColor Yellow
-  }
-}
-else {
-  Write-Host "GitHub CLI ('gh' command) not found. Cannot auto-detect forks." -ForegroundColor Yellow
-}
-
-# If auto-detection failed, prompt the user manually
-if ([string]::IsNullOrWhiteSpace($personalRepoUrl)) {
-  $personalRepoUrlInput = Read-Host -Prompt "Enter your personal dotfiles GitHub repo URL (optional - default: '$personalRepoUrlDefault' or generated based on your GitHub username')"
-  if ([string]::IsNullOrWhiteSpace($personalRepoUrlInput)) {
-    # Fallback to default generated URL if manual input is also empty
-    if ([string]::IsNullOrWhiteSpace($gitUserName)) {
-      Write-Host "WARNING: Git username is empty. Cannot generate default personal repo URL, using hardcoded default." -ForegroundColor Yellow
-      $personalRepoUrl = $personalRepoUrlDefault # Final fallback to hardcoded default
-    }
-    else {
-      $personalRepoUrl = "https://github.com/$gitUserName/$originalRepoName.git" # Generated from user's GH name
-    }
-  }
-  else {
-    $personalRepoUrl = $personalRepoUrlInput
-  }
-}
-Write-Host "`nUsing personal dotfiles repository: $($personalRepoUrl)" -ForegroundColor Green # Confirm final URL
-# --- END INTERACTIVE USERNAME PROMPT ---
-
 # Import modules and create the logger
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$scriptPath\PowerShell\Logging.ps1"
@@ -88,6 +22,18 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$scriptPath\PowerShell\Import-Distro.ps1"
 . "$scriptPath\PowerShell\Export-Image.ps1"
 $logger = [WslLogger]::new("C:\wsl")
+
+$userConfig = Get-InstallationUserConfig `
+  -WslUsernameDefault $wslUsernameDefault `
+  -GitUserNameDefault $gitUserNameDefault `
+  -GitUserEmailDefault $gitUserEmailDefault `
+  -PersonalRepoUrlDefault $personalRepoUrlDefault
+
+# Assign results to the main script variables
+$wslUsername = $userConfig.WslUsername
+$gitUserName = $userConfig.GitUserName
+$gitUserEmail = $userConfig.GitUserEmail
+$personalRepoUrl = $userConfig.PersonalRepoUrl
 
 try {
   # The repository root directory that will be cloned/deleted (e.g., C:\wsl\wsl_dev_setup)
@@ -114,6 +60,13 @@ try {
   }
   $logger.WritePhaseStatus("IMPORT", "SUCCESS", "Distro imported successfully")
 	  
+  $logger.WritePhaseStatus("GIT_SECURITY", "STARTING", "Configuring Git 'safe.directory' exception for C:\wsl\git...")
+  # Make sure the path uses forward slashes as Git prefers, even on Windows
+  Start-Process -FilePath "git" -ArgumentList "config", "--global", "--add", "safe.directory", "C:/wsl/git" `
+    -NoNewWindow -Wait -ErrorAction Stop | Out-Null
+  $logger.WritePhaseStatus("GIT_SECURITY", "SUCCESS", "'C:/wsl/git' added to Git's safe.directory list.")
+
+  
   # Phase 2: Repository Clone (This clones the setup repo itself)
   $logger.WritePhaseStatus("CLONE", "STARTING", "Cloning setup repository into Windows path...")
   $gitCloneTarget = "C:\wsl\wsl_dev_setup"
