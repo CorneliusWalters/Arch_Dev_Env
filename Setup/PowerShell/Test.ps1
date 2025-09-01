@@ -61,7 +61,7 @@ function Test-GitFunctionality {
 		$Logger.WriteLog("INFO", "Git global config (user.email): $((git config --global user.email 2>&1 | Out-String).Trim())", "DarkGray")
         
 		# --- FIX: Ensure -v for verbose output is included in git clone ---
-		Start-Process -FilePath "git" -ArgumentList "clone", "-v", "https://github.com/octocat/Spoon-Knife.git", $testGitCloneDir `
+		Start-Process -FilePath "git" -ArgumentList "clone", "-v", "http://github.com/octocat/Spoon-Knife.git", $testGitCloneDir `
 			-RedirectStandardOutput $testStdoutFile -RedirectStandardError $testStderrFile -NoNewWindow -Wait `
 			-ErrorAction Stop
 		$testExitCode = $LASTEXITCODE

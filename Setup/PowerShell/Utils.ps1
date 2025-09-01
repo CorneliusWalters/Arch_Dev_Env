@@ -58,7 +58,16 @@ function Get-InstallationUserConfig {
 	Write-Host "Using Git Email: $finalGitUserEmail" -ForegroundColor DarkGreen
 
 	$finalPersonalRepoUrl = $null # Initialize to null, we'll try to detect or ask
-
+	
+	Write-Host "`n--- GitHub SSH Setup ---" -ForegroundColor Yellow
+	$sshKeySetupInput = Read-Host -Prompt "Have you generated an SSH key and added it to your GitHub account? (Y/N)"
+	$finalSshKeyReady = if ($sshKeySetupInput -eq 'Y') { $true } else { $false }
+	if (-not $finalSshKeyReady) {
+		Write-Host "WARNING: SSH key is highly recommended for Git operations. Please follow GitHub's guide to create an SSH key and add it to your account:" -ForegroundColor Yellow
+		Write-Host "         https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent" -ForegroundColor Yellow
+		Write-Host "         https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account" -ForegroundColor Yellow
+		Write-Host "         You may encounter issues if your network interferes with HTTPS." -ForegroundColor Yellow
+	}
 	# Try to auto-detect the forked repository using GitHub CLI
 	Write-Host "`nAttempting to auto-detect your forked repository on GitHub..." -ForegroundColor Cyan
 	if (Get-Command gh -ErrorAction SilentlyContinue) {
@@ -119,6 +128,45 @@ function Get-InstallationUserConfig {
 		GitUserName     = $finalGitUserName
 		GitUserEmail    = $finalGitUserEmail
 		PersonalRepoUrl = $finalPersonalRepoUrl
+		SshKeyReady     = $finalSshKeyReady
+	}
+}
+
+function Test-IsGitSafeDirectory {
+	param(
+		[string]$PathToCheck # The path, e.g., "C:/wsl/git" or "C:/wsl/wsl_dev_setup"
+	)
+
+	# Git expects forward slashes for safe.directory entries
+	$gitFormattedPath = $PathToCheck.Replace('\', '/')
+
+	try {
+		# Get all global safe.directory entries
+		$safeDirs = Start-Process -FilePath "git" -ArgumentList "config", "--global", "--get-all", "safe.directory" `
+			-NoNewWindow -Wait -PassThru -ErrorAction Stop | Select-Object -ExpandProperty StandardOutput | Out-String | ConvertFrom-Csv -Header Value
+
+		if ($safeDirs -is [System.Array]) {
+			# Handle multiple entries
+			foreach ($entry in $safeDirs) {
+				# Check for exact match or wildcard match (e.g., C:/foo vs C:/foo/*)
+				if ($entry.Value -eq $gitFormattedPath -or $entry.Value -eq "$gitFormattedPath/*") {
+					return $true
+				}
+			}
+		}
+		elseif ($safeDirs -is [PSCustomObject]) {
+			# Handle single entry
+			if ($safeDirs.Value -eq $gitFormattedPath -or $safeDirs.Value -eq "$gitFormattedPath/*") {
+				return $true
+			}
+		}
+		return $false
+	}
+	catch {
+		# Git config will error if safe.directory is not set at all, which means it's not safe.
+		# So we catch and return false, or log a more specific error if needed.
+		Write-Host "WARNING: Could not check Git safe.directory status for '$PathToCheck'. Error: $($_.Exception.Message)" -ForegroundColor Yellow
+		return $false
 	}
 }
 
@@ -222,3 +270,168 @@ appendWindowsPath=true
 #        return $false
 #    }
 #}
+
+# --- NEW: Function to configure all Git for Windows global settings ---
+# This includes safe.directory, user info, protocol, and proxy.
+function Set-GitGlobalConfig {
+	param(
+		[PSCustomObject]$Logger,
+		[string]$GitUserName,
+		[string]$GitUserEmail,
+		[bool]$SshKeyReady,
+		[string]$HttpProxy,
+		[string]$HttpsProxy,
+		[string]$PSScriptRootContext # Pass $PSScriptRoot so utility can derive mainRepoWindowsPath
+	)
+
+	$logger.WritePhaseStatus("GIT_SECURITY", "STARTING", "Configuring Git 'safe.directory' exceptions...")
+	$gitTestBasePath = "C:/wsl/git" # Git prefers forward slashes
+
+	# Ensure C:\wsl\git (for test clones) is safe
+	if (-not (Test-IsGitSafeDirectory -PathToCheck $gitTestBasePath)) {
+		$Logger.WriteLog("INFO", "Adding '$gitTestBasePath' to Git's safe.directory list (for test clones).", "DarkGreen")
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "--add", "safe.directory", $gitTestBasePath `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+	}
+ else {
+		$Logger.WriteLog("INFO", "'$gitTestBasePath' already in Git's safe.directory list.", "DarkGreen")
+	}
+
+	# Ensure the main setup repository path (C:\wsl\wsl_dev_setup) is safe
+	$mainRepoWindowsPath = (Convert-Path $PSScriptRootContext | Get-Item).Parent.FullName
+	$mainRepoGitFormattedPath = $mainRepoWindowsPath.Replace('\', '/')
+	if (-not (Test-IsGitSafeDirectory -PathToCheck $mainRepoGitFormattedPath)) {
+		$Logger.WriteLog("INFO", "Adding '$mainRepoGitFormattedPath' to Git's safe.directory list (for setup repo).", "DarkGreen")
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "--add", "safe.directory", $mainRepoGitFormattedPath `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+	}
+ else {
+		$Logger.WriteLog("INFO", "'$mainRepoGitFormattedPath' already in Git's safe.directory list.", "DarkGreen")
+	}
+
+	# Also add the wildcard version for subdirectories within C:/wsl/git, but only if needed
+	if (-not (Test-IsGitSafeDirectory -PathToCheck "$gitTestBasePath/*")) {
+		$Logger.WriteLog("INFO", "Adding '$gitTestBasePath/*' to Git's safe.directory list (for subdirectories).", "DarkGreen")
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "--add", "safe.directory", "$gitTestBasePath/*" `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+	}
+ else {
+		$Logger.WriteLog("INFO", "'$gitTestBasePath/*' already in Git's safe.directory list.", "DarkGreen")
+	}
+	$logger.WritePhaseStatus("GIT_SECURITY", "SUCCESS", "Git 'safe.directory' configuration completed.")
+
+	# Set global Git user.name and user.email.
+	$logger.WritePhaseStatus("GIT_GLOBAL_CONFIG", "STARTING", "Setting Git for Windows global user.name and user.email...")
+	Start-Process -FilePath "git" -ArgumentList "config", "--global", "user.name", "'$GitUserName'" `
+		-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+	Start-Process -FilePath "git" -ArgumentList "config", "--global", "user.email", "'$GitUserEmail'" `
+		-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+	$logger.WritePhaseStatus("GIT_GLOBAL_CONFIG", "SUCCESS", "Git global user.name and user.email set to '$GitUserName' <$GitUserEmail>.")
+
+	# Configure Git's SSH/HTTPS protocol.
+	if ($SshKeyReady) {
+		$logger.WritePhaseStatus("GIT_PROTOCOL", "STARTING", "Configuring Git to use SSH for GitHub automatically...")
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "url.git@github.com:.insteadOf", "https://github.com/" `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+		$logger.WritePhaseStatus("GIT_PROTOCOL", "SUCCESS", "Git configured to use SSH for GitHub.com.")
+	}
+ else {
+		$Logger.WriteLog("WARNING", "SSH key not confirmed. Git will continue to use HTTPS, which may fail in restrictive networks.", "Yellow")
+	}
+	$logger.WritePhaseStatus("GIT_PROTOCOL", "SUCCESS", "Git protocol configured.")
+
+	# Configure Git's HTTP/S proxy.
+	$logger.WritePhaseStatus("GIT_PROXY", "STARTING", "Configuring Git for Windows proxy settings...")
+	if (-not [string]::IsNullOrWhiteSpace($HttpProxy)) {
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "http.proxy", "'$HttpProxy'" `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+		$Logger.WriteLog("INFO", "Git http.proxy set to '$HttpProxy'.", "DarkGreen")
+	}
+ else {
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "--unset", "http.proxy" `
+			-NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+		$Logger.WriteLog("INFO", "Git http.proxy not set.", "DarkGray")
+	}
+	if (-not [string]::IsNullOrWhiteSpace($HttpsProxy)) {
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "https.proxy", "'$HttpsProxy'" `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+		$Logger.WriteLog("INFO", "Git https.proxy set to '$HttpsProxy'.", "DarkGreen")
+	}
+ else {
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "--unset", "https.proxy" `
+			-NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+		$Logger.WriteLog("INFO", "Git https.proxy not set.", "DarkGray")
+	}
+	$logger.WritePhaseStatus("GIT_PROXY", "SUCCESS", "Git proxy configuration completed.")
+	return $true
+}
+
+# --- NEW: Function to clone the main setup repository (Arch_Dev_Env) ---
+function Clone-SetupRepository {
+	param(
+		[PSCustomObject]$Logger,
+		[string]$GitCloneTarget, # The Windows path where the repo will be cloned
+		[string]$SourceRepoUrl, # The URL of the upstream repo
+		[bool]$ForceOverwrite # Whether to forcibly delete existing target
+	)
+
+	$Logger.WritePhaseStatus("CLONE_SETUP_REPO", "STARTING", "Cloning setup repository into Windows path '$GitCloneTarget'...")
+    
+	if ($ForceOverwrite -or -not (Test-Path $GitCloneTarget)) {
+		if (Test-Path $GitCloneTarget) { 
+			Remove-Item -Recurse -Force $GitCloneTarget 
+		}
+
+		$cloneOutput = ""
+		$cloneExitCode = 0
+		$tempLogFile = Join-Path $env:TEMP "git_clone_output_$((Get-Random)).log"
+
+		try {
+			Start-Process -FilePath "git" -ArgumentList "clone", $SourceRepoUrl, $GitCloneTarget `
+				-RedirectStandardOutput $tempLogFile -RedirectStandardError $tempLogFile -NoNewWindow -Wait
+			$cloneExitCode = $LASTEXITCODE
+			$cloneOutput = Get-Content $tempLogFile | Out-String
+		}
+		finally {
+			if (Test-Path $tempLogFile) { Remove-Item $tempLogFile -ErrorAction SilentlyContinue }
+		}
+
+		if ($cloneExitCode -ne 0) {
+			$Logger.WriteLog("ERROR", "Git clone of setup repository failed (Exit Code: $cloneExitCode). Full output:", "Red")
+			$cloneOutput.Split("`n") | ForEach-Object { $Logger.WriteLog("ERROR", $_, "DarkRed") }
+			throw "Git clone of setup repository failed with exit code $cloneExitCode. Check logs for full output and details."
+		}
+	}
+ else {
+		$Logger.WriteLog("INFO", "Setup repository '$GitCloneTarget' already exists. Skipping clone.", "Green")
+	}
+	return $true
+}
+
+# --- NEW: Function to run basic WSL functionality debug commands ---
+function Test-WslBasicFunctionality {
+	param(
+		[PSCustomObject]$Logger,
+		[string]$DistroName,
+		[string]$Username,
+		[string]$WslRepoPath # Path to the repo inside WSL
+	)
+
+	$Logger.WritePhaseStatus("CONF_STATUS", "STARTING", "Running basic WSL functionality and repository access tests...")
+	$confCommands = @(
+		"whoami",
+		"pwd", 
+		"echo `$HOME",
+		"test -d '$WslRepoPath' && echo 'REPO_DIR_EXISTS' || echo 'REPO_DIR_MISSING'",
+		"test -f '$WslRepoPath/Setup/1_sys_init.sh' && echo 'SCRIPT_EXISTS' || echo 'SCRIPT_MISSING'",
+		"ls -la '$WslRepoPath/Setup/' | head -5"
+	)
+	foreach ($cmd in $confCommands) {
+		# Use Invoke-WSLCommand for consistent logging and error handling
+		if (-not (Invoke-WSLCommand -DistroName $DistroName -Username $Username -Command $cmd -Description "Debug command: $cmd" -Logger $Logger)) {
+			$Logger.WriteLog("Conf_Status", "Debug command FAILED: $cmd", "Red")
+		}
+	}
+	$logger.WritePhaseStatus("CONF_STATUS", "SUCCESS", "Basic WSL functionality tests completed.")
+	return $true
+}

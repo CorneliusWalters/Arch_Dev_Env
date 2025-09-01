@@ -60,7 +60,7 @@ function Import-ArchDistro {
 	$Logger.WriteLog("SUCCESS", "Virtual disk verified. Import was successful.", "Green")
 
 	# --- FIX: Removed manual wsl.conf default user setting ---
-	# This is now handled by setup_systemd_enabler after systemd is set up, to avoid conflicts.
+	# This is now handled by Set-WslConfDefaults in Install.ps1, to avoid conflicts.
 	# The current user will temporarily be root until after a WSL shutdown/restart cycle in Install.ps1.
     
 	$Logger.WriteLog("SUCCESS", "Distro imported and configured. Proceeding with setup.", "Green")

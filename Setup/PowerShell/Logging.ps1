@@ -173,7 +173,7 @@
 										elseif ($trimmedLine -match '^\[COMMAND\]') {
 											Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
 											Write-Host "$line" -ForegroundColor DarkGray
-											$wasCustomColorized = $true
+											$wasCustomColorized = true
 										}
 										elseif ($trimmedLine -match '^===.*===') {
 											# Generic header like "=== System Information ==="
@@ -181,10 +181,7 @@
 											$wasCustomColorized = $true
 										}
 
-										# --- DEFAULT: Pass raw ANSI-colored output through ---
 										if (-not $wasCustomColorized) {
-											# Write a timestamp, but allow any embedded ANSI codes in $line to pass through.
-											# Ensure no -ForegroundColor is applied here to avoid stripping native colors.
 											Write-Host "[$timestamp] WSL: $line"
 										}
                                     

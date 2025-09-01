@@ -3,6 +3,7 @@
 ###     dir: /mnt/c/wsl/wsl_dev_setup/Setup/.
 # shellcheck disable=SC2155
 
+#######--- START OF FILE ---#######
 # Main initialization script for WSL Arch Linux setup
 # Exit on any error
 set -e
@@ -16,7 +17,7 @@ source "$SCRIPT_DIR/lib/2_logging.sh" || exit 1
 source "$SCRIPT_DIR/lib/4_syst_ready_fn.sh" || exit 1 # Contains get_packages_from_file now
 source "$SCRIPT_DIR/lib/5_install_dev.sh" || exit 1   # Contains dev/db/python installs
 source "$SCRIPT_DIR/lib/5_install_serv.sh" || exit 1  # Contains service/hook installs
-source "$SCRIPT_DIR/lib/6_setup_tools.sh" || exit 1   # Contains consolidated setup_zsh/tmux/nvim/p10k/lsd/winyank functions
+source "$SCRIPT_DIR/lib/6_setup_tools.sh" || exit 1   # NEW: Consolidated tool setup & configs
 
 # Export Repository Root (one level up from Setup/)
 export REPO_ROOT="$(dirname "$SCRIPT_DIR")"
