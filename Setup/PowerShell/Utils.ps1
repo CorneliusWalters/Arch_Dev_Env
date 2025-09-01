@@ -172,7 +172,6 @@ function Test-IsGitSafeDirectory {
 
 
 function Set-NeutralDirectory {
- # Using canonical capitalization
 	try {
 		$setupDir = $PSScriptRoot
 		$repoDir = Split-Path -Parent $setupDir
@@ -182,18 +181,17 @@ function Set-NeutralDirectory {
 		if (-not (Test-Path $neutralBaseDir -PathType Container)) {
 			throw "Neutral directory path '$neutralBaseDir' does not exist or is not a container."
 		}
-		# This handles cases where PowerShell might be in a non-filesystem provider path.
-		Set-Location -Path $neutralBaseDir -Provider FileSystem -ErrorAction Stop -PassThru | Out-Null
+
+		Set-Location -Path $neutralBaseDir -ErrorAction Stop -PassThru | Out-Null
         
 		Write-Host "Working directory set to '$neutralBaseDir' to prevent file locks." -ForegroundColor Green
 	}
 	catch {
-		# This prevents the script from proceeding if it cannot successfully change directory,
-		# which would inevitably lead to the 'Remove-Item' failing due to a file lock.
 		Write-Host "ERROR: Critical failure to set neutral directory. $($_.Exception.Message)" -ForegroundColor Red
 		throw "Failed to set neutral directory: $($_.Exception.Message). Please ensure C:\wsl exists and is writable, and that no other process is locking it."
 	}
 }
+
 function Wait-WSLShutdown {
 	param(
 		[string]$DistroName, 
