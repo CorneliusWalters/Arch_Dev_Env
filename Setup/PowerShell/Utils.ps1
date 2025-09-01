@@ -249,7 +249,12 @@ appendWindowsPath=true
 
 	# Construct the command to write wsl.conf as root inside WSL
 	# Use printf for safety against special characters in $Username, though not strictly needed here
-	$writeWslConfCommand = "printf '%s' '$wslConfContent' | sudo tee /etc/wsl.conf > /dev/null"
+	$writeWslConfCommand = @"
+bash -c "`$'\n'cat <<EOF | sudo tee /etc/wsl.conf > /dev/null
+$wslConfContent
+EOF
+"
+"@
 
 	# Execute this command as root using Invoke-WSLCommand
 	if (-not (Invoke-WSLCommand -DistroName $DistroName -Username "root" -Command $writeWslConfCommand -Description "Write initial /etc/wsl.conf" -Logger $Logger)) {
