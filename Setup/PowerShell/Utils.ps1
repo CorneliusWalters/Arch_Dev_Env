@@ -373,7 +373,7 @@ function Clone-SetupRepository {
 		[bool]$ForceOverwrite # Whether to forcibly delete existing target
 	)
 
-	$Logger.WritePhaseStatus("CLONE_SETUP_REPO", "STARTING", "Cloning setup repository into Windows path '$GitCloneTarget'...")
+	$Logger.WritePhaseStatus("CLONE_SETUP_REPO", "STARTING", "Cloning setup repository into Windows path '$GitCloneTarget' from '$SourceRepoUrl'...")
     
 	if ($ForceOverwrite -or -not (Test-Path $GitCloneTarget)) {
 		if (Test-Path $GitCloneTarget) { 
@@ -382,22 +382,48 @@ function Clone-SetupRepository {
 
 		$cloneOutput = ""
 		$cloneExitCode = 0
-		$tempLogFile = Join-Path $env:TEMP "git_clone_output_$((Get-Random)).log"
+		# --- FIX: Use separate temporary files for StandardOutput and StandardError ---
+		$tempStdoutFile = Join-Path $env:TEMP "git_clone_stdout_$((Get-Random)).log"
+		$tempStderrFile = Join-Path $env:TEMP "git_clone_stderr_$((Get-Random)).log"
 
 		try {
 			Start-Process -FilePath "git" -ArgumentList "clone", $SourceRepoUrl, $GitCloneTarget `
-				-RedirectStandardOutput $tempLogFile -RedirectStandardError $tempLogFile -NoNewWindow -Wait
+				-RedirectStandardOutput $tempStdoutFile -RedirectStandardError $tempStderrFile -NoNewWindow -Wait `
+				-ErrorAction Stop
 			$cloneExitCode = $LASTEXITCODE
-			$cloneOutput = Get-Content $tempLogFile | Out-String
+            
+			# Combine output from both files
+			if (Test-Path $tempStdoutFile) { $cloneOutput += (Get-Content $tempStdoutFile | Out-String) }
+			if (Test-Path $tempStderrFile) { $cloneOutput += (Get-Content $tempStderrFile | Out-String) }
+		}
+		catch {
+			# Catch exceptions during Start-Process itself
+			$Logger.WriteLog("ERROR", "Exception during setup repository clone: $($_.Exception.Message)", "Red")
+			# Include any captured output in the error if available
+			if (Test-Path $tempStdoutFile) { $Logger.WriteLog("ERROR", (Get-Content $tempStdoutFile | Out-String), "DarkRed") }
+			if (Test-Path $tempStderrFile) { $Logger.WriteLog("ERROR", (Get-Content $tempStderrFile | Out-String), "DarkRed") }
+			throw # Re-throw to propagate the original error
 		}
 		finally {
-			if (Test-Path $tempLogFile) { Remove-Item $tempLogFile -ErrorAction SilentlyContinue }
+			# Clean up all temporary files
+			if (Test-Path $tempStdoutFile) { Remove-Item $tempStdoutFile -ErrorAction SilentlyContinue }
+			if (Test-Path $tempStderrFile) { Remove-Item $tempStderrFile -ErrorAction SilentlyContinue }
 		}
 
 		if ($cloneExitCode -ne 0) {
 			$Logger.WriteLog("ERROR", "Git clone of setup repository failed (Exit Code: $cloneExitCode). Full output:", "Red")
 			$cloneOutput.Split("`n") | ForEach-Object { $Logger.WriteLog("ERROR", $_, "DarkRed") }
-			throw "Git clone of setup repository failed with exit code $cloneExitCode. Check logs for full output and details."
+			$Logger.WriteLog("RECOVERY", "--- MANUAL GIT CLONE TROUBLESHOOTING ---", "Yellow")
+			$Logger.WriteLog("RECOVERY", "Attempted to clone: $SourceRepoUrl", "Yellow")
+			$Logger.WriteLog("RECOVERY", "Target directory: $GitCloneTarget", "Yellow")
+			$Logger.WriteLog("RECOVERY", "Possible causes:", "Yellow")
+			$Logger.WriteLog("RECOVERY", "1. Network/Proxy interference with HTTPS. Ensure Git proxy settings are correct.", "Yellow")
+			$Logger.WriteLog("RECOVERY", "2. Git 'safe.directory' issue (ensure C:/wsl/git and C:/wsl/wsl_dev_setup are added globally).", "Yellow")
+			$Logger.WriteLog("RECOVERY", "3. Missing/incorrect SSH key if using SSH protocol.", "Yellow")
+			$Logger.WriteLog("RECOVERY", "To manually test, open PowerShell as Administrator and run:", "Yellow")
+			$Logger.WriteLog("RECOVERY", "   git clone $SourceRepoUrl C:\\test_clone_manual", "Yellow")
+			$Logger.WriteLog("RECOVERY", "--- END MANUAL GIT CLONE TROUBLESHOOTING ---", "Yellow")
+			throw "Git clone of setup repository failed with exit code $cloneExitCode. Check logs for full output and manual troubleshooting steps."
 		}
 	}
  else {
