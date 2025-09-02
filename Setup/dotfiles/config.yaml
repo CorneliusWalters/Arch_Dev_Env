@@ -1,29 +1,55 @@
-# Kanagawa theme for lsd
 classic: false
-colors:
-  user: 117
-  group: 142
+blocks:
+  - permission
+  - user
+  - group
+  - size
+  - date
+  - name
+color:
+  user: 117          # Kanagawa spring violet
+  group: 142         # Kanagawa fuji gray
   permission:
-    read: yellow
-    write: red
-    exec: green
-    exec-sticky: 5
-    no-access: 243
+    read: 180        # Kanagawa autumn yellow
+    write: 167       # Kanagawa autumn red  
+    exec: 107        # Kanagawa spring green
+    exec-sticky: 140 # Kanagawa oni violet
+    no-access: 243   # Dark gray
   date:
-    hour-old: 142
-    day-old: 142
-    older: 142
+    hour-old: 142    # Kanagawa fuji gray
+    day-old: 110     # Kanagawa spring blue
+    older: 243       # Dark gray
   size:
-    none: 142
-    small: 142
-    medium: 142
-    large: 142
-  directory: 110
-  file: 223
-  pipe: yellow
-  symlink: cyan
-  block-device: yellow
-  char-device: yellow
-  socket: magenta
-  special: magenta
-  tree-edge: 243
+    none: 142        # Kanagawa fuji gray
+    small: 142       # Kanagawa fuji gray  
+    medium: 180      # Kanagawa autumn yellow
+    large: 167       # Kanagawa autumn red
+  inode:
+    valid: 107       # Kanagawa spring green
+    invalid: 167     # Kanagawa autumn red
+  links:
+    valid: 110       # Kanagawa spring blue
+    invalid: 167     # Kanagawa autumn red
+  tree-edge: 243     # Dark gray
+  file-type:
+    file:
+      executable: 107      # Kanagawa spring green
+      pipe: 180           # Kanagawa autumn yellow
+      socket: 140         # Kanagawa oni violet
+      block-device: 180   # Kanagawa autumn yellow
+      char-device: 180    # Kanagawa autumn yellow
+      symlink: 110        # Kanagawa spring blue
+      broken-symlink: 167 # Kanagawa autumn red
+    dir:
+      normal: 110         # Kanagawa spring blue
+      symlink: 110        # Kanagawa spring blue
+    special: 140          # Kanagawa oni violet
+date: relative
+sorting:
+  column: name
+  reverse: false
+  dir-grouping: first
+icons:
+  when: auto
+  theme: fancy
+  separator: " "

@@ -214,6 +214,7 @@ function Wait-WSLShutdown {
 			$Logger.WritePhaseStatus("WSL_SHUTDOWN", "SUCCESS", "WSL command failed (assuming stopped)")
 			return $true
 		}
+		
         
 		Start-Sleep -Seconds 2
 		$elapsed += 2
