@@ -130,41 +130,60 @@ sync_wsl_time() {
 optimise_mirrors() {
   print_status "MIRROR" "Optimizing mirror list for best performance..."
 
-  # Check Python Deps
-  # before installing reflector, which depends on it.
+  # Check Python Deps before installing reflector
   execute_and_log "sudo pacman -S --noconfirm --needed python" "Ensuring Python is installed" "MIRROR" || return 1
 
-  # Step 2: Install reflector.
+  # Install reflector
   if ! command_exists reflector; then
     execute_and_log "sudo pacman -S --noconfirm reflector" "Install reflector" "MIRROR" || return 1
   fi
 
-  # Step 3: Backup the current, known-working mirrorlist.
+  # Backup the current mirrorlist
   execute_and_log "sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup" \
     "Backup current mirrorlist" "MIRROR" || return 1
 
-  # Step 4: Attempt to generate a faster mirrorlist.
-  print_status "MIRROR" "Attempting to generate a faster mirror list with reflector..."
-  local reflector_cmd="sudo reflector --protocol https --latest 50 --age 12 --sort rate --save /etc/pacman.d/mirrorlist --download-timeout 15"
+  # Use a more conservative reflector command with shorter timeout and fewer mirrors
+  print_status "MIRROR" "Running reflector with conservative settings..."
+  local reflector_cmd="timeout 120 sudo reflector --protocol https --latest 20 --age 6 --sort rate --save /etc/pacman.d/mirrorlist --download-timeout 5 --connection-timeout 10"
 
-  # We run this command but don't exit if it fails.
-  eval "$reflector_cmd"
+  # Run reflector with explicit timeout and capture exit code
+  print_status "MIRROR" "Executing: $reflector_cmd"
+  eval "$reflector_cmd" 2>&1
   local exit_code=$?
 
-  # Step 5: Check the result and recover safely if needed.
+  # Check the result and handle different failure modes
   if [ $exit_code -eq 0 ]; then
     print_success "MIRROR" "Reflector successfully generated an optimized mirror list."
-  else
-    print_warning "MIRROR" "Reflector failed to generate a new list (Exit Code: $exit_code)."
-    print_warning "MIRROR" "This is non-fatal. Restoring the previous working mirrorlist."
-    # --- THE CRITICAL FIX ---
-    # Restore the known-good mirrorlist instead of writing a bad one.
+    # Verify the new mirrorlist has content
+    if [ -s /etc/pacman.d/mirrorlist ] && grep -q "^Server" /etc/pacman.d/mirrorlist; then
+      print_success "MIRROR" "New mirrorlist verified and contains valid servers."
+    else
+      print_warning "MIRROR" "New mirrorlist appears empty or invalid. Restoring backup."
+      execute_and_log "sudo cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist" \
+        "Restoring backup mirrorlist due to invalid output" "MIRROR"
+    fi
+  elif [ $exit_code -eq 124 ]; then
+    print_warning "MIRROR" "Reflector timed out after 2 minutes. This is common with slow networks."
+    print_warning "MIRROR" "Restoring the previous working mirrorlist."
     execute_and_log "sudo cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist" \
-      "Restoring backup mirrorlist" "MIRROR"
+      "Restoring backup mirrorlist after timeout" "MIRROR"
+  else
+    print_warning "MIRROR" "Reflector failed with exit code: $exit_code (network or server issues)."
+    print_warning "MIRROR" "This is non-fatal. Restoring the previous working mirrorlist."
+    execute_and_log "sudo cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist" \
+      "Restoring backup mirrorlist after failure" "MIRROR"
   fi
 
-  # This function should always succeed, as having a working-but-unoptimized
-  # mirrorlist is an acceptable outcome.
+  # Test that pacman can still work with the current mirrorlist
+  print_status "MIRROR" "Testing pacman functionality with current mirrorlist..."
+  if timeout 30 sudo pacman -Sy >/dev/null 2>&1; then
+    print_success "MIRROR" "Pacman database refresh successful - mirrors are working."
+  else
+    print_error "MIRROR" "Pacman cannot refresh databases. This suggests mirror issues."
+    return 1
+  fi
+
+  # This function should always succeed as long as pacman works
   return 0
 }
 
