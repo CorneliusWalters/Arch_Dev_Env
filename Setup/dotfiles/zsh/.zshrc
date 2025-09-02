@@ -88,6 +88,8 @@ alias ...='cd ../..'
 alias ....='cd ../../..'
 alias proj='cd ~/projects'
 alias wrk='cd ~/work'
+alias dots='cd ~/.config/dotfiles'
+alias conf='cd ~/.config/'
 
 # Quick edit configs
 alias zshconf='${EDITOR:-nvim} ~/.config/zsh/.zshrc'
