@@ -229,37 +229,13 @@ function Set-WslConfDefaults {
 		[PSCustomObject]$Logger,
 		[string]$DistroName,
 		[string]$Username,
-		[string]$WslRepoPath # Need this for context, although not used in wsl.conf directly
+		[string]$WslRepoPath
 	)
 
 	$Logger.WritePhaseStatus("WSL_CONF", "STARTING", "Creating initial /etc/wsl.conf with user and systemd defaults...")
 
-	# The content for /etc/wsl.conf (escape special characters for safe passage through multiple command layers)
-	$wslConfContent = @"
-[user]
-default=$Username
-
-[boot]
-systemd=true
-
-[interop]
-enabled=true
-appendWindowsPath=true
-"@
-
-	# Use a simpler approach that avoids heredoc complexity
-	# Write to a temporary file first, then move it
-	$writeWslConfCommand = @"
-echo '[user]' | sudo tee /etc/wsl.conf > /dev/null && \
-echo 'default=$Username' | sudo tee -a /etc/wsl.conf > /dev/null && \
-echo '' | sudo tee -a /etc/wsl.conf > /dev/null && \
-echo '[boot]' | sudo tee -a /etc/wsl.conf > /dev/null && \
-echo 'systemd=true' | sudo tee -a /etc/wsl.conf > /dev/null && \
-echo '' | sudo tee -a /etc/wsl.conf > /dev/null && \
-echo '[interop]' | sudo tee -a /etc/wsl.conf > /dev/null && \
-echo 'enabled=true' | sudo tee -a /etc/wsl.conf > /dev/null && \
-echo 'appendWindowsPath=true' | sudo tee -a /etc/wsl.conf > /dev/null
-"@
+	# Use a single command without line continuation
+	$writeWslConfCommand = "sudo bash -c `"printf '[user]\ndefault=$Username\n\n[boot]\nsystemd=true\n\n[interop]\nenabled=true\nappendWindowsPath=true\n' > /etc/wsl.conf`""
 
 	# Execute this command as root using Invoke-WSLCommand
 	if (-not (Invoke-WSLCommand -DistroName $DistroName -Username "root" -Command $writeWslConfCommand -Description "Write initial /etc/wsl.conf" -Logger $Logger)) {
@@ -268,6 +244,7 @@ echo 'appendWindowsPath=true' | sudo tee -a /etc/wsl.conf > /dev/null
 	$Logger.WritePhaseStatus("WSL_CONF", "SUCCESS", "Initial /etc/wsl.conf created with user '$Username' and systemd enabled.")
 	return $true
 }
+
 #function Test-WSLDistroExists {
 #    param([string]$DistroName)
 #    
