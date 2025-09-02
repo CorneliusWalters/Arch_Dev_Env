@@ -234,15 +234,47 @@ function Set-WslConfDefaults {
 
 	$Logger.WritePhaseStatus("WSL_CONF", "STARTING", "Creating initial /etc/wsl.conf with user and systemd defaults...")
 
-	# Use a single command without line continuation
-	$writeWslConfCommand = "sudo bash -c `"printf '[user]\ndefault=$Username\n\n[boot]\nsystemd=true\n\n[interop]\nenabled=true\nappendWindowsPath=true\n' > /etc/wsl.conf`""
+	# Create the wsl.conf content
+	$wslConfContent = @"
+[user]
+default=$Username
 
-	# Execute this command as root using Invoke-WSLCommand
-	if (-not (Invoke-WSLCommand -DistroName $DistroName -Username "root" -Command $writeWslConfCommand -Description "Write initial /etc/wsl.conf" -Logger $Logger)) {
-		throw "Failed to write initial /etc/wsl.conf."
+[boot]
+systemd=true
+
+[interop]
+enabled=true
+appendWindowsPath=true
+"@
+
+	# Write content to a temporary Windows file
+	$tempFile = [System.IO.Path]::GetTempFileName()
+	$wslConfContent | Out-File -FilePath $tempFile -Encoding UTF8 -NoNewline
+
+	try {
+		# Use a simple WSL command to copy the temp file to /etc/wsl.conf
+		$copyCommand = "wsl -d $DistroName -u root -- bash -c `"cp '/mnt/c/$(($tempFile -replace '\\', '/').Substring(2))' /etc/wsl.conf`""
+		
+		$Logger.WriteLog("INFO", "Executing: $copyCommand", "Gray")
+		
+		$result = Invoke-Expression $copyCommand
+		$exitCode = $LASTEXITCODE
+		
+		if ($exitCode -eq 0) {
+			$Logger.WritePhaseStatus("WSL_CONF", "SUCCESS", "Initial /etc/wsl.conf created with user '$Username' and systemd enabled.")
+			return $true
+		}
+		else {
+			$Logger.WritePhaseStatus("WSL_CONF", "ERROR", "Failed to copy wsl.conf (exit code: $exitCode)")
+			throw "Failed to write initial /etc/wsl.conf."
+		}
 	}
-	$Logger.WritePhaseStatus("WSL_CONF", "SUCCESS", "Initial /etc/wsl.conf created with user '$Username' and systemd enabled.")
-	return $true
+	finally {
+		# Clean up the temporary file
+		if (Test-Path $tempFile) {
+			Remove-Item $tempFile -Force
+		}
+	}
 }
 
 #function Test-WSLDistroExists {
