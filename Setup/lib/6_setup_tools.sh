@@ -67,7 +67,7 @@ setup_p10k() {
   print_status "P10K" "Setting up Powerlevel10k configuration..."
 
   # 1. Copy the pristine file directly from the repo.
-  cp "$PRISTINE_DOTFILES_SRC/zsh/.p10k.zsh" "$ZSH_WORKING_FILE"
+  cp "$PRISTINE_DOTFILES_SRC/zsh/.p10k.zsh" "$P10K_WORKING_FILE"
   # 2. Apply the patch.
   if [ -f "$P10K_PATCH_FILE" ]; then
     print_status "P10K_PATCH" "Applying patch for .p10k.zsh ..."

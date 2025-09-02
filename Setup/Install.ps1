@@ -107,6 +107,9 @@ try {
   $logger.WritePhaseStatus("ROOT_PREP", "SUCCESS", "Root preparation completed")
 
   # --- Step 6: Initial WSL Configuration (sets default user, systemd in /etc/wsl.conf) ---
+  # Initialize WSL capture for the main setup execution
+  $wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
+  
   if (-not (Set-WslConfDefaults -Logger $logger -DistroName $wslDistroName -Username $wslUsername -WslRepoPath $wslRepoPath)) {
     throw "Initial WSL configuration in /etc/wsl.conf failed."
   }

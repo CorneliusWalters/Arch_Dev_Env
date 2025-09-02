@@ -234,7 +234,7 @@ function Set-WslConfDefaults {
 
 	$Logger.WritePhaseStatus("WSL_CONF", "STARTING", "Creating initial /etc/wsl.conf with user and systemd defaults...")
 
-	# The content for /etc/wsl.conf
+	# The content for /etc/wsl.conf (escape special characters for safe passage through multiple command layers)
 	$wslConfContent = @"
 [user]
 default=$Username
@@ -247,13 +247,18 @@ enabled=true
 appendWindowsPath=true
 "@
 
-	# Construct the command to write wsl.conf as root inside WSL
-	# Use printf for safety against special characters in $Username, though not strictly needed here
+	# Use a simpler approach that avoids heredoc complexity
+	# Write to a temporary file first, then move it
 	$writeWslConfCommand = @"
-bash -c "`$'\n'cat <<EOF | sudo tee /etc/wsl.conf > /dev/null
-$wslConfContent
-EOF
-"
+echo '[user]' | sudo tee /etc/wsl.conf > /dev/null && \
+echo 'default=$Username' | sudo tee -a /etc/wsl.conf > /dev/null && \
+echo '' | sudo tee -a /etc/wsl.conf > /dev/null && \
+echo '[boot]' | sudo tee -a /etc/wsl.conf > /dev/null && \
+echo 'systemd=true' | sudo tee -a /etc/wsl.conf > /dev/null && \
+echo '' | sudo tee -a /etc/wsl.conf > /dev/null && \
+echo '[interop]' | sudo tee -a /etc/wsl.conf > /dev/null && \
+echo 'enabled=true' | sudo tee -a /etc/wsl.conf > /dev/null && \
+echo 'appendWindowsPath=true' | sudo tee -a /etc/wsl.conf > /dev/null
 "@
 
 	# Execute this command as root using Invoke-WSLCommand
