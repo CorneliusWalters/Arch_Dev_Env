@@ -87,7 +87,7 @@ EOL
 setup_pacman_git_hook() {
   print_status "HOOK_SETUP" "Setting up pacman hook for Git repository synchronization..."
 
-  local sync_script_source="$REPO_ROOT/lib/6_sync_packs.sh"
+  local sync_script_source="$REPO_ROOT/Setup/lib/6_sync_packs.sh"
   # Destination script gets the descriptive name.
   local sync_script_target="/usr/local/bin/pacman-git-sync"
   local hook_file="/etc/pacman.d/hooks/auto-git-sync.hook"
