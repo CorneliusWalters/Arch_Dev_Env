@@ -234,8 +234,9 @@ function Set-WslConfDefaults {
 
 	$Logger.WritePhaseStatus("WSL_CONF", "STARTING", "Creating initial /etc/wsl.conf with user and systemd defaults...")
 
-	# Create the wsl.conf content
-	$wslConfContent = @"
+	try {
+		# Create wsl.conf content with proper variable substitution
+		$wslConfContent = @"
 [user]
 default=$Username
 
@@ -247,30 +248,38 @@ enabled=true
 appendWindowsPath=true
 "@
 
-	# Write content to a temporary Windows file
-	$tempFile = [System.IO.Path]::GetTempFileName()
-	$wslConfContent | Out-File -FilePath $tempFile -Encoding UTF8 -NoNewline
+		# Write to a temporary file first
+		$tempFile = [System.IO.Path]::GetTempFileName()
+		$wslConfContent | Out-File -FilePath $tempFile -Encoding UTF8 -NoNewline
 
-	try {
-		# Use a simple WSL command to copy the temp file to /etc/wsl.conf
-		$copyCommand = "wsl -d $DistroName -u root -- bash -c `"cp '/mnt/c/$(($tempFile -replace '\\', '/').Substring(2))' /etc/wsl.conf`""
-		
-		$Logger.WriteLog("INFO", "Executing: $copyCommand", "Gray")
-		
-		$result = Invoke-Expression $copyCommand
-		$exitCode = $LASTEXITCODE
-		
-		if ($exitCode -eq 0) {
+		# Get the WSL path for the temp file
+		$tempFileWSLPath = "/mnt/c" + ($tempFile.Replace('\', '/').Substring(2))
+
+		$Logger.WriteLog("INFO", "Creating /etc/wsl.conf with default user: $Username", "Cyan")
+
+		# Copy the temp file to /etc/wsl.conf in one command
+		$copyResult = wsl -d $DistroName -u root -- bash -c "cp '$tempFileWSLPath' /etc/wsl.conf && echo 'SUCCESS' || echo 'FAILED'"
+
+		if ($copyResult -contains "SUCCESS") {
 			$Logger.WritePhaseStatus("WSL_CONF", "SUCCESS", "Initial /etc/wsl.conf created with user '$Username' and systemd enabled.")
+			
+			# Verify the content was written correctly
+			$verifyResult = wsl -d $DistroName -u root -- bash -c "cat /etc/wsl.conf"
+			$Logger.WriteLog("INFO", "Verification - /etc/wsl.conf contents:", "Gray")
+			$verifyResult | ForEach-Object { $Logger.WriteLog("INFO", $_, "Gray") }
+			
 			return $true
 		}
 		else {
-			$Logger.WritePhaseStatus("WSL_CONF", "ERROR", "Failed to copy wsl.conf (exit code: $exitCode)")
-			throw "Failed to write initial /etc/wsl.conf."
+			throw "Failed to copy wsl.conf to /etc/wsl.conf"
 		}
 	}
+	catch {
+		$Logger.WritePhaseStatus("WSL_CONF", "ERROR", "Exception: $($_.Exception.Message)")
+		throw "Failed to write initial /etc/wsl.conf."
+	}
 	finally {
-		# Clean up the temporary file
+		# Clean up temp file
 		if (Test-Path $tempFile) {
 			Remove-Item $tempFile -Force
 		}
