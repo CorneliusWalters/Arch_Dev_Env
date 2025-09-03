@@ -6,16 +6,20 @@
 # It should perform Git operations as the user who invoked sudo pacman.
 
 # --- Define Paths ---
-# Derive REPO_ROOT and PACKAGE_LISTS_SRC as these may not be directly inherited by the hook.
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(dirname "$SCRIPT_DIR")" # E.g., /mnt/c/wsl/wsl_dev_setup
-PACKAGE_LISTS_SRC="$REPO_ROOT/Setup/packages"
+# Derive PERSONAL_REPO_ROOT and PACKAGE_LISTS_SRC as these may not be directly inherited by the hook.
+
+PERSONAL_REPO_ROOT="$HOME/.config/dotfiles" # E.g., /mnt/c/wsl/wsl_dev_setup
+PACKAGE_LISTS_SRC="$PERSONAL_REPO_ROOT/packages"
+timestamp=$(date '+%Y-%m-%d %H:%M:%S')
 
 # Path to the manual additions file, now managed by the hook.
 ADD_INSTALLS_FILE="$PACKAGE_LISTS_SRC/add.installs"
 
+#Create Directory for Changed Installs
+mkdir -p "$PACKAGE_LISTS_SRC"
+
 # Path to the log directory for the hook (inside the repo for consistency).
-LOG_DIR="$REPO_ROOT/tmp/logs"
+LOG_DIR="$HOME/.local/logs/$timestamp"
 LOGFILE="$LOG_DIR/pacman_git_sync.log"
 
 # Get the user who invoked sudo (important for Git operations).
@@ -38,14 +42,14 @@ run_as_user() {
 }
 
 # Ensure the Git repository exists and is accessible.
-if [ ! -d "$REPO_ROOT" ]; then
-	echo "ERROR: Git repository root '$REPO_ROOT' not found or not a directory. Exiting."
+if [ ! -d "$PERSONAL_REPO_ROOT" ]; then
+	echo "ERROR: Git repository root '$PERSONAL_REPO_ROOT' not found or not a directory. Exiting."
 	exit 1
 fi
 
 # Change to the Git repository root directory as the current user.
-if ! run_as_user "cd \"$REPO_ROOT\""; then
-	echo "ERROR: Failed to change to repository directory '$REPO_ROOT' as user '$CURRENT_USER'. Exiting."
+if ! run_as_user "cd \"$PERSONAL_REPO_ROOT\""; then
+	echo "ERROR: Failed to change to repository directory '$PERSONAL_REPO_ROOT' as user '$CURRENT_USER'. Exiting."
 	exit 1
 fi
 
@@ -98,33 +102,33 @@ if [ "$new_pkgs_found" -eq 1 ]; then
 	) | run_as_user "tee -a '$ADD_INSTALLS_FILE'"
 
 	# --- Perform Git operations as the current user ---
-	if ! run_as_user "cd \"$REPO_ROOT\" && git add \"$ADD_INSTALLS_FILE\""; then
+	if ! run_as_user "cd \"$PERSONAL_REPO_ROOT\" && git add \"$ADD_INSTALLS_FILE\""; then
 		echo "ERROR: Failed to add '$ADD_INSTALLS_FILE' to Git staging. Exiting."
 		exit 1
 	fi
 
 	# Check if there are actual changes staged before committing.
-	if run_as_user "cd \"$REPO_ROOT\" && git diff-index --quiet HEAD"; then
+	if run_as_user "cd \"$PERSONAL_REPO_ROOT\" && git diff-index --quiet HEAD"; then
 		echo "No actual changes to commit after 'git add'. This should not happen if new packages were found."
 	else
 		# Commit the changes.
-		if ! run_as_user "cd \"$REPO_ROOT\" && git commit -m \"Auto: Update $ADD_INSTALLS_FILE with new packages from pacman hook on $timestamp\""; then
+		if ! run_as_user "cd \"$PERSONAL_REPO_ROOT\" && git commit -m \"Auto: Update $ADD_INSTALLS_FILE with new packages from pacman hook on $timestamp\""; then
 			echo "ERROR: Failed to commit changes to Git. Exiting."
 			exit 1
 		fi
 
 		# Attempt to pull and rebase before pushing to minimize conflicts.
 		echo "Attempting to pull and rebase before pushing..."
-		if ! run_as_user "cd \"$REPO_ROOT\" && git pull --rebase"; then
+		if ! run_as_user "cd \"$PERSONAL_REPO_ROOT\" && git pull --rebase"; then
 			echo "WARNING: 'git pull --rebase' failed. Manual intervention may be required to resolve conflicts before the next push."
 			# Continue to push, but user might need to resolve conflicts later.
 		fi
 
 		# Push to GitHub.
 		echo "Pushing changes to GitHub..."
-		if ! run_as_user "cd \"$REPO_ROOT\" && git push"; then
+		if ! run_as_user "cd \"$PERSONAL_REPO_ROOT\" && git push"; then
 			echo "ERROR: Failed to push changes to GitHub. Please check your Git credentials and network connectivity."
-			echo "Manual push from '$REPO_ROOT' as user '$CURRENT_USER' may be required."
+			echo "Manual push from '$PERSONAL_REPO_ROOT' as user '$CURRENT_USER' may be required."
 			exit 1 # Indicate failure for the hook.
 		fi
 		echo "Successfully updated and pushed '$ADD_INSTALLS_FILE' to GitHub."
