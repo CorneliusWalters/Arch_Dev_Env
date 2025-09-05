@@ -1,23 +1,9 @@
 # Install.ps1 - Main entry point for Arch Linux WSL setup
 
 $ErrorActionPreference = "Stop" # Set to Stop for better error propagation
-
-# --- CONFIGURATION ---
-$wslDistroName = "Arch"
-$cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar"
-$configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar"
-$ForceOverwrite = $true # Hardcoded true for setup runs to ensure a clean slate
-
-# --- Default Values (Used if user input is empty) ---
-$wslUsernameDefault = "chw"
-$gitUserNameDefault = "CorneliusWalters"
-$gitUserEmailDefault = "seven.nomad@gmail.com"
-$personalRepoUrlDefault = "https://github.com/CorneliusWalters/Arch_Dev_Env.git" # Your upstream repo
-$httpProxyDefault = "" # e.g., "http://your.proxy.com:8080"
-$httpsProxyDefault = "" # e.g., "http://your.proxy.com:8080"
-
 # Import modules and create the logger
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+. "$scriptPath\PowerShell\Header.ps1"
 . "$scriptPath\PowerShell\Logging.ps1"
 . "$scriptPath\PowerShell\Test.ps1"
 . "$scriptPath\PowerShell\Utils.ps1"
@@ -25,27 +11,6 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$scriptPath\PowerShell\Export-Image.ps1"
 $logger = [WslLogger]::new("C:\wsl")
 
-
-# --- Call the consolidated user configuration function ---
-$userConfig = Get-InstallationUserConfig `
-  -WslUsernameDefault $wslUsernameDefault `
-  -GitUserNameDefault $gitUserNameDefault `
-  -GitUserEmailDefault $gitUserEmailDefault `
-  -PersonalRepoUrlDefault $personalRepoUrlDefault `
-  -HttpProxyDefault $httpProxyDefault `
-  -HttpsProxyDefault $httpsProxyDefault
-
-# Assign results to the main script variables
-$wslUsername = $userConfig.WslUsername
-$gitUserName = $userConfig.GitUserName
-$gitUserEmail = $userConfig.GitUserEmail
-$personalRepoUrl = $userConfig.PersonalRepoUrl
-$sshKeyReady = $userConfig.SshKeyReady
-$httpProxy = $userConfig.HttpProxy
-$httpsProxy = $userConfig.HttpsProxy
-
-$scriptWindowsRepoRoot = (Convert-Path $PSScriptRoot | Get-Item).Parent.FullName
-$wslRepoPath = $scriptWindowsRepoRoot.Replace('C:\', '/mnt/c/').Replace('\', '/')
 
 try {
   # --- Step 1: Ensure execution environment is clean ---

@@ -95,3 +95,5 @@ alias conf='cd ~/.config/'
 alias zshconf='${EDITOR:-nvim} ~/.config/zsh/.zshrc'
 alias tmuxconf='${EDITOR:-nvim} ~/.config/tmux/tmux.conf'
 alias nvimconf='${EDITOR:-nvim} ~/.config/nvim/init.lua'
+
+

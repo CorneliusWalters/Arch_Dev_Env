@@ -34,6 +34,6 @@ echo "--> Unlocking user account..."
 passwd -d "${USERNAME}"
 
 echo "--> Granting passwordless sudo to 'wheel' group..."
-echo '%wheel ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/wheel
+echo '%wheel ALL=(ALL) NOPASSWD: /usr/bin/pacman, /usr/bin/systemctl' >/etc/sudoers.d/wheel
 
 echo "--- Root Preparation Complete ---"

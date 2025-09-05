@@ -1,4 +1,6 @@
 # Setup/PowerShell/WSL-Utils.ps1
+
+
 function Invoke-WSLCommand {
 	param(
 		[string]$DistroName,
@@ -201,28 +203,22 @@ function Wait-WSLShutdown {
     
 	$Logger.WritePhaseStatus("WSL_SHUTDOWN", "STARTING", "Waiting for $DistroName to shut down")
     
-	$elapsed = 0
-	while ($elapsed -lt $TimeoutSeconds) {
+	$startTime = Get-Date
+	do {
+		Start-Sleep -Seconds 2
 		try {
-			$status = wsl -l -v | Where-Object { $_ -match $DistroName }
-			if (-not ($status -match "Running")) {
-				$Logger.WritePhaseStatus("WSL_SHUTDOWN", "SUCCESS", "WSL instance stopped")
-				return $true
-			}
+			$null = wsl -d $DistroName -e echo "test" 2>$null
+			$isRunning = $LASTEXITCODE -eq 0
 		}
 		catch {
-			$Logger.WritePhaseStatus("WSL_SHUTDOWN", "SUCCESS", "WSL command failed (assuming stopped)")
-			return $true
+			$isRunning = $false
 		}
-		
-        
-		Start-Sleep -Seconds 2
-		$elapsed += 2
-		Write-Host "." -NoNewline
-	}
+	} while ($isRunning -and ((Get-Date) - $startTime).TotalSeconds -lt $TimeoutSeconds)
+    
+
     
 	$Logger.WritePhaseStatus("WSL_SHUTDOWN", "TIMEOUT", "Timed out waiting for shutdown")
-	return $false
+	return -not $isRunning
 }
 
 function Set-WslConfDefaults {
