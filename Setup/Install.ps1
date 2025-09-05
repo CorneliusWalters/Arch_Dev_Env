@@ -25,6 +25,7 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$scriptPath\PowerShell\Export-Image.ps1"
 $logger = [WslLogger]::new("C:\wsl")
 
+
 # --- Call the consolidated user configuration function ---
 $userConfig = Get-InstallationUserConfig `
   -WslUsernameDefault $wslUsernameDefault `
@@ -42,6 +43,9 @@ $personalRepoUrl = $userConfig.PersonalRepoUrl
 $sshKeyReady = $userConfig.SshKeyReady
 $httpProxy = $userConfig.HttpProxy
 $httpsProxy = $userConfig.HttpsProxy
+
+$scriptWindowsRepoRoot = (Convert-Path $PSScriptRoot | Get-Item).Parent.FullName
+$wslRepoPath = $scriptWindowsRepoRoot.Replace('C:\', '/mnt/c/').Replace('\', '/')
 
 try {
   # --- Step 1: Ensure execution environment is clean ---
@@ -95,7 +99,6 @@ try {
         -ForceOverwrite $ForceOverwrite)) {
     throw "Cloning of setup repository failed."
   }
-  $wslRepoPath = "/mnt/c/wsl/wsl_dev_setup" # Path to the cloned repo *inside* WSL
   $logger.WritePhaseStatus("CLONE_SETUP_REPO", "SUCCESS", "Setup repository cloned to '$wslRepoPath'")
 	  
   # --- Step 5: Root Preparation (basic OS config, user creation, sudoers) ---
