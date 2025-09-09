@@ -6,50 +6,110 @@ blocks:
   - size
   - date
   - name
-color:
-  user: 117          # Kanagawa spring violet
-  group: 142         # Kanagawa fuji gray
-  permission:
-    read: 180        # Kanagawa autumn yellow
-    write: 167       # Kanagawa autumn red  
-    exec: 107        # Kanagawa spring green
-    exec-sticky: 140 # Kanagawa oni violet
-    no-access: 243   # Dark gray
-  date:
-    hour-old: 142    # Kanagawa fuji gray
-    day-old: 110     # Kanagawa spring blue
-    older: 243       # Dark gray
-  size:
-    none: 142        # Kanagawa fuji gray
-    small: 142       # Kanagawa fuji gray  
-    medium: 180      # Kanagawa autumn yellow
-    large: 167       # Kanagawa autumn red
-  inode:
-    valid: 107       # Kanagawa spring green
-    invalid: 167     # Kanagawa autumn red
-  links:
-    valid: 110       # Kanagawa spring blue
-    invalid: 167     # Kanagawa autumn red
-  tree-edge: 243     # Dark gray
-  file-type:
-    file:
-      executable: 107      # Kanagawa spring green
-      pipe: 180           # Kanagawa autumn yellow
-      socket: 140         # Kanagawa oni violet
-      block-device: 180   # Kanagawa autumn yellow
-      char-device: 180    # Kanagawa autumn yellow
-      symlink: 110        # Kanagawa spring blue
-      broken-symlink: 167 # Kanagawa autumn red
-    dir:
-      normal: 110         # Kanagawa spring blue
-      symlink: 110        # Kanagawa spring blue
-    special: 140          # Kanagawa oni violet
-date: relative
-sorting:
-  column: name
-  reverse: false
-  dir-grouping: first
+  - git
+permission: rwx
+size: default
+date: date
 icons:
   when: auto
   theme: fancy
   separator: " "
+indicators: true
+layout: grid
+header: false
+sorting:
+  column: name
+  reverse: false
+  dir-grouping: first
+no-symlink: false
+total-size: false
+hyperlink: never
+symlink-arrow: ⇒
+
+# Kanagawa color scheme (using 256 color codes)
+color:
+  when: always
+  theme: custom
+  
+  # User and group colors
+  user: 104        # waveAqua2 (muted cyan)
+  group: 246       # fujiGray (neutral gray)
+  
+  # Permission colors
+  permission:
+    read: 150      # springGreen (readable)
+    write: 223     # surimiOrange (writable)
+    exec: 108      # sakuraPink (executable)
+    exec-sticky: 183  # peachRed (sticky)
+    no-access: 237    # sumiInk4 (no access)
+    octal: 245        # fujiGray
+    acl: 220          # carpYellow
+    context: 255      # fujiWhite
+    
+  # File type colors
+  filetype:
+    file:
+      executable: 108     # springGreen
+      regular: 252        # fujiWhite
+      special: 181        # waveRed
+    dir:
+      normal: 110         # crystalBlue
+      symlink: 73         # springBlue
+      special: 141        # oniViolet
+    symlink:
+      default: 73         # springBlue
+      broken: 167         # autumnRed
+    pipe: 215            # surimiOrange
+    block_device: 230    # roninYellow
+    char_device: 179     # springViolet
+    socket: 176          # oniViolet
+    special: 181         # waveRed
+    
+  # Date colors based on age
+  date:
+    hour-old: 252        # fujiWhite (recent)
+    day-old: 251         # slightly dimmer
+    week-old: 250        # dimmer
+    month-old: 248       # even dimmer
+    older: 246           # fujiGray (old)
+    
+  # Size colors based on file size
+  size:
+    none: 245            # fujiGray
+    small: 150           # springGreen
+    medium: 223          # surimiOrange
+    large: 210           # peachRed
+    
+  # Inode colors
+  inode:
+    valid: 246           # fujiGray
+    invalid: 167         # autumnRed
+    
+  # Tree view colors
+  tree-edge: 238       # sumiInk3
+  
+  # Git status colors
+  git-status:
+    default: 245         # fujiGray
+    unmodified: 245      # fujiGray
+    ignored: 238         # sumiInk3
+    new-in-index: 108    # springGreen
+    new-in-workdir: 73   # springBlue
+    typechange: 223      # surimiOrange
+    deleted-in-index: 167    # autumnRed
+    deleted-in-workdir: 203  # samuraiRed
+    renamed-in-index: 110    # crystalBlue
+    modified-in-index: 221   # autumnYellow
+    modified-in-workdir: 217 # lightOrange
+    conflicted: 196          # pure red
+    
+  # Special blocks
+  links:
+    valid: 73            # springBlue
+    invalid: 167         # autumnRed
+    
+  # Additional settings for better rendering
+  punctuation: 238       # sumiInk3 (for separators)
+  immediate: 252         # fujiWhite
+  directory: 110         # crystalBlue
+  executable: 108        # springGreen

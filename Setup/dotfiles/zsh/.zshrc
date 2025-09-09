@@ -51,16 +51,30 @@ plugins=(
 source $ZSH/oh-my-zsh.sh
 # For WSL specific clipboard
 
-if [[ "$-" == *i* && -t 0 ]] && [[ -n "$WSL_DISTRO_NAME" ]] && [[ -z "$TMUX" ]] && [[ "$TERM_PROGRAM" != "vscode" ]]; then
-    tmux -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -A -s main
+if [[ "$-" == *i* ]] && [[ -t 0 ]] && [[ -n "$WSL_DISTRO_NAME" ]]; then
+  # Check if we're not already in tmux, VS Code, or SSH
+  if [[ -z "$TMUX" ]] && [[ "$TERM_PROGRAM" != "vscode" ]] && [[ -z "$SSH_CLIENT" ]]; then
+    # Check if tmux server is running
+    if tmux has-session -t main 2>/dev/null; then
+ 		  exec tmux attach-session -t main
+  	else
+    	exec tmux -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -s main
+    fi
+  fi
 fi
-
 [[ ! -f $XDG_CONFIG_HOME/zsh/.p10k.zsh ]] || source $XDG_CONFIG_HOME/zsh/.p10k.zsh
 
 # SET Alias Shortcuts
-alias ls='lsd -lah'
-alias ll='lsd -l'
-alias la='lsd --tree ./*'
+alias ls='lsd --group-dirs first'
+alias ll='lsd -l --group-dirs first'
+alias la='lsd -la --group-dirs first'
+alias lt='lsd --tree --depth 2'
+alias llt='lsd -l --tree --depth 2'
+
+# Fix for color output in pipes
+alias lsd='lsd --color=always'
+
+#Other aliases 
 alias cat='bat'
 alias top='btop'
 alias find='fd'

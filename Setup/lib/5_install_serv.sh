@@ -124,6 +124,14 @@ EOL" \
 setup_git_config() {
   print_status "GIT_CONFIG" "Setting up Git configuration..."
 
+  # Add SSH key check if using SSH URLs
+  if [[ "$PERSONAL_REPO_URL" =~ ^git@ ]]; then
+    if ! ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
+      print_warning "GIT_CONFIG" "SSH key not configured for GitHub"
+      print_status "GIT_CONFIG" "Switching to HTTPS for clone..."
+      PERSONAL_REPO_URL="${PERSONAL_REPO_URL/git@github.com:/https://github.com/}"
+    fi
+  fi
   # --- Configure Global Git Settings ---
   local git_name=$(git config --global user.name 2>/dev/null)
   local git_email=$(git config --global user.email 2>/dev/null)

@@ -252,25 +252,42 @@ EOL" \
 install_base_packages() {
   print_status "PACKAGES" "Installing base dependencies..."
 
-  # Read the core package list from its file.
   local base_pkgs=$(get_packages_from_file "$PACKAGE_LISTS_SRC/base.installs")
-
-  # --- MODIFIED: Read additional packages from 'add.installs' ---
-  local additional_pkgs_file="$PACKAGE_LISTS_SRC/add.installs"
-  local additional_pkgs=$(get_packages_from_file "$additional_pkgs_file")
-
-  if [ -n "$additional_pkgs" ]; then
-    print_status "PACKAGES" "Including additional packages from '$additional_pkgs_file'."
-  fi
-
-  # Combine the lists.
+  local additional_pkgs=$(get_packages_from_file "$PACKAGE_LISTS_SRC/add.installs")
   local all_pkgs="$base_pkgs $additional_pkgs"
 
-  if [ -z "$all_pkgs" ]; then
-    print_warning "PACKAGES" "No packages to install."
-    return 0
-  fi
+  # Split into smaller chunks for better error handling
+  local pkg_array=($all_pkgs)
+  local chunk_size=10
+  local failed_packages=()
 
-  execute_and_log "sudo pacman -S --needed --noconfirm $all_pkgs" \
-    "Installing base and additional dependencies" "PACKAGES" || return 1
+  for ((i = 0; i < ${#pkg_array[@]}; i += chunk_size)); do
+    local chunk="${pkg_array[@]:i:chunk_size}"
+    if ! execute_and_log "sudo pacman -S --needed --noconfirm $chunk" \
+      "Installing packages: ${chunk:0:50}..." "PACKAGES"; then
+      failed_packages+=($chunk)
+    fi
+  done
+
+  if [[ ${#failed_packages[@]} -gt 0 ]]; then
+    print_warning "PACKAGES" "Some packages failed to install: ${failed_packages[*]}"
+    return 1
+  fi
+}
+
+check_network_connectivity() {
+  local test_urls=("https://archlinux.org" "https://github.com" "https://google.com")
+  local success=false
+
+  for url in "${test_urls[@]}"; do
+    if curl -s --connect-timeout 5 "$url" >/dev/null 2>&1; then
+      success=true
+      break
+    fi
+  done
+
+  if ! $success; then
+    print_error "NETWORK" "No internet connectivity detected"
+    return 1
+  fi
 }

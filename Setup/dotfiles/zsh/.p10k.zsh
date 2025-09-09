@@ -14,93 +14,121 @@
 () {
   emulate -L zsh -o extended_glob
 
-  # --- Kanagawa Color Palette ---
-  local sumiInk1='#1F1F28'
-  local sumiInk2='#242430'
-  local sumiInk3='#2A2A37'
-  local fujiWhite='#DCD7BA'
-  local fujiGray='#727169'
-  local carpYellow='#938056'
-  local springViolet='#938AA9'
-  local oniViolet='#957FB8'
-  local crystalBlue='#7E9CD8'
-  local springGreen='#98BB6C'
-  local autumnRed='#C34043'
-  local autumnYellow='#DCA561'
-
-  # --- General Prompt Settings ---
+  # --- General Settings ---
   typeset -g POWERLEVEL9K_MODE=nerdfont-complete
+  typeset -g POWERLEVEL9K_INSTANT_PROMPT=verbose
+  
+  # --- Prompt Structure ---
   typeset -g POWERLEVEL9K_PROMPT_ADD_NEWLINE=true
-  typeset -g POWERLEVEL9K_LEFT_PROMPT_SEPARATOR='\uE0B0'
-  typeset -g POWERLEVEL9K_RIGHT_PROMPT_SEPARATOR='\uE0B2'
-  typeset -g POWERLEVEL9K_VISUAL_IDENTIFIER_EXPANSION='${P9K_VISUAL_IDENTIFIER// }'
-
-  # --- Left Prompt Segments (What you actually see) ---
+  typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX=''
+  typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_PREFIX='%F{108}❯ %f'
+  
+  # Left prompt segments
   typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
-    context
-    dir
-    vcs
-    vi_mode
+    context                 # user@host
+    dir                     # current directory
+    vcs                     # git status
+    command_execution_time  # command duration
+    newline                 # \n
+    status                  # last command status
+    virtualenv              # python venv
   )
-
-  # --- Right Prompt Segments (What you actually see) ---
+  
+  # Right prompt segments  
   typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
-    status
-    command_execution_time
-    virtualenv
+    node_version
     go_version
     rust_version
-    node_version
     time
   )
 
+  # --- Kanagawa Colors (Using P9K color codes) ---
+  # Background colors use numbers 0-255
+  local KANAGAWA_BG=236        # sumiInk0
+  local KANAGAWA_BG_DARK=234   # sumiInk1
+  local KANAGAWA_BG_LIGHT=238  # sumiInk2
+  local KANAGAWA_FG=223        # fujiWhite
+  local KANAGAWA_COMMENT=102   # fujiGray
+  local KANAGAWA_SELECTION=237 # waveBlue1
+  local KANAGAWA_CYAN=109      # waveAqua1
+  local KANAGAWA_GREEN=108     # springGreen
+  local KANAGAWA_ORANGE=216    # surimiOrange
+  local KANAGAWA_PINK=175      # sakuraPink
+  local KANAGAWA_PURPLE=176    # oniViolet
+  local KANAGAWA_RED=167       # autumnRed
+  local KANAGAWA_YELLOW=221    # autumnYellow
+
   # --- Segment Styling ---
-
+  
   # Context (user@hostname)
-  typeset -g POWERLEVEL9K_CONTEXT_BACKGROUND=$sumiInk3
-  typeset -g POWERLEVEL9K_CONTEXT_FOREGROUND=$fujiWhite
-
+  typeset -g POWERLEVEL9K_CONTEXT_BACKGROUND=$KANAGAWA_BG_LIGHT
+  typeset -g POWERLEVEL9K_CONTEXT_FOREGROUND=$KANAGAWA_FG
+  typeset -g POWERLEVEL9K_CONTEXT_{DEFAULT,SUDO}_{CONTENT,VISUAL_IDENTIFIER}_EXPANSION=
+  typeset -g POWERLEVEL9K_CONTEXT_PREFIX='%fon '
+  
   # Directory
-  typeset -g POWERLEVEL9K_DIR_BACKGROUND=$sumiInk2
-  typeset -g POWERLEVEL9K_DIR_FOREGROUND=$crystalBlue
-  typeset -g POWERLEVEL9K_DIR_SHORTENED_FOREGROUND=$springViolet
-  typeset -g POWERLEVEL9K_DIR_ANCHOR_FOREGROUND=$fujiGray
+  typeset -g POWERLEVEL9K_DIR_BACKGROUND=$KANAGAWA_PURPLE
+  typeset -g POWERLEVEL9K_DIR_FOREGROUND=0
+  typeset -g POWERLEVEL9K_DIR_SHORTENED_FOREGROUND=0
+  typeset -g POWERLEVEL9K_DIR_ANCHOR_FOREGROUND=0
   typeset -g POWERLEVEL9K_DIR_ANCHOR_BOLD=true
-
+  typeset -g POWERLEVEL9K_SHORTEN_STRATEGY=truncate_to_unique
+  typeset -g POWERLEVEL9K_SHORTEN_DELIMITER=
+  typeset -g POWERLEVEL9K_DIR_MAX_LENGTH=50
+  
   # VCS (Git)
-  typeset -g POWERLEVEL9K_VCS_BACKGROUND=$sumiInk3
-  typeset -g POWERLEVEL9K_VCS_CLEAN_FOREGROUND=$springGreen
-  typeset -g POWERLEVEL9K_VCS_MODIFIED_FOREGROUND=$autumnYellow
-  typeset -g POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND=$autumnRed
-  typeset -g POWERLEVEL9K_VCS_BRANCH_ICON='\uF126'
-
-  # Vi Mode (Normal/Insert)
-  typeset -g POWERLEVEL9K_VI_MODE_NORMAL_BACKGROUND=$crystalBlue
-  typeset -g POWERLEVEL9K_VI_MODE_NORMAL_FOREGROUND=$sumiInk1
-  typeset -g POWERLEVEL9K_VI_MODE_INSERT_BACKGROUND=$springGreen
-  typeset -g POWERLEVEL9K_VI_MODE_INSERT_FOREGROUND=$sumiInk1
-
-  # Status (exit code)
-  typeset -g POWERLEVEL9K_STATUS_OK_FOREGROUND=$springGreen
-  typeset -g POWERLEVEL9K_STATUS_ERROR_FOREGROUND=$autumnRed
-
-  # Command Execution Time
-  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_FOREGROUND=$fujiGray
-
-  # Language Versions
-  typeset -g POWERLEVEL9K_VIRTUALENV_FOREGROUND=$springGreen
-  typeset -g POWERLEVEL9K_GO_VERSION_FOREGROUND=$crystalBlue
-  typeset -g POWERLEVEL9K_RUST_VERSION_FOREGROUND=$autumnYellow
-  typeset -g POWERLEVEL9K_NODE_VERSION_FOREGROUND=$springGreen
-
+  typeset -g POWERLEVEL9K_VCS_CLEAN_BACKGROUND=$KANAGAWA_GREEN
+  typeset -g POWERLEVEL9K_VCS_MODIFIED_BACKGROUND=$KANAGAWA_YELLOW
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND=$KANAGAWA_RED
+  typeset -g POWERLEVEL9K_VCS_CONFLICTED_BACKGROUND=$KANAGAWA_RED
+  typeset -g POWERLEVEL9K_VCS_CLEAN_FOREGROUND=0
+  typeset -g POWERLEVEL9K_VCS_MODIFIED_FOREGROUND=0
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND=0
+  typeset -g POWERLEVEL9K_VCS_CONFLICTED_FOREGROUND=0
+  typeset -g POWERLEVEL9K_VCS_BRANCH_ICON=' '
+  typeset -g POWERLEVEL9K_VCS_GIT_GITHUB_ICON=' '
+  
+  # Command execution time
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_THRESHOLD=3
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_PRECISION=2
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_BACKGROUND=$KANAGAWA_BG_DARK
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_FOREGROUND=$KANAGAWA_YELLOW
+  
+  # Status
+  typeset -g POWERLEVEL9K_STATUS_OK=false
+  typeset -g POWERLEVEL9K_STATUS_ERROR_BACKGROUND=$KANAGAWA_RED
+  typeset -g POWERLEVEL9K_STATUS_ERROR_FOREGROUND=$KANAGAWA_FG
+  
+  # Python virtualenv
+  typeset -g POWERLEVEL9K_VIRTUALENV_BACKGROUND=$KANAGAWA_CYAN
+  typeset -g POWERLEVEL9K_VIRTUALENV_FOREGROUND=0
+  typeset -g POWERLEVEL9K_VIRTUALENV_SHOW_WITH_PYENV=false
+  
+  # Language versions
+  typeset -g POWERLEVEL9K_NODE_VERSION_BACKGROUND=$KANAGAWA_GREEN
+  typeset -g POWERLEVEL9K_NODE_VERSION_FOREGROUND=0
+  typeset -g POWERLEVEL9K_GO_VERSION_BACKGROUND=$KANAGAWA_CYAN
+  typeset -g POWERLEVEL9K_GO_VERSION_FOREGROUND=0
+  typeset -g POWERLEVEL9K_RUST_VERSION_BACKGROUND=$KANAGAWA_ORANGE
+  typeset -g POWERLEVEL9K_RUST_VERSION_FOREGROUND=0
+  
   # Time
-  typeset -g POWERLEVEL9K_TIME_FOREGROUND=$fujiGray
+  typeset -g POWERLEVEL9K_TIME_BACKGROUND=$KANAGAWA_BG_DARK
+  typeset -g POWERLEVEL9K_TIME_FOREGROUND=$KANAGAWA_COMMENT
   typeset -g POWERLEVEL9K_TIME_FORMAT='%D{%H:%M}'
-
-  # Prompt Character
-  typeset -g POWERLEVEL9K_PROMPT_CHAR_OK_FOREGROUND=$oniViolet
-  typeset -g POWERLEVEL9K_PROMPT_CHAR_ERROR_FOREGROUND=$autumnRed
-  typeset -g POWERLEVEL9K_PROMPT_CHAR_SYMBOL='❯'
+  typeset -g POWERLEVEL9K_TIME_VISUAL_IDENTIFIER_EXPANSION=
+  
+  # Separators
+  typeset -g POWERLEVEL9K_LEFT_SEGMENT_SEPARATOR=''
+  typeset -g POWERLEVEL9K_RIGHT_SEGMENT_SEPARATOR=''
+  typeset -g POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR=''
+  typeset -g POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR=''
+  typeset -g POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL=''
+  typeset -g POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL=''
+  
+  # Icons
+  typeset -g POWERLEVEL9K_VISUAL_IDENTIFIER_EXPANSION='${P9K_VISUAL_IDENTIFIER// }'
+  typeset -g POWERLEVEL9K_MODE=nerdfont-complete
 }
 
 (( ${#p10k_config_opts} )) && setopt ${p10k_config_opts[@]}
