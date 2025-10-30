@@ -11,16 +11,7 @@ $gitUserEmailDefault = "seven.nomad@gmail.com"
 $personalRepoUrlDefault = "https://github.com/CorneliusWalters/Arch_Dev_Env.git" # Your upstream repo
 $httpProxyDefault = "" # e.g., "http://your.proxy.com:8080"
 $httpsProxyDefault = "" # e.g., "http://your.proxy.com:8080"
-
-
-# --- Call the consolidated user configuration function ---
-$userConfig = Get-InstallationUserConfig `
-  -WslUsernameDefault $wslUsernameDefault `
-  -GitUserNameDefault $gitUserNameDefault `
-  -GitUserEmailDefault $gitUserEmailDefault `
-  -PersonalRepoUrlDefault $personalRepoUrlDefault `
-  -HttpProxyDefault $httpProxyDefault `
-  -HttpsProxyDefault $httpsProxyDefault
+$sshKeyPath = "C:\Users\corneliusw\.ssh"
 
 # Assign results to the main script variables
 $wslUsername = $userConfig.WslUsername
@@ -30,7 +21,7 @@ $personalRepoUrl = $userConfig.PersonalRepoUrl
 $sshKeyReady = $userConfig.SshKeyReady
 $httpProxy = $userConfig.HttpProxy
 $httpsProxy = $userConfig.HttpsProxy
-$sshKeyPath = $userConfig.SshKeyPath
+
 
 $scriptWindowsRepoRoot = (Convert-Path $PSScriptRoot | Get-Item).Parent.FullName
 $wslRepoPath = $scriptWindowsRepoRoot.Replace('C:\', '/mnt/c/').Replace('\', '/')
