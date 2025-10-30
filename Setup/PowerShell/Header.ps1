@@ -30,6 +30,7 @@ $personalRepoUrl = $userConfig.PersonalRepoUrl
 $sshKeyReady = $userConfig.SshKeyReady
 $httpProxy = $userConfig.HttpProxy
 $httpsProxy = $userConfig.HttpsProxy
+$sshKeyPath = $userConfig.SshKeyPath
 
 $scriptWindowsRepoRoot = (Convert-Path $PSScriptRoot | Get-Item).Parent.FullName
 $wslRepoPath = $scriptWindowsRepoRoot.Replace('C:\', '/mnt/c/').Replace('\', '/')

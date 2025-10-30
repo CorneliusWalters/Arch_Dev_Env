@@ -11,6 +11,24 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$scriptPath\PowerShell\Export-Image.ps1"
 $logger = [WslLogger]::new("C:\wsl")
 
+# --- Call the consolidated user configuration function ---
+$userConfig = Get-InstallationUserConfig `
+  -WslUsernameDefault $wslUsernameDefault `
+  -GitUserNameDefault $gitUserNameDefault `
+  -GitUserEmailDefault $gitUserEmailDefault `
+  -PersonalRepoUrlDefault $personalRepoUrlDefault `
+  -HttpProxyDefault $httpProxyDefault `
+  -HttpsProxyDefault $httpsProxyDefault
+
+# Assign results to the main script variables
+$wslUsername = $userConfig.WslUsername
+$gitUserName = $userConfig.GitUserName
+$gitUserEmail = $userConfig.GitUserEmail
+$personalRepoUrl = $userConfig.PersonalRepoUrl
+$sshKeyReady = $userConfig.SshKeyReady
+$sshKeyPath = $userConfig.SshKeyPath  # This is where we actually use it
+$httpProxy = $userConfig.HttpProxy
+$httpsProxy = $userConfig.HttpsProxy
 
 try {
   # --- Step 1: Ensure execution environment is clean ---
@@ -65,7 +83,7 @@ try {
     throw "Cloning of setup repository failed."
   }
   $logger.WritePhaseStatus("CLONE_SETUP_REPO", "SUCCESS", "Setup repository cloned to '$wslRepoPath'")
-	  
+
   # --- Step 5: Root Preparation (basic OS config, user creation, sudoers) ---
   $logger.WritePhaseStatus("ROOT_PREP", "STARTING", "Preparing pristine environment as root (user, sudo, basic packages)...")
   $prepCommand = "$wslRepoPath/Setup/lib/0_prepare_root.sh $wslUsername"
@@ -74,6 +92,24 @@ try {
   }
   $logger.WritePhaseStatus("ROOT_PREP", "SUCCESS", "Root preparation completed")
 
+  # --- Step 5a: Copy SSH Keys (AFTER user creation) ---
+  if ($sshKeyPath -and (Test-Path $sshKeyPath)) {
+    $logger.WritePhaseStatus("SSH_SETUP", "STARTING", "Setting up SSH keys from $sshKeyPath")
+    
+    if (Copy-SSHKeysToWSL -Logger $logger -WindowsSshPath $sshKeyPath `
+        -WslDistroName $wslDistroName -WslUsername $wslUsername) {
+      $logger.WritePhaseStatus("SSH_SETUP", "SUCCESS", "SSH keys configured successfully")
+    }
+    else {
+      $logger.WriteLog("WARNING", "SSH key setup failed - will use HTTPS for Git", "Yellow")
+      $sshKeyReady = $false
+    }
+  }
+  elseif ($sshKeyPath) {
+    $logger.WriteLog("WARNING", "SSH key path specified but not found: $sshKeyPath", "Yellow")
+    $sshKeyReady = $false
+  }
+  
   # --- Step 6: Initial WSL Configuration (sets default user, systemd in /etc/wsl.conf) ---
   # Initialize WSL capture for the main setup execution
   $wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)

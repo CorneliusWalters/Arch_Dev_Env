@@ -52,4 +52,12 @@ find "$HOME/.config" -type d -exec chmod 700 {} \;
 chmod 755 "$HOME/.local" "$HOME/.cache"
 chown -R "$USER:$USER" "$HOME/.config" "$HOME/.local" "$HOME/.cache"
 
+print_status "PATHS" "Setting up environment paths..."
+# Ensure personal repo exists immediately
+if [[ ! -d "$PERSONAL_REPO_ROOT/.git" ]]; then
+  cd "$PERSONAL_REPO_ROOT"
+  git init >/dev/null 2>&1
+  git branch -M main >/dev/null 2>&1
+fi
+
 print_success "DIRS" "Directory structure and paths defined."

@@ -21,15 +21,6 @@ get_packages_from_file() {
 }
 
 # Check Dependencies
-setup_environment_paths() {
-  print_status "PATHS" "Setting up environment paths..."
-  # Ensure personal repo exists immediately
-  if [[ ! -d "$PERSONAL_REPO_ROOT/.git" ]]; then
-    cd "$PERSONAL_REPO_ROOT"
-    git init >/dev/null 2>&1
-    git branch -M main >/dev/null 2>&1
-  fi
-}
 
 check_dependencies() {
   local deps=("git" "curl" "sudo")

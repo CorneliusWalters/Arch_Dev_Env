@@ -51,6 +51,7 @@ setup_watcher_service() {
 
   # Create the service file
   cat >"$service_file_path" <<EOL
+  
 [Unit]
 Description=Watches for user config file changes and commits them to Git
 After=graphical-session.target
@@ -60,11 +61,14 @@ Type=simple
 ExecStart=/usr/bin/bash $watcher_script
 Restart=always
 RestartSec=10
+Environment="REPO_ROOT={{REPO_ROOT}}"
 Environment=HOME=$HOME
 
 [Install]
 WantedBy=default.target
 EOL
+
+  sed -i "s|{{REPO_ROOT}}|$REPO_ROOT|g" "$service_file_path"
 
   # Add enabler to .zshrc that waits for systemd to be ready
   cat >>"$zshrc_file" <<'EOL'
@@ -165,5 +169,90 @@ setup_git_config() {
     fi
   else
     print_warning "PERSONAL_REPO" "No personal repository URL provided. Skipping clone."
+  fi
+}
+
+setup_ssh_config() {
+  print_status "SSH_CONFIG" "Configuring SSH for optimal Git access..."
+
+  # Ensure .ssh directory exists with correct permissions
+  mkdir -p ~/.ssh
+  chmod 700 ~/.ssh
+
+  # Create/update SSH config for GitHub
+  local ssh_config=~/.ssh/config
+  local github_config="
+	# GitHub SSH Configuration
+	Host github.com
+	    HostName github.com
+	    User git
+	    IdentityFile ~/.ssh/id_ed25519
+	    IdentityFile ~/.ssh/id_rsa
+	    AddKeysToAgent yes
+	    StrictHostKeyChecking accept-new
+	"
+
+  # Check if GitHub config exists
+  if ! grep -q "Host github.com" "$ssh_config" 2>/dev/null; then
+    print_status "SSH_CONFIG" "Adding GitHub SSH configuration..."
+    echo "$github_config" >>"$ssh_config"
+    chmod 600 "$ssh_config"
+  fi
+
+  # Test SSH connection
+  print_status "SSH_TEST" "Testing SSH connection to GitHub..."
+  if ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
+    print_success "SSH_TEST" "GitHub SSH authentication successful"
+    return 0
+  else
+    print_warning "SSH_TEST" "SSH authentication test failed - you may need to add your key to GitHub"
+    return 1
+  fi
+}
+
+setup_ssh_agent() {
+  print_status "SSH_AGENT" "Configuring SSH agent auto-start..."
+
+  local zshrc="$HOME/.config/zsh/.zshrc"
+
+  if ! grep -q "SSH Agent Configuration" "$zshrc" 2>/dev/null; then
+    # Create the content as a variable first
+    local ssh_agent_config='
+# SSH Agent Configuration
+if [[ -z "$SSH_AUTH_SOCK" ]]; then
+    # Check for existing ssh-agent
+    if pgrep -u "$USER" ssh-agent > /dev/null; then
+        # Try to find existing agent
+        export SSH_AUTH_SOCK=$(find /tmp/ssh-* -name "agent.*" -uid $(id -u) 2>/dev/null | head -n1)
+    fi
+    
+    # Start new agent if needed
+    if [[ -z "$SSH_AUTH_SOCK" ]] || ! ssh-add -l &>/dev/null; then
+        eval "$(ssh-agent -s)" > /dev/null
+        
+        # Auto-add keys
+        for key in ~/.ssh/id_{ed25519,rsa,ecdsa}; do
+            if [[ -f "$key" ]]; then
+                ssh-add "$key" 2>/dev/null
+            fi
+        done
+    fi
+fi
+
+# Function to manually add SSH keys
+ssh-add-all() {
+    for key in ~/.ssh/id_*; do
+        if [[ -f "$key" && ! "$key" =~ \.pub$ ]]; then
+            ssh-add "$key"
+        fi
+    done
+}'
+
+    # Append using echo or printf
+    echo "$ssh_agent_config" >>"$zshrc"
+
+    print_success "SSH_AGENT" "SSH agent configuration added to shell profile"
+  else
+    print_status "SSH_AGENT" "SSH agent already configured"
   fi
 }

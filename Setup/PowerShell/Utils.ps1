@@ -39,7 +39,9 @@ function Get-InstallationUserConfig {
 		[string]$WslUsernameDefault,
 		[string]$GitUserNameDefault,
 		[string]$GitUserEmailDefault,
-		[string]$PersonalRepoUrlDefault
+		[string]$PersonalRepoUrlDefault,
+		[string]$HttpProxyDefault,
+		[string]$HttpsProxyDefault
 	)
 
 	Write-Host "`n--- Collecting User Configuration ---" -ForegroundColor Yellow
@@ -63,6 +65,51 @@ function Get-InstallationUserConfig {
 	
 	Write-Host "`n--- GitHub SSH Setup ---" -ForegroundColor Yellow
 	$sshKeySetupInput = Read-Host -Prompt "Have you generated an SSH key and added it to your GitHub account? (Y/N)"
+	$finalSshKeyReady = if ($sshKeySetupInput -eq 'Y') { $true } else { $false }
+    
+	$sshKeyPath = $null
+	if ($finalSshKeyReady) {
+		Write-Host "`nLet's set up your SSH key for WSL." -ForegroundColor Cyan
+		Write-Host "Common locations:" -ForegroundColor Gray
+		Write-Host "  1. C:\Users\$env:USERNAME\.ssh" -ForegroundColor Gray
+		Write-Host "  2. C:\Users\$env:USERNAME\Documents\.ssh" -ForegroundColor Gray
+		Write-Host "  3. Custom location" -ForegroundColor Gray
+        
+		$sshChoice = Read-Host -Prompt "Choose location (1/2/3) or press Enter to skip"
+        
+		switch ($sshChoice) {
+			"1" { $testPath = "C:\Users\$env:USERNAME\.ssh" }
+			"2" { $testPath = "C:\Users\$env:USERNAME\Documents\.ssh" }
+			"3" { 
+				$testPath = Read-Host -Prompt "Enter the full path to your .ssh directory"
+				$testPath = [System.Environment]::ExpandEnvironmentVariables($testPath)
+			}
+			default { $testPath = $null }
+		}
+        
+		if ($testPath -and (Test-Path $testPath)) {
+			# Check for common SSH key files
+			$foundKeys = @()
+			foreach ($keyFile in @("id_rsa", "id_ed25519", "id_ecdsa")) {
+				if (Test-Path "$testPath\$keyFile") {
+					$foundKeys += $keyFile
+				}
+			}
+            
+			if ($foundKeys.Count -gt 0) {
+				Write-Host "Found SSH keys: $($foundKeys -join ', ')" -ForegroundColor Green
+				$sshKeyPath = $testPath
+			}
+			else {
+				Write-Host "No SSH keys found in $testPath" -ForegroundColor Yellow
+			}
+		}
+		elseif ($testPath) {
+			Write-Host "Path not found: $testPath" -ForegroundColor Red
+		}
+	}
+
+	Write-Host "`n--- GitHub SSH Setup ---" -ForegroundColor Yellow
 	$finalSshKeyReady = if ($sshKeySetupInput -eq 'Y') { $true } else { $false }
 	if (-not $finalSshKeyReady) {
 		Write-Host "WARNING: SSH key is highly recommended for Git operations. Please follow GitHub's guide to create an SSH key and add it to your account:" -ForegroundColor Yellow
@@ -483,4 +530,215 @@ function Test-WslBasicFunctionality {
 	}
 	$logger.WritePhaseStatus("CONF_STATUS", "SUCCESS", "Basic WSL functionality tests completed.")
 	return $true
+}
+function Find-WindowsSSHKeys {
+	param([PSCustomObject]$Logger)
+    
+	$Logger.WriteLog("INFO", "Searching for SSH keys on Windows...", "Cyan")
+    
+	# Common SSH key locations
+	$searchPaths = @(
+		"$env:USERPROFILE\.ssh",
+		"$env:USERPROFILE\Documents\.ssh",
+		"$env:USERPROFILE\OneDrive\Documents\.ssh",
+		"$env:USERPROFILE\Desktop\.ssh"
+	)
+    
+	$foundPaths = @()
+    
+	foreach ($path in $searchPaths) {
+		if (Test-Path $path) {
+			$keyFiles = Get-ChildItem -Path $path -File -ErrorAction SilentlyContinue | Where-Object {
+				$_.Name -match '^(id_rsa|id_ed25519|id_ecdsa|id_dsa)$'
+			}
+            
+			if ($keyFiles.Count -gt 0) {
+				$Logger.WriteLog("SUCCESS", "Found SSH keys in: $path", "Green")
+				$Logger.WriteLog("INFO", "Keys found: $($keyFiles.Name -join ', ')", "Gray")
+				$foundPaths += $path
+			}
+		}
+	}
+    
+	return $foundPaths
+}
+
+function Copy-SSHKeysToWSL {
+	param(
+		[PSCustomObject]$Logger,
+		[string]$WindowsSshPath,
+		[string]$WslDistroName,
+		[string]$WslUsername
+	)
+    
+	if ([string]::IsNullOrWhiteSpace($WindowsSshPath) -or -not (Test-Path $WindowsSshPath)) {
+		$Logger.WriteLog("ERROR", "SSH path not found: $WindowsSshPath", "Red")
+		return $false
+	}
+    
+	$Logger.WritePhaseStatus("SSH_COPY", "STARTING", "Copying SSH keys from $WindowsSshPath to WSL")
+    
+	try {
+		# Create WSL .ssh directory first
+		$createSshCmd = @"
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+"@
+        
+		if (-not (Invoke-WSLCommand -DistroName $WslDistroName -Username $WslUsername `
+					-Command $createSshCmd -Description "Create .ssh directory" -Logger $Logger)) {
+			throw "Failed to create .ssh directory"
+		}
+        
+		# Get files to copy
+		$filesToCopy = Get-ChildItem -Path $WindowsSshPath -File | Where-Object {
+			$_.Name -match '^(id_|config$|known_hosts$|authorized_keys$)'
+		}
+        
+		if ($filesToCopy.Count -eq 0) {
+			$Logger.WriteLog("WARNING", "No SSH files found in $WindowsSshPath", "Yellow")
+			return $false
+		}
+        
+		foreach ($file in $filesToCopy) {
+			$Logger.WriteLog("INFO", "Processing: $($file.Name)", "Cyan")
+            
+			# Read content and fix line endings
+			$content = Get-Content -Path $file.FullName -Raw -Encoding UTF8
+			if ($null -eq $content) { continue }
+            
+			$content = $content.Replace("`r`n", "`n").TrimEnd() + "`n"
+            
+			# Pipe directly to WSL to create the file
+			$content | wsl -d $WslDistroName -u $WslUsername -- bash -c "cat > ~/.ssh/$($file.Name)"
+	
+			# Set permissions in a separate command
+			$permCmd = "chmod $permissions ~/.ssh/$($file.Name) && chown `$USER:`$USER ~/.ssh/$($file.Name)"
+			Invoke-WSLCommand -DistroName $WslDistroName -Username $WslUsername -Command $permCmd -Description "Set permissions for $($file.Name)" -Logger $Logger
+			
+			if (-not (Invoke-WSLCommand -DistroName $WslDistroName -Username $WslUsername `
+						-Command $copyCmd -Description "Copy $($file.Name)" -Logger $Logger)) {
+				$Logger.WriteLog("ERROR", "Failed to copy $($file.Name)", "Red")
+				Remove-Item $tempFile -Force
+				continue
+			}
+            
+			Remove-Item $tempFile -Force
+			$Logger.WriteLog("SUCCESS", "Copied $($file.Name) with permissions $permissions", "Green")
+		}
+        
+		# Add GitHub to known hosts to prevent prompt
+		$addKnownHostCmd = @"
+ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+"@
+		Invoke-WSLCommand -DistroName $WslDistroName -Username $WslUsername `
+			-Command $addKnownHostCmd -Description "Add GitHub to known hosts" -Logger $Logger | Out-Null
+        
+		# Test SSH
+		$Logger.WriteLog("INFO", "Testing SSH connection to GitHub...", "Cyan")
+		$testResult = wsl -d $WslDistroName -u $WslUsername -- bash -c "ssh -T git@github.com 2>&1 || true"
+        
+		if ($testResult -match "successfully authenticated") {
+			$Logger.WritePhaseStatus("SSH_COPY", "SUCCESS", "SSH keys copied and GitHub access verified")
+			return $true
+		}
+		else {
+			$Logger.WriteLog("WARNING", "SSH test output: $testResult", "Yellow")
+			$Logger.WriteLog("INFO", "SSH keys copied but GitHub authentication not verified", "Yellow")
+			return $true # Still return true as keys were copied
+		}
+	}
+	catch {
+		$Logger.WritePhaseStatus("SSH_COPY", "ERROR", "Exception: $($_.Exception.Message)")
+		return $false
+	}
+}
+
+# Update your existing Get-InstallationUserConfig function
+function Get-InstallationUserConfig {
+	param(
+		[string]$WslUsernameDefault,
+		[string]$GitUserNameDefault,
+		[string]$GitUserEmailDefault,
+		[string]$PersonalRepoUrlDefault,
+		[string]$HttpProxyDefault = "",
+		[string]$HttpsProxyDefault = ""
+	)
+
+	Write-Host "`n--- Collecting User Configuration ---" -ForegroundColor Yellow
+
+	# ... existing username, git name, email collection code ...
+
+	# SSH Configuration Section
+	Write-Host "`n--- SSH Key Configuration ---" -ForegroundColor Yellow
+    
+	# Auto-detect SSH keys first
+	$tempLogger = [PSCustomObject]@{
+		WriteLog = { param($level, $msg, $color) Write-Host "[$level] $msg" -ForegroundColor $color }
+	}
+	$detectedPaths = Find-WindowsSSHKeys -Logger $tempLogger
+    
+	$sshKeyPath = $null
+	$sshKeyReady = $false
+    
+	if ($detectedPaths.Count -gt 0) {
+		Write-Host "`nFound SSH keys in the following locations:" -ForegroundColor Green
+		for ($i = 0; $i -lt $detectedPaths.Count; $i++) {
+			Write-Host "  $($i + 1). $($detectedPaths[$i])" -ForegroundColor Cyan
+		}
+		Write-Host "  0. Enter custom path" -ForegroundColor Gray
+		Write-Host "  S. Skip SSH setup (use HTTPS)" -ForegroundColor Gray
+        
+		$choice = Read-Host "Select location (1-$($detectedPaths.Count)/0/S)"
+        
+		if ($choice -match '^\d+$') {
+			$choiceNum = [int]$choice
+			if ($choiceNum -gt 0 -and $choiceNum -le $detectedPaths.Count) {
+				$sshKeyPath = $detectedPaths[$choiceNum - 1]
+				$sshKeyReady = $true
+			}
+			elseif ($choiceNum -eq 0) {
+				$customPath = Read-Host "Enter full path to .ssh directory"
+				if (Test-Path $customPath) {
+					$sshKeyPath = $customPath
+					$sshKeyReady = $true
+				}
+				else {
+					Write-Host "Path not found: $customPath" -ForegroundColor Red
+				}
+			}
+		}
+	}
+ else {
+		Write-Host "No SSH keys found in common locations." -ForegroundColor Yellow
+		$manualChoice = Read-Host "Would you like to specify a custom path? (Y/N)"
+        
+		if ($manualChoice -eq 'Y') {
+			$customPath = Read-Host "Enter full path to .ssh directory"
+			if (Test-Path $customPath) {
+				$sshKeyPath = $customPath
+				$sshKeyReady = $true
+			}
+		}
+	}
+    
+	# Proxy configuration
+	Write-Host "`n--- Network Configuration ---" -ForegroundColor Yellow
+	$httpProxyInput = Read-Host "HTTP Proxy (blank for none, default: '$httpProxyDefault')"
+	$finalHttpProxy = if ([string]::IsNullOrWhiteSpace($httpProxyInput)) { $httpProxyDefault } else { $httpProxyInput }
+    
+	$httpsProxyInput = Read-Host "HTTPS Proxy (blank for none, default: '$httpsProxyDefault')"
+	$finalHttpsProxy = if ([string]::IsNullOrWhiteSpace($httpsProxyInput)) { $httpsProxyDefault } else { $httpsProxyInput }
+    
+	# ... rest of your existing personal repo detection code ...
+    
+	return [PSCustomObject]@{
+		WslUsername     = $finalWslUsername
+		GitUserName     = $finalGitUserName
+		GitUserEmail    = $finalGitUserEmail
+		PersonalRepoUrl = $finalPersonalRepoUrl
+		SshKeyReady     = $sshKeyReady
+		SshKeyPath      = $sshKeyPath
+		HttpProxy       = $finalHttpProxy
+		HttpsProxy      = $finalHttpsProxy
+	}
 }
