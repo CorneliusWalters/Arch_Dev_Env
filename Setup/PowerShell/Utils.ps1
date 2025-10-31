@@ -529,7 +529,8 @@ function Test-WslBasicFunctionality {
 function Find-WindowsSSHKeys {
 	param([PSCustomObject]$Logger)
     
-	$Logger.WriteLog("INFO", "Searching for SSH keys on Windows...", "Cyan")
+	# Use the call operator '&' because the logger is a PSCustomObject
+	& $Logger.WriteLog("INFO", "Searching for SSH keys on Windows...", "Cyan")
     
 	# Common SSH key locations
 	$searchPaths = @(
@@ -548,8 +549,9 @@ function Find-WindowsSSHKeys {
 			}
             
 			if ($keyFiles.Count -gt 0) {
-				$Logger.WriteLog("SUCCESS", "Found SSH keys in: $path", "Green")
-				$Logger.WriteLog("INFO", "Keys found: $($keyFiles.Name -join ', ')", "Gray")
+				# Use the call operator '&'
+				& $Logger.WriteLog("SUCCESS", "Found SSH keys in: $path", "Green")
+				& $Logger.WriteLog("INFO", "Keys found: $($keyFiles.Name -join ', ')", "Gray")
 				$foundPaths += $path
 			}
 		}
