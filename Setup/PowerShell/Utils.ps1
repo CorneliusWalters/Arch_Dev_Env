@@ -39,6 +39,7 @@ function Get-InstallationUserConfig {
 		[string]$WslUsernameDefault,
 		[string]$GitUserNameDefault,
 		[string]$GitUserEmailDefault,
+		[PSCustomObject]$Logger,
 		[string]$PersonalRepoUrlDefault,
 		[string]$HttpProxyDefault,
 		[string]$HttpsProxyDefault
@@ -529,13 +530,12 @@ function Test-WslBasicFunctionality {
 function Find-WindowsSSHKeys {
 	param([PSCustomObject]$Logger)
     
-	# Use the call operator '&' because the logger is a PSCustomObject
-	& $Logger.WriteLog("INFO", "Searching for SSH keys on Windows...", "Cyan")
+	$Logger.WriteLog("INFO", "Searching for SSH keys on Windows...", "Cyan")
     
 	# Common SSH key locations
 	$searchPaths = @(
 		"$env:USERPROFILE\.ssh",
-		"$env:USERPROFILE\Documents\.ssh",
+		"$env:USER-PROFILE\Documents\.ssh",
 		"$env:USERPROFILE\OneDrive\Documents\.ssh",
 		"$env:USERPROFILE\Desktop\.ssh"
 	)
@@ -549,9 +549,8 @@ function Find-WindowsSSHKeys {
 			}
             
 			if ($keyFiles.Count -gt 0) {
-				# Use the call operator '&'
-				& $Logger.WriteLog("SUCCESS", "Found SSH keys in: $path", "Green")
-				& $Logger.WriteLog("INFO", "Keys found: $($keyFiles.Name -join ', ')", "Gray")
+				$Logger.WriteLog("SUCCESS", "Found SSH keys in: $path", "Green")
+				$Logger.WriteLog("INFO", "Keys found: $($keyFiles.Name -join ', ')", "Gray")
 				$foundPaths += $path
 			}
 		}
@@ -655,91 +654,3 @@ ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
 }
 
 # Update your existing Get-InstallationUserConfig function
-function Get-InstallationUserConfig {
-	param(
-		[string]$WslUsernameDefault,
-		[string]$GitUserNameDefault,
-		[string]$GitUserEmailDefault,
-		[string]$PersonalRepoUrlDefault,
-		[string]$HttpProxyDefault = "",
-		[string]$HttpsProxyDefault = ""
-	)
-
-	Write-Host "`n--- Collecting User Configuration ---" -ForegroundColor Yellow
-
-	# ... existing username, git name, email collection code ...
-
-	# SSH Configuration Section
-	Write-Host "`n--- SSH Key Configuration ---" -ForegroundColor Yellow
-    
-	# Auto-detect SSH keys first
-	$tempLogger = [PSCustomObject]@{
-		WriteLog = { param($level, $msg, $color) Write-Host "[$level] $msg" -ForegroundColor $color }
-	}
-	$detectedPaths = Find-WindowsSSHKeys -Logger $tempLogger
-    
-	$sshKeyPath = $null
-	$sshKeyReady = $false
-    
-	if ($detectedPaths.Count -gt 0) {
-		Write-Host "`nFound SSH keys in the following locations:" -ForegroundColor Green
-		for ($i = 0; $i -lt $detectedPaths.Count; $i++) {
-			Write-Host "  $($i + 1). $($detectedPaths[$i])" -ForegroundColor Cyan
-		}
-		Write-Host "  0. Enter custom path" -ForegroundColor Gray
-		Write-Host "  S. Skip SSH setup (use HTTPS)" -ForegroundColor Gray
-        
-		$choice = Read-Host "Select location (1-$($detectedPaths.Count)/0/S)"
-        
-		if ($choice -match '^\d+$') {
-			$choiceNum = [int]$choice
-			if ($choiceNum -gt 0 -and $choiceNum -le $detectedPaths.Count) {
-				$sshKeyPath = $detectedPaths[$choiceNum - 1]
-				$sshKeyReady = $true
-			}
-			elseif ($choiceNum -eq 0) {
-				$customPath = Read-Host "Enter full path to .ssh directory"
-				if (Test-Path $customPath) {
-					$sshKeyPath = $customPath
-					$sshKeyReady = $true
-				}
-				else {
-					Write-Host "Path not found: $customPath" -ForegroundColor Red
-				}
-			}
-		}
-	}
- else {
-		Write-Host "No SSH keys found in common locations." -ForegroundColor Yellow
-		$manualChoice = Read-Host "Would you like to specify a custom path? (Y/N)"
-        
-		if ($manualChoice -eq 'Y') {
-			$customPath = Read-Host "Enter full path to .ssh directory"
-			if (Test-Path $customPath) {
-				$sshKeyPath = $customPath
-				$sshKeyReady = $true
-			}
-		}
-	}
-    
-	# Proxy configuration
-	Write-Host "`n--- Network Configuration ---" -ForegroundColor Yellow
-	$httpProxyInput = Read-Host "HTTP Proxy (blank for none, default: '$httpProxyDefault')"
-	$finalHttpProxy = if ([string]::IsNullOrWhiteSpace($httpProxyInput)) { $httpProxyDefault } else { $httpProxyInput }
-    
-	$httpsProxyInput = Read-Host "HTTPS Proxy (blank for none, default: '$httpsProxyDefault')"
-	$finalHttpsProxy = if ([string]::IsNullOrWhiteSpace($httpsProxyInput)) { $httpsProxyDefault } else { $httpsProxyInput }
-    
-	# ... rest of your existing personal repo detection code ...
-    
-	return [PSCustomObject]@{
-		WslUsername     = $finalWslUsername
-		GitUserName     = $finalGitUserName
-		GitUserEmail    = $finalGitUserEmail
-		PersonalRepoUrl = $finalPersonalRepoUrl
-		SshKeyReady     = $sshKeyReady
-		SshKeyPath      = $sshKeyPath
-		HttpProxy       = $finalHttpProxy
-		HttpsProxy      = $finalHttpsProxy
-	}
-}

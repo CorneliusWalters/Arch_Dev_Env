@@ -1,6 +1,5 @@
 # Install.ps1 - Main entry point for Arch Linux WSL setup
-
-$ErrorActionPreference = "Stop" # Set to Stop for better error propagation
+$ErrorActionPreference = "Stop"
 # Import modules and create the logger
 $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$scriptPath\PowerShell\Header.ps1"
@@ -11,15 +10,22 @@ $scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 . "$scriptPath\PowerShell\Export-Image.ps1"
 $logger = [WslLogger]::new("C:\wsl")
 
+# --- CORRECTED PATH CALCULATION ---
+# This logic now runs in the context of Install.ps1, where $PSScriptRoot is correct.
+$scriptWindowsRepoRoot = (Convert-Path $PSScriptRoot | Get-Item).Parent.FullName
+$wslRepoPath = $scriptWindowsRepoRoot.Replace('C:\', '/mnt/c/').Replace('\', '/')
+
+
 # --- Call the consolidated user configuration function ---
 $userConfig = Get-InstallationUserConfig `
   -WslUsernameDefault $wslUsernameDefault `
   -GitUserNameDefault $gitUserNameDefault `
   -GitUserEmailDefault $gitUserEmailDefault `
+  -Logger $logger `
   -PersonalRepoUrlDefault $personalRepoUrlDefault `
   -HttpProxyDefault $httpProxyDefault `
   -HttpsProxyDefault $httpsProxyDefault
-
+  
 # Assign results to the main script variables
 $wslUsername = $userConfig.WslUsername
 $gitUserName = $userConfig.GitUserName
