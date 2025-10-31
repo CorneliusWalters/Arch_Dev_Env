@@ -4,26 +4,23 @@
 # shellcheck disable=SC1090
 # generate_and_commit_patch.sh - Creates a .patch file from a modified config
 # and commits it to Git.
-# Load configuration
-CONFIG_FILE="$HOME/.config/arch-dev-env.conf"
-if [[ -f "$CONFIG_FILE" ]]; then
-    source "$CONFIG_FILE"
-else
-    echo "$(date): ERROR - Config file not found at $CONFIG_FILE"
-    exit 1
-fi
 
-# --- Do not edit below this line ---
-source "$CONFIG_FILE" || {
-    echo "$(date): ERROR - Config file not found at $CONFIG_FILE. Exiting."
-    exit 1
-}
-source "$SETUP_REPO_ROOT/lib/3_set_dirs.sh" || {
+# --- Self-contained Path Derivation ---
+# This script's own directory (e.g., /mnt/c/wsl/wsl_dev_setup/lib)
+SCRIPT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The repository root (e.g., /mnt/c/wsl/wsl_dev_setup)
+REPO_ROOT="$(dirname "$SCRIPT_LIB_DIR")"
+# The Setup directory (e.g., /mnt/c/wsl/wsl_dev_setup/Setup)
+SETUP_DIR="$REPO_ROOT/Setup"
+# Source directory definitions relative to the derived path
+source "$SETUP_DIR/lib/3_set_dirs.sh" || {
     echo "$(date): ERROR - Central directory definitions not found. Exiting."
     exit 1
 }
 
-mkdir -p "$(dirname "$LOG_FILE")"
+LOG_DIR="$REPO_ROOT/tmp/logs"
+LOG_FILE="$LOG_DIR/commit_patch.log"
+mkdir -p "$LOG_DIR"
 exec >>"$LOG_FILE" 2>&1
 
 WORKING_FILE="$1"
@@ -32,9 +29,10 @@ if [ -z "$WORKING_FILE" ]; then
     exit 1
 fi
 
-# Derive the pristine and patch file paths
-RELATIVE_PATH=${WORKING_FILE#$HOME/}                                # e.g., .config/tmux/tmux.conf
-PRISTINE_FILE="$HOME/.config/dotfiles-pristine/${RELATIVE_PATH#*/}" # e.g., .../tmux/tmux.conf
+# Derive the pristine and patch file paths from variables defined in 3_set_dirs.sh
+# This logic requires PRISTINE_ROOT to be defined, which it is.
+RELATIVE_PATH=${WORKING_FILE#$HOME/}
+PRISTINE_FILE="$PRISTINE_ROOT/${RELATIVE_PATH#*/}"
 PATCH_FILE="$WORKING_FILE.patch"
 FILENAME=$(basename "$WORKING_FILE")
 
@@ -47,8 +45,6 @@ if [ ! -f "$PRISTINE_FILE" ]; then
 fi
 
 # Generate the patch using diff
-# -u: unified format (standard for patches)
-# The labels 'a/' and 'b/' are conventional for diff.
 echo "Generating patch for $FILENAME..."
 diff -u "$PRISTINE_FILE" "$WORKING_FILE" >"$PATCH_FILE"
 
@@ -59,8 +55,8 @@ if [ ! -s "$PATCH_FILE" ]; then
     exit 0
 fi
 
-cd "$REPO_ROOT" || {
-    echo "ERROR: Could not cd to $REPO_ROOT"
+cd "$PERSONAL_REPO_ROOT" || {
+    echo "ERROR: Could not cd to $PERSONAL_REPO_ROOT"
     exit 1
 }
 

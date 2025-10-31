@@ -1,0 +1,2461 @@
+Exported Git Repository Contents - Generated on 2025-10-30 15:23:23
+--------------------------------------------------------
+
+--- FILE 1: 1_sys_init.sh ---
+```
+#!/bin/bash
+###     file name: 1_sys_init.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/Setup/.
+# shellcheck disable=SC2155
+
+#######--- START OF FILE ---#######
+# Main initialization script for WSL Arch Linux setup with step control
+# Exit on any error
+set -e
+
+# set directory source (directory of this script)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+export TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+# Source core library functions (order matters!)
+source "$SCRIPT_DIR/lib/2_logging.sh" || exit 1
+source "$SCRIPT_DIR/lib/4_syst_ready_fn.sh" || exit 1 # Contains get_packages_from_file now
+source "$SCRIPT_DIR/lib/5_install_dev.sh" || exit 1   # Contains dev/db/python installs
+source "$SCRIPT_DIR/lib/5_install_serv.sh" || exit 1  # Contains service/hook installs
+source "$SCRIPT_DIR/lib/6_setup_tools.sh" || exit 1   # NEW: Consolidated tool setup & configs
+
+# Export Repository Root (one level up from Setup/)
+export REPO_ROOT="$(dirname "$SCRIPT_DIR")"
+
+# Initialize logging (this sets up LOG_DIR and LOGFILE)
+init_logging || exit 1
+
+# Source Directory setup (defines PRISTINE_ROOT, PRISTINE_DOTFILES_SRC, PACKAGE_LISTS_SRC etc.)
+source "$SCRIPT_DIR/lib/3_set_dirs.sh" || exit 1
+
+# Define available steps
+declare -A STEPS=(
+	["1"]="step_system_prep"
+	["2"]="step_system_update"
+	["3"]="step_mirror_optimization"
+	["4"]="step_filesystem_config"
+	["5"]="step_locale_setup"
+	["6"]="step_base_packages"
+	["7"]="step_dev_tools"
+	["8"]="step_tool_configs"
+	["9"]="step_ssh_setup" # Add this
+	["10"]="step_git_setup"
+	["11"]="step_hooks_services" # Increment this
+)
+
+declare -A STEP_NAMES=(
+	["1"]="System Preparation (Time, Keyring, Dependencies)"
+	["2"]="Critical System Update"
+	["3"]="Mirror Optimization"
+	["4"]="Filesystem Health & Pacman Configuration"
+	["5"]="Locale Setup"
+	["6"]="Base Package Installation & Environment Paths"
+	["7"]="Development Tools & Environments"
+	["8"]="User Tools & Dotfile Configuration"
+	["9"]="Setup SSH Config"
+	["10"]="Git Configuration"
+	["11"]="System Hooks and Services"
+)
+
+# Step implementations
+step_system_prep() {
+	print_phase_start "SYSTEM_PREP" "Time Sync, Keyring, Dependencies"
+	sync_wsl_time || exit 1
+	stabilise_keyring || exit 1
+	check_dependencies || exit 1
+	print_phase_end "SYSTEM_PREP" "SUCCESS"
+}
+
+step_system_update() {
+	print_phase_start "SYSTEM_UPDATE" "Critical System Update"
+	update_system || exit 1
+	print_phase_end "SYSTEM_UPDATE" "SUCCESS"
+}
+
+step_mirror_optimization() {
+	print_phase_start "MIRRORS" "Optimizing package mirrors"
+	optimise_mirrors || exit 1
+	print_phase_end "MIRRORS" "SUCCESS"
+}
+
+step_filesystem_config() {
+	print_phase_start "FILESYSTEM" "Filesystem Health & Pacman Configuration"
+	check_filesystem_health || {
+		print_error "MAIN" "Filesystem health check failed, cannot continue"
+		exit 1
+	}
+	optimise_pacman || exit 1
+	print_phase_end "FILESYSTEM" "SUCCESS"
+}
+
+step_locale_setup() {
+	print_phase_start "SYSTEM_CONFIG" "Setting system-wide locale"
+	setup_locale || exit 1
+	print_phase_end "SYSTEM_CONFIG" "SUCCESS"
+}
+
+step_base_packages() {
+	print_phase_start "BASE_PACKAGES" "Installing base packages and configuring environment paths"
+	setup_environment_paths || exit 1 # Creates ~/.config/dotfiles git repo
+	install_base_packages || exit 1   # Installs packages from base.installs & add.installs
+	print_phase_end "BASE_PACKAGES" "SUCCESS"
+}
+
+step_dev_tools() {
+	print_phase_start "DEV_TOOLS" "Installing development tools and Python environment"
+	install_dev_tools || exit 1
+	install_db_tools || exit 1
+	install_python_environment || exit 1
+	print_phase_end "DEV_TOOLS" "SUCCESS"
+}
+
+step_tool_configs() {
+	print_phase_start "TOOL_CONFIGS" "Setting up user tools and configurations (Zsh, Tmux, Neovim, P10k, LSD, win32yank)"
+	setup_shell || exit 1 # Sets Zsh as default shell, calls setup_zsh internally
+	setup_p10k || exit 1
+	setup_tmux || exit 1
+	setup_neovim || exit 1
+	setup_lsd_theme || exit 1
+	print_phase_end "TOOL_CONFIGS" "SUCCESS"
+}
+
+step_git_setup() {
+	print_phase_start "GIT_SETUP" "Setting up Git configuration and cloning personal repository"
+	setup_git_config || exit 1
+	print_phase_end "GIT_SETUP" "SUCCESS"
+}
+
+step_hooks_services() {
+	print_phase_start "HOOKS" "Setting up system hooks and services (pacman sync, systemd, config watcher)"
+	setup_pacman_git_hook || exit 1
+	setup_systemd_enabler || exit 1
+	setup_watcher_service || exit 1
+	print_phase_end "HOOKS" "SUCCESS"
+}
+
+step_ssh_setup() {
+	print_phase_start "SSH_SETUP" "Configuring SSH access and agent"
+
+	# Only run if SSH keys exist
+	if [[ -f ~/.ssh/id_ed25519 ]] || [[ -f ~/.ssh/id_rsa ]]; then
+		setup_ssh_config || print_warning "SSH_SETUP" "SSH config setup had issues"
+		setup_ssh_agent || print_warning "SSH_SETUP" "SSH agent setup had issues"
+	else
+		print_status "SSH_SETUP" "No SSH keys found, skipping SSH setup"
+	fi
+
+	print_phase_end "SSH_SETUP" "COMPLETE"
+}
+
+# Function to show available steps
+show_help() {
+	echo "Usage: $0 [OPTION]"
+	echo ""
+	echo "Options:"
+	echo "  --help, -h          Show this help message"
+	echo "  --list, -l          List all available steps"
+	echo "  --step N            Run specific step number N (1-10)"
+	echo "  --steps N-M         Run steps from N to M (e.g., 5-8)"
+	echo "  --steps N,M,P       Run specific steps N, M, and P (e.g., 3,7,9)"
+	echo ""
+	echo "Examples:"
+	echo "  $0                  Run all steps (default behavior)"
+	echo "  $0 --step 3         Run only step 3 (Mirror Optimization)"
+	echo "  $0 --steps 5-7      Run steps 5 through 7"
+	echo "  $0 --steps 1,4,8    Run steps 1, 4, and 8 only"
+	echo ""
+}
+
+# Function to list all steps
+list_steps() {
+	echo "Available steps:"
+	echo ""
+	for i in {1..11}; do
+		printf "  %2d. %s\n" "$i" "${STEP_NAMES[$i]}"
+	done
+	echo ""
+}
+
+# Function to validate step number
+validate_step() {
+	local step=$1
+	if [[ ! "$step" =~ ^[0-9]+$ ]] || [ "$step" -lt 1 ] || [ "$step" -gt 11 ]; then
+		print_error "PARAM" "Invalid step number: $step (must be 1-10)"
+		return 1
+	fi
+	return 0
+}
+
+# Function to parse and run specified steps
+run_specified_steps() {
+	local step_spec=$1
+	local steps_to_run=()
+
+	if [[ "$step_spec" =~ ^[0-9]+$ ]]; then
+		# Single step
+		validate_step "$step_spec" || exit 1
+		steps_to_run=("$step_spec")
+	elif [[ "$step_spec" =~ ^[0-9]+-[0-9]+$ ]]; then
+		# Range of steps (e.g., 5-8)
+		local start_step=$(echo "$step_spec" | cut -d'-' -f1)
+		local end_step=$(echo "$step_spec" | cut -d'-' -f2)
+		validate_step "$start_step" || exit 1
+		validate_step "$end_step" || exit 1
+
+		if [ "$start_step" -gt "$end_step" ]; then
+			print_error "PARAM" "Invalid range: start step ($start_step) is greater than end step ($end_step)"
+			exit 1
+		fi
+
+		for ((i = start_step; i <= end_step; i++)); do
+			steps_to_run+=("$i")
+		done
+	elif [[ "$step_spec" =~ ^[0-9,]+$ ]]; then
+		# Comma-separated steps (e.g., 1,4,8)
+		IFS=',' read -ra step_array <<<"$step_spec"
+		for step in "${step_array[@]}"; do
+			validate_step "$step" || exit 1
+			steps_to_run+=("$step")
+		done
+	else
+		print_error "PARAM" "Invalid step specification: $step_spec"
+		echo "Use --help for usage information."
+		exit 1
+	fi
+
+	# Execute the specified steps
+	print_status "MAIN" "Running specified steps: ${steps_to_run[*]}"
+
+	for step_num in "${steps_to_run[@]}"; do
+		local step_func="${STEPS[$step_num]}"
+		local step_name="${STEP_NAMES[$step_num]}"
+
+		print_status "MAIN" "=== STEP $step_num: $step_name ==="
+
+		if declare -f "$step_func" >/dev/null; then
+			$step_func || {
+				print_error "MAIN" "Step $step_num failed: $step_name"
+				exit 1
+			}
+		else
+			print_error "MAIN" "Step function not found: $step_func"
+			exit 1
+		fi
+	done
+}
+
+# Function to run all steps (original behavior)
+run_all_steps() {
+	print_status "MAIN" "Starting system initialization (all steps)..."
+
+	step_system_prep
+	step_system_update
+	step_mirror_optimization
+	step_filesystem_config
+	step_locale_setup
+	step_base_packages
+	step_dev_tools
+	step_tool_configs
+	step_git_setup
+	step_hooks_services
+
+	print_success "MAIN" "Installation complete!"
+	print_status "MAIN" "Please log out and log back in for all changes to take effect."
+	print_status "MAIN" "After logging back in, run 'nvim' and wait for plugins to install."
+	print_status "MAIN" "Check logs at: $LOGFILE"
+}
+
+# --- Parameter Processing ---
+case "${1:-}" in
+--help | -h)
+	show_help
+	exit 0
+	;;
+--list | -l)
+	list_steps
+	exit 0
+	;;
+--step)
+	if [ -z "${2:-}" ]; then
+		print_error "PARAM" "--step requires a step number"
+		show_help
+		exit 1
+	fi
+	run_specified_steps "$2"
+	;;
+--steps)
+	if [ -z "${2:-}" ]; then
+		print_error "PARAM" "--steps requires a step specification"
+		show_help
+		exit 1
+	fi
+	run_specified_steps "$2"
+	;;
+"")
+	# No parameters - run all steps (original behavior)
+	run_all_steps
+	;;
+*)
+	print_error "PARAM" "Unknown option: $1"
+	show_help
+	exit 1
+	;;
+esac
+
+```
+
+--- FILE 9: dotfiles/config.yaml ---
+```
+classic: false
+blocks:
+  - permission
+  - user
+  - group
+  - size
+  - date
+  - name
+  - git
+permission: rwx
+size: default
+date: date
+icons:
+  when: auto
+  theme: fancy
+  separator: " "
+indicators: true
+layout: grid
+header: false
+sorting:
+  column: name
+  reverse: false
+  dir-grouping: first
+no-symlink: false
+total-size: false
+hyperlink: never
+symlink-arrow: ⇒
+
+# Kanagawa color scheme (using 256 color codes)
+color:
+  when: always
+  theme: custom
+  
+  # User and group colors
+  user: 104        # waveAqua2 (muted cyan)
+  group: 246       # fujiGray (neutral gray)
+  
+  # Permission colors
+  permission:
+    read: 150      # springGreen (readable)
+    write: 223     # surimiOrange (writable)
+    exec: 108      # sakuraPink (executable)
+    exec-sticky: 183  # peachRed (sticky)
+    no-access: 237    # sumiInk4 (no access)
+    octal: 245        # fujiGray
+    acl: 220          # carpYellow
+    context: 255      # fujiWhite
+    
+  # File type colors
+  filetype:
+    file:
+      executable: 108     # springGreen
+      regular: 252        # fujiWhite
+      special: 181        # waveRed
+    dir:
+      normal: 110         # crystalBlue
+      symlink: 73         # springBlue
+      special: 141        # oniViolet
+    symlink:
+      default: 73         # springBlue
+      broken: 167         # autumnRed
+    pipe: 215            # surimiOrange
+    block_device: 230    # roninYellow
+    char_device: 179     # springViolet
+    socket: 176          # oniViolet
+    special: 181         # waveRed
+    
+  # Date colors based on age
+  date:
+    hour-old: 252        # fujiWhite (recent)
+    day-old: 251         # slightly dimmer
+    week-old: 250        # dimmer
+    month-old: 248       # even dimmer
+    older: 246           # fujiGray (old)
+    
+  # Size colors based on file size
+  size:
+    none: 245            # fujiGray
+    small: 150           # springGreen
+    medium: 223          # surimiOrange
+    large: 210           # peachRed
+    
+  # Inode colors
+  inode:
+    valid: 246           # fujiGray
+    invalid: 167         # autumnRed
+    
+  # Tree view colors
+  tree-edge: 238       # sumiInk3
+  
+  # Git status colors
+  git-status:
+    default: 245         # fujiGray
+    unmodified: 245      # fujiGray
+    ignored: 238         # sumiInk3
+    new-in-index: 108    # springGreen
+    new-in-workdir: 73   # springBlue
+    typechange: 223      # surimiOrange
+    deleted-in-index: 167    # autumnRed
+    deleted-in-workdir: 203  # samuraiRed
+    renamed-in-index: 110    # crystalBlue
+    modified-in-index: 221   # autumnYellow
+    modified-in-workdir: 217 # lightOrange
+    conflicted: 196          # pure red
+    
+  # Special blocks
+  links:
+    valid: 73            # springBlue
+    invalid: 167         # autumnRed
+    
+  # Additional settings for better rendering
+  punctuation: 238       # sumiInk3 (for separators)
+  immediate: 252         # fujiWhite
+  directory: 110         # crystalBlue
+  executable: 108        # springGreen
+```
+
+--- FILE 10: dotfiles/nvim/init.lua ---
+```
+-- ##--init.lua
+
+-- Set leader key early, as many plugins might use it during setup
+vim.g.mapleader = " "
+
+-- Bootstrap lazy.nvim
+local lazypath = vim.fn.stdpath('data') .. '/lazy/lazy.nvim'
+if not vim.loop.fs_stat(lazypath) then
+  vim.fn.system({
+    'git',
+    'clone',
+    '--filter=blob:none',
+    'https://github.com/folke/lazy.nvim.git',
+    '--branch=stable',
+    lazypath,
+  })
+end
+vim.opt.rtp:prepend(lazypath)
+
+-- Load core preferences that don't depend on plugins
+require('preferences')
+require('keymaps')
+
+-- Tell lazy.nvim to setup plugins from the 'plugins' module
+-- This is where the magic happens.
+require('lazy').setup('plugins', {
+  -- Optional lazy.nvim global options can go here
+  -- checker = { enabled = true },
+})
+
+-- Set colorscheme
+vim.cmd([[colorscheme kanagawa]])
+
+```
+
+--- FILE 11: dotfiles/nvim/lua/keymaps.lua ---
+```
+-- Core keymaps that do not depend on any plugins
+
+print("Loading core keymaps...")
+
+-- File operations
+vim.keymap.set('n', '<leader>w', ':w<CR>', { desc = "Save file" })
+vim.keymap.set('n', '<leader>q', ':q<CR>', { desc = "Quit" })
+
+-- Window navigation
+vim.keymap.set('n', '<C-h>', '<C-w>h', { desc = "Move to left window" })
+vim.keymap.set('n', '<C-j>', '<C-w>j', { desc = "Move to window below" })
+vim.keymap.set('n', '<C-k>', '<C-w>k', { desc = "Move to window above" })
+vim.keymap.set('n', '<C-l>', '<C-w>l', { desc = "Move to right window" })
+
+-- Buffer navigation
+vim.keymap.set('n', '<Tab>', ':bnext<CR>', { desc = "Next buffer" })
+vim.keymap.set('n', '<S-Tab>', ':bprevious<CR>', { desc = "Previous buffer" })
+
+```
+
+--- FILE 12: dotfiles/nvim/lua/plugins.lua ---
+```
+return {
+  -- Appearance
+  { "rebelot/kanagawa.nvim", priority = 1000 },
+  {
+    "nvim-lualine/lualine.nvim",
+    dependencies = { "nvim-tree/nvim-web-devicons" },
+    config = function() require("lualine").setup({ theme = "kanagawa" }) end
+  },
+
+  -- File Explorer
+  {
+    "nvim-tree/nvim-tree.lua",
+    dependencies = { "nvim-tree/nvim-web-devicons" },
+    config = function() require("nvim-tree").setup({ view = { side = "right", width = 30 } }) end,
+    keys = {
+      {
+        "<leader>e",
+        "<cmd>NvimTreeToggle<CR>",
+        desc = "Toggle NvimTree"
+      }
+    }
+  },
+
+  -- LSP, Completion, Snippets
+  {
+    "neovim/nvim-lspconfig",
+    dependencies = {
+      "hrsh7th/nvim-cmp",
+      "hrsh7th/cmp-nvim-lsp",
+      "L3MON4D3/LuaSnip",
+      "saadparwaiz1/cmp_luasnip"
+    },
+    config = function()
+      local lspconfig = require('lspconfig')
+      local capabilities = require('cmp_nvim_lsp').default_capabilities()
+      -- Setup servers
+      lspconfig.pyright.setup { capabilities = capabilities }
+      lspconfig.tsserver.setup { capabilities = capabilities }
+      lspconfig.rust_analyzer.setup({}) -- Basic setup is fine
+      lspconfig.zls.setup({})           -- Basic setup is fine
+      lspconfig.lua_ls.setup {
+        capabilities = capabilities,
+        settings = { Lua = { diagnostics = { globals = { 'vim' } } } }
+      }
+      -- Setup completion
+      local cmp = require('cmp')
+      cmp.setup {
+        snippet = { expand = function(args) require('luasnip').lsp_expand(args.body) end },
+        sources = cmp.config.sources({ { name = 'nvim_lsp' }, { name = 'luasnip' } }, { { name = 'buffer' } }),
+        mapping = cmp.mapping.preset.insert({
+          ['<C-Space>'] = cmp.mapping.complete(),
+          ['<CR>'] = cmp.mapping.confirm({ select = true }),
+        }),
+      }
+      -- Setup LSP keymaps
+      vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = "Go to definition" })
+      vim.keymap.set('n', 'K', vim.lsp.buf.hover, { desc = "Show hover info" })
+    end
+  },
+
+  -- Fuzzy Finding
+  {
+    "nvim-telescope/telescope.nvim",
+    dependencies = { "nvim-lua/plenary.nvim" },
+    config = function() require("telescope").setup({}) end,
+    keys = {
+      { "<leader>ff", function() require('telescope.builtin').find_files() end, desc = "Find files" },
+      { "<leader>fg", function() require('telescope.builtin').live_grep() end,  desc = "Find by grep" },
+    }
+  },
+
+  -- Database Support
+  { "tpope/vim-dadbod" },
+  {
+    "kristijanhusak/vim-dadbod-ui",
+    dependencies = {
+      "tpope/vim-dadbod",
+      "nvim-lua/plenary.nvim"
+    },
+    config = function() vim.g.dadbod_ui_use_nvim_notify = 1 end,
+    keys = { {
+      "<leader>db",
+      "<cmd>DBUIToggle<cr>",
+      desc = "DBUI: Toggle"
+    } }
+  },
+
+  -- API Testing
+  {
+    "rest-nvim/rest.nvim",
+    dependencies = { "nvim-lua/plenary.nvim" },
+    config = function() require("rest-nvim").setup({}) end,
+  },
+
+  -- Treesitter
+  {
+    "nvim-treesitter/nvim-treesitter",
+    build = ":TSUpdate",
+    config = function()
+      require("nvim-treesitter.configs").setup({
+        ensure_installed =
+        {
+          "python",
+          "lua",
+          "javascript",
+          "rust",
+          "zig",
+          "sql",
+          "bash"
+        },
+        auto_install = true,
+        highlight = { enable = true }
+      })
+    end
+  },
+
+  -- Other QoL plugins
+  {
+    "lewis6991/gitsigns.nvim",
+    config = function() require('gitsigns').setup() end
+  },
+  { "windwp/nvim-autopairs", config = true },
+  { "nvim-lua/plenary.nvim" }, -- Explicit dependency
+}
+
+```
+
+--- FILE 13: dotfiles/nvim/lua/preferences.lua ---
+```
+-- This file is required by init.lua before plugins are loaded.
+-- It's for settings that don't depend on any plugins.
+
+print("Loading core preferences...")
+
+vim.opt.number = true
+vim.opt.relativenumber = true
+vim.opt.mouse = 'a'
+vim.opt.ignorecase = true
+vim.opt.smartcase = true
+vim.opt.termguicolors = true
+vim.opt.expandtab = true
+vim.opt.shiftwidth = 2
+vim.opt.tabstop = 2
+vim.opt.autoindent = true
+vim.opt.showcmd = true
+vim.opt.showmatch = true
+vim.opt.wrap = false
+
+```
+
+--- FILE 14: dotfiles/tmux.conf ---
+```
+# Change prefix from 'Ctrl+b' to 'Ctrl+a' 
+unbind C-b 
+set-option -g prefix C-a 
+bind-key C-a send-prefix 
+
+set-option -g status-position top
+
+
+# Split panes using | and -
+bind | split-window -h
+bind - split-window -v
+unbind '"'
+unbind %
+
+# Enable mouse mode
+set -g mouse on 
+
+# Start window numbering at 1 
+set -g base-index 1 
+set -g pane-base-index 1
+
+# Modern colors 
+set -g default-terminal "tmux-256color"
+set -ga terminal-overrides ",xterm-256color:Tc"
+set -g status-bg black
+set -g status-fg colour91
+set -g pane-active-border-style fg=colour91
+
+bind -n M-Left select-pane -L
+bind -n M-Right select-pane -R
+bind -n M-Up select-pane -U
+bind -n M-Down select-pane -D
+
+# Set locale options
+set-option -g default-shell /usr/bin/zsh
+set-option -g status-interval 1
+
+# Improve escape time
+set -sg escape-time 0
+
+# Increase scrollback buffer size
+set -g history-limit 50000
+
+# Enable focus events
+set -g focus-events on
+
+```
+
+--- FILE 15: dotfiles/zsh/.p10k.zsh ---
+```
+# shellcheck disable=SC2206
+# shellcheck disable=SC1090
+# shellcheck disable=SC2296
+# shellcheck disable=SC2164
+# shellcheck disable=SC2034
+
+# Generated by Powerlevel10k configuration wizard
+'builtin' 'local' '-a' 'p10k_config_opts'
+[[ ! -o 'aliases'         ]] || p10k_config_opts+=('aliases')
+[[ ! -o 'sh_glob'        ]] || p10k_config_opts+=('sh_glob')
+[[ ! -o 'no_brace_expand' ]] || p10k_config_opts+=('no_brace_expand')
+'builtin' 'setopt' 'no_aliases' 'no_sh_glob' 'brace_expand'
+
+() {
+  emulate -L zsh -o extended_glob
+
+  # --- General Settings ---
+  typeset -g POWERLEVEL9K_MODE=nerdfont-complete
+  typeset -g POWERLEVEL9K_INSTANT_PROMPT=verbose
+  
+  # --- Prompt Structure ---
+  typeset -g POWERLEVEL9K_PROMPT_ADD_NEWLINE=true
+  typeset -g POWERLEVEL9K_MULTILINE_FIRST_PROMPT_PREFIX=''
+  typeset -g POWERLEVEL9K_MULTILINE_LAST_PROMPT_PREFIX='%F{108}❯ %f'
+  
+  # Left prompt segments
+  typeset -g POWERLEVEL9K_LEFT_PROMPT_ELEMENTS=(
+    context                 # user@host
+    dir                     # current directory
+    vcs                     # git status
+    command_execution_time  # command duration
+    newline                 # \n
+    status                  # last command status
+    virtualenv              # python venv
+  )
+  
+  # Right prompt segments  
+  typeset -g POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(
+    node_version
+    go_version
+    rust_version
+    time
+  )
+
+  # --- Kanagawa Colors (Using P9K color codes) ---
+  # Background colors use numbers 0-255
+  local KANAGAWA_BG=236        # sumiInk0
+  local KANAGAWA_BG_DARK=234   # sumiInk1
+  local KANAGAWA_BG_LIGHT=238  # sumiInk2
+  local KANAGAWA_FG=223        # fujiWhite
+  local KANAGAWA_COMMENT=102   # fujiGray
+  local KANAGAWA_SELECTION=237 # waveBlue1
+  local KANAGAWA_CYAN=109      # waveAqua1
+  local KANAGAWA_GREEN=108     # springGreen
+  local KANAGAWA_ORANGE=216    # surimiOrange
+  local KANAGAWA_PINK=175      # sakuraPink
+  local KANAGAWA_PURPLE=176    # oniViolet
+  local KANAGAWA_RED=167       # autumnRed
+  local KANAGAWA_YELLOW=221    # autumnYellow
+
+  # --- Segment Styling ---
+  
+  # Context (user@hostname)
+  typeset -g POWERLEVEL9K_CONTEXT_BACKGROUND=$KANAGAWA_BG_LIGHT
+  typeset -g POWERLEVEL9K_CONTEXT_FOREGROUND=$KANAGAWA_FG
+  typeset -g POWERLEVEL9K_CONTEXT_{DEFAULT,SUDO}_{CONTENT,VISUAL_IDENTIFIER}_EXPANSION=
+  typeset -g POWERLEVEL9K_CONTEXT_PREFIX='%fon '
+  
+  # Directory
+  typeset -g POWERLEVEL9K_DIR_BACKGROUND=$KANAGAWA_PURPLE
+  typeset -g POWERLEVEL9K_DIR_FOREGROUND=0
+  typeset -g POWERLEVEL9K_DIR_SHORTENED_FOREGROUND=0
+  typeset -g POWERLEVEL9K_DIR_ANCHOR_FOREGROUND=0
+  typeset -g POWERLEVEL9K_DIR_ANCHOR_BOLD=true
+  typeset -g POWERLEVEL9K_SHORTEN_STRATEGY=truncate_to_unique
+  typeset -g POWERLEVEL9K_SHORTEN_DELIMITER=
+  typeset -g POWERLEVEL9K_DIR_MAX_LENGTH=50
+  
+  # VCS (Git)
+  typeset -g POWERLEVEL9K_VCS_CLEAN_BACKGROUND=$KANAGAWA_GREEN
+  typeset -g POWERLEVEL9K_VCS_MODIFIED_BACKGROUND=$KANAGAWA_YELLOW
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_BACKGROUND=$KANAGAWA_RED
+  typeset -g POWERLEVEL9K_VCS_CONFLICTED_BACKGROUND=$KANAGAWA_RED
+  typeset -g POWERLEVEL9K_VCS_CLEAN_FOREGROUND=0
+  typeset -g POWERLEVEL9K_VCS_MODIFIED_FOREGROUND=0
+  typeset -g POWERLEVEL9K_VCS_UNTRACKED_FOREGROUND=0
+  typeset -g POWERLEVEL9K_VCS_CONFLICTED_FOREGROUND=0
+  typeset -g POWERLEVEL9K_VCS_BRANCH_ICON=' '
+  typeset -g POWERLEVEL9K_VCS_GIT_GITHUB_ICON=' '
+  
+  # Command execution time
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_THRESHOLD=3
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_PRECISION=2
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_BACKGROUND=$KANAGAWA_BG_DARK
+  typeset -g POWERLEVEL9K_COMMAND_EXECUTION_TIME_FOREGROUND=$KANAGAWA_YELLOW
+  
+  # Status
+  typeset -g POWERLEVEL9K_STATUS_OK=false
+  typeset -g POWERLEVEL9K_STATUS_ERROR_BACKGROUND=$KANAGAWA_RED
+  typeset -g POWERLEVEL9K_STATUS_ERROR_FOREGROUND=$KANAGAWA_FG
+  
+  # Python virtualenv
+  typeset -g POWERLEVEL9K_VIRTUALENV_BACKGROUND=$KANAGAWA_CYAN
+  typeset -g POWERLEVEL9K_VIRTUALENV_FOREGROUND=0
+  typeset -g POWERLEVEL9K_VIRTUALENV_SHOW_WITH_PYENV=false
+  
+  # Language versions
+  typeset -g POWERLEVEL9K_NODE_VERSION_BACKGROUND=$KANAGAWA_GREEN
+  typeset -g POWERLEVEL9K_NODE_VERSION_FOREGROUND=0
+  typeset -g POWERLEVEL9K_GO_VERSION_BACKGROUND=$KANAGAWA_CYAN
+  typeset -g POWERLEVEL9K_GO_VERSION_FOREGROUND=0
+  typeset -g POWERLEVEL9K_RUST_VERSION_BACKGROUND=$KANAGAWA_ORANGE
+  typeset -g POWERLEVEL9K_RUST_VERSION_FOREGROUND=0
+  
+  # Time
+  typeset -g POWERLEVEL9K_TIME_BACKGROUND=$KANAGAWA_BG_DARK
+  typeset -g POWERLEVEL9K_TIME_FOREGROUND=$KANAGAWA_COMMENT
+  typeset -g POWERLEVEL9K_TIME_FORMAT='%D{%H:%M}'
+  typeset -g POWERLEVEL9K_TIME_VISUAL_IDENTIFIER_EXPANSION=
+  
+  # Separators
+  typeset -g POWERLEVEL9K_LEFT_SEGMENT_SEPARATOR=''
+  typeset -g POWERLEVEL9K_RIGHT_SEGMENT_SEPARATOR=''
+  typeset -g POWERLEVEL9K_LEFT_SUBSEGMENT_SEPARATOR=''
+  typeset -g POWERLEVEL9K_RIGHT_SUBSEGMENT_SEPARATOR=''
+  typeset -g POWERLEVEL9K_LEFT_PROMPT_LAST_SEGMENT_END_SYMBOL=''
+  typeset -g POWERLEVEL9K_RIGHT_PROMPT_FIRST_SEGMENT_START_SYMBOL=''
+  
+  # Icons
+  typeset -g POWERLEVEL9K_VISUAL_IDENTIFIER_EXPANSION='${P9K_VISUAL_IDENTIFIER// }'
+  typeset -g POWERLEVEL9K_MODE=nerdfont-complete
+}
+
+(( ${#p10k_config_opts} )) && setopt ${p10k_config_opts[@]}
+'builtin' 'unset' 'p10k_config_opts'
+```
+
+--- FILE 16: dotfiles/zsh/.zshrc ---
+```
+# shellcheck disable=SC2206
+# shellcheck disable=SC1090
+# shellcheck disable=SC2296
+# shellcheck disable=SC2164
+# shellcheck disable=SC2086
+# shellcheck disable=SC1091
+# shellcheck disable=SC2034
+
+
+
+# p10k instant prompt
+if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then
+# shellcheck disable=SC1090
+  source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
+fi
+
+path=(
+    $HOME/.local/opt/go/bin
+    $HOME/.local/opt
+    $HOME/.local/bin
+    $HOME/go/bin
+    $path
+)
+
+# Force UTF-8 locale settings for compatibility with nvim and other tools
+export LANG=en_ZA.UTF-8
+export LC_ALL=en_ZA.UTF-8
+
+# XDG Base Directory Specification
+export XDG_CONFIG_HOME="$HOME/.config"
+export XDG_CACHE_HOME="$HOME/.cache"
+export XDG_DATA_HOME="$HOME/.local/share"
+
+# Updated paths
+export TMUX_CONFIG_DIR="$HOME/.config/tmux"
+export ZSH="$XDG_DATA_HOME/zsh/oh-my-zsh"
+export TERM="xterm-256color"
+
+export PERSONAL_REPO_ROOT="$HOME/.config/dotfiles"
+export SETUP_REPO_ROOT="/mnt/c/wsl/wsl_dev_setup"
+	
+ZSH_THEME="powerlevel10k/powerlevel10k"
+
+plugins=(
+    git
+    z
+    zsh-autosuggestions
+    zsh-syntax-highlighting
+)
+
+source $ZSH/oh-my-zsh.sh
+# For WSL specific clipboard
+
+if [[ "$-" == *i* ]] && [[ -t 0 ]] && [[ -n "$WSL_DISTRO_NAME" ]]; then
+  # Check if we're not already in tmux, VS Code, or SSH
+  if [[ -z "$TMUX" ]] && [[ "$TERM_PROGRAM" != "vscode" ]] && [[ -z "$SSH_CLIENT" ]]; then
+    # Check if tmux server is running
+    if tmux has-session -t main 2>/dev/null; then
+ 		  exec tmux attach-session -t main
+  	else
+    	exec tmux -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -s main
+    fi
+  fi
+fi
+[[ ! -f $XDG_CONFIG_HOME/zsh/.p10k.zsh ]] || source $XDG_CONFIG_HOME/zsh/.p10k.zsh
+
+# SET Alias Shortcuts
+alias ls='lsd --group-dirs first'
+alias ll='lsd -l --group-dirs first'
+alias la='lsd -la --group-dirs first'
+alias lt='lsd --tree --depth 2'
+alias llt='lsd -l --tree --depth 2'
+
+# Fix for color output in pipes
+alias lsd='lsd --color=always'
+
+#Other aliases 
+alias cat='bat'
+alias top='btop'
+alias find='fd'
+alias grep='rg'
+
+
+# Git shortcuts
+alias g='git'
+alias lg='lazygit'
+
+# Development shortcuts
+alias v='nvim'
+alias py='python'
+alias ipy='ipython'
+
+# System
+alias update='sudo pacman -Syu'
+alias free='free -h'
+alias df='df -h'
+alias du='du -h'
+
+# Directory navigation
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias proj='cd ~/projects'
+alias wrk='cd ~/work'
+alias dots='cd ~/.config/dotfiles'
+alias conf='cd ~/.config/'
+
+# Quick edit configs
+alias zshconf='${EDITOR:-nvim} ~/.config/zsh/.zshrc'
+alias tmuxconf='${EDITOR:-nvim} ~/.config/tmux/tmux.conf'
+alias nvimconf='${EDITOR:-nvim} ~/.config/nvim/init.lua'
+
+
+
+```
+
+--- FILE 17: lib/0_prepare_root.sh ---
+```
+#!/bin/bash
+###     file name: 0_prepare_root.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+
+set -e # Exit on any error
+
+# The username is passed as the first argument from the PowerShell script
+USERNAME="$1"
+
+if [ -z "$USERNAME" ]; then
+    echo "FATAL: No username provided to the preparation script." >&2
+    exit 1
+fi
+
+echo "--- Starting Root Preparation for user: ${USERNAME} ---"
+
+echo "--> Initializing pacman keyring..."
+pacman-key --init
+pacman-key --populate archlinux
+
+echo "--> Updating package databases..."
+pacman -Sy
+
+echo "--> Installing essential packages: sudo..."
+pacman -S --noconfirm sudo git inetutils curl
+
+echo "--> Creating sudoers directory..."
+mkdir -p /etc/sudoers.d
+
+echo "--> Creating user '${USERNAME}' with home directory..."
+useradd -m -G wheel -s /bin/bash "${USERNAME}"
+
+echo "--> Unlocking user account..."
+passwd -d "${USERNAME}"
+
+echo "--> Granting passwordless sudo to 'wheel' group..."
+echo "$USERNAME ALL=(ALL) NOPASSWD: /usr/bin/pacman, /usr/bin/systemctl" >"/etc/sudoers.d/10-$USERNAME-pacman"
+
+echo "--- Root Preparation Complete ---"
+
+```
+
+--- FILE 18: lib/2_logging.sh ---
+```
+#!/bin/bash
+###     file name: 2_logging.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+# shellcheck disable=SC2155
+# shellcheck disable=SC2034
+
+# Force unbuffered output for real-time display
+export PYTHONUNBUFFERED=1
+export DEBIAN_FRONTEND=noninteractive
+
+# Setup logging with detailed timestamps and categories
+LOG_DIR="$HOME/.local/logs/$TIMESTAMP"
+mkdir -p "$LOG_DIR"
+LOGFILE="$LOG_DIR/sys_init.log"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+# Phase Markers
+PHASE_MARKER_PREFIX="### PHASE_BOUNDARY ###"
+PHASE_START_MARKER=">>> PHASE_START"
+PHASE_END_MARKER="<<< PHASE_END"
+
+init_logging() {
+	local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+	# Create the header in the log file
+	cat >>"$LOGFILE" <<EOF
+=== Installation Log Started at $timestamp ===
+=== System Information ===
+User: $(whoami)
+Hostname: $(hostname)
+WSL Version: $(wsl.exe --version 2>/dev/null || echo 'WSL version not available')
+Kernel: $(uname -r)
+Distribution: $(cat /etc/os-release | grep PRETTY_NAME)
+Memory: $(free -h)
+Disk Space: $(df -h /)
+Network Status: $(ip addr show | grep 'inet ')
+Current Shell: $SHELL
+=== Environment Status ===
+Working Directory: $(pwd)
+Script Directory: $SCRIPT_DIR
+==========================
+EOF
+	# Output to stderr for PowerShell capture (single stream for consistency)
+	echo "=== Installation Log Started at $timestamp ===" >&2
+	echo "=== System Information ===" >&2
+	echo "User: $(whoami)" >&2
+	echo "Hostname: $(hostname)" >&2
+	echo "Working Directory: $(pwd)" >&2
+	echo "Script Directory: $SCRIPT_DIR" >&2
+	echo "==========================" >&2
+	sync
+}
+
+print_phase_start() {
+	local phase=$1
+	local description=$2
+	local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+	echo "" >&2                     # Blank line before phase
+	echo "$PHASE_MARKER_PREFIX" >&2 # ### PHASE_BOUNDARY ###
+	echo "$PHASE_START_MARKER: $phase" >&2
+	echo "TIMESTAMP: $timestamp" >&2
+	echo "DESCRIPTION: $description" >&2
+	echo "$PHASE_MARKER_PREFIX" >&2 # ### PHASE_BOUNDARY ###
+	echo "" >&2                     # Blank line after phase
+	sync
+}
+
+print_phase_end() {
+	local phase=$1
+	local status=$2
+	local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+	echo "" >&2                     # Blank line before phase
+	echo "$PHASE_MARKER_PREFIX" >&2 # ### PHASE_BOUNDARY ###
+	echo "$PHASE_END_MARKER: $phase" >&2
+	echo "STATUS: $status" >&2
+	echo "TIMESTAMP: $timestamp" >&2
+	echo "$PHASE_MARKER_PREFIX" >&2 # ### PHASE_BOUNDARY ###
+	echo "" >&2                     # Blank line after phase
+	sync
+}
+
+print_progress() {
+	local current=$1
+	local total=$2
+	local phase=$3
+	local action=$4
+	echo ">>> PROGRESS: [$current/$total] $phase - $action" >&2 # Send to stderr
+	sync
+}
+
+log_message() {
+	local level=$1
+	local category=$2
+	local message=$3
+	local func="${FUNCNAME[2]:-main}"
+	local timestamp
+
+	if timestamp=$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null); then :; else timestamp="TIMESTAMP_ERROR"; fi
+
+	local log_entry="[$timestamp] [$level] [$category] [$func] $message"
+
+	if [[ -w "$LOGFILE" ]] && [[ -w "$(dirname "$LOGFILE")" ]]; then
+		echo "$log_entry" >>"$LOGFILE" 2>/dev/null || {
+			echo "$log_entry" >>"/tmp/fallback_install.log" 2>/dev/null
+		}
+	else
+		mkdir -p "/tmp" 2>/dev/null
+		echo "$log_entry" >>"/tmp/fallback_install.log" 2>/dev/null
+	fi
+
+	# Send all formatted log_message output to PowerShell's stderr (OutputDataReceived)
+	echo "[$timestamp] [$level] [$category] $message" >&2
+	sync
+}
+
+print_status() {
+	local category=$1
+	local message=$2
+	log_message "STATUS" "$category" "$message"
+}
+print_success() {
+	local category=$1
+	local message=$2
+	log_message "SUCCESS" "$category" "$message"
+}
+print_warning() {
+	local category=$1
+	local message=$2
+	log_message "WARNING" "$category" "$message"
+}
+print_error() {
+	local category=$1
+	local message=$2
+	log_message "ERROR" "$category" "$message"
+}
+
+execute_and_log() {
+	local cmd="$1"
+	local desc="$2"
+	local category="${3:-COMMAND}"
+	local func="${FUNCNAME[1]:-main}"
+
+	log_message "STATUS" "$category" "Executing: $desc"
+	log_message "COMMAND" "$category" "[$func] \$ $cmd"
+
+	local start_time=$(date +%s)
+
+	# Execute the command directly, allowing its stdout/stderr to stream.
+	eval "$cmd" >&2 # Direct raw command output to stderr so PowerShell captures it.
+	local exit_code=$?
+
+	local end_time=$(date +%s)
+	local duration=$((end_time - start_time))
+
+	if [ $exit_code -eq 0 ]; then
+		log_message "SUCCESS" "$category" "$desc completed successfully (${duration}s)."
+		log_message "TIMING" "$category" "[$func] Command finished. Exit Code: 0, Duration: ${duration}s"
+		return 0
+	else
+		log_message "ERROR" "$category" "FAILED: $desc (Exit Code: $exit_code, Duration: ${duration}s)."
+		log_message "TIMING" "$category" "[$func] Command failed. Exit Code: $exit_code, Duration: ${duration}s"
+		return $exit_code
+	fi
+}
+
+execute_and_log_with_retry() {
+	local cmd="$1"
+	local max_attempts="${2:-3}"
+	local delay="${3:-5}"
+	local category="${4:-RETRY}"
+	local attempt=1
+	local exit_code=0
+	local func="${FUNCNAME[1]:-main}"
+
+	while [ $attempt -le $max_attempts ]; do
+		log_message "STATUS" "$category" "[$func] Attempt $attempt of $max_attempts for: $cmd"
+
+		# Execute command directly for streaming output
+		eval "$cmd" >&2 # Direct raw command output to stderr so PowerShell captures it.
+		exit_code=$?
+
+		if [ $exit_code -eq 0 ]; then
+			log_message "SUCCESS" "$category" "[$func] Succeeded on attempt $attempt."
+			return 0
+		fi
+
+		if [ $attempt -lt $max_attempts ]; then
+			log_message "WARNING" "$category" "[$func] Attempt $attempt failed. Retrying in $delay seconds..."
+			sleep "$delay"
+		fi
+
+		attempt=$((attempt + 1))
+	done
+
+	log_message "ERROR" "$category" "[$func] Command failed after $max_attempts attempts."
+	return $exit_code
+}
+
+```
+
+--- FILE 19: lib/3_set_dirs.sh ---
+```
+#!/bin/bash
+###     file name: 3_set_dirs.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+
+print_status "DIRS" "Defining paths and creating directory structure..."
+
+# --- 1. Define Core Paths ---
+export PERSONAL_REPO_ROOT="$HOME/.config/dotfiles"
+export SETUP_REPO_ROOT="$REPO_ROOT" # REPO_ROOT is from 1_sys_init.sh
+export PRISTINE_ROOT="$HOME/.config/dotfiles-pristine"
+export PRISTINE_DOTFILES_SRC="$SETUP_REPO_ROOT/Setup/dotfiles"
+export PACKAGE_LISTS_SRC="$SETUP_REPO_ROOT/Setup/packages"
+
+# --- 2. Define Specific Configuration File Paths ---
+
+# ZSH Paths
+export ZSH_PRISTINE_FILE="$PRISTINE_ROOT/zsh/.zshrc"
+export ZSH_WORKING_FILE="$HOME/.config/zsh/.zshrc"
+export ZSH_PATCH_FILE="$ZSH_WORKING_FILE.patch"
+
+# P10K Paths
+export P10K_PRISTINE_FILE="$PRISTINE_ROOT/zsh/.p10k.zsh"
+export P10K_WORKING_FILE="$HOME/.config/zsh/.p10k.zsh"
+export P10K_PATCH_FILE="$P10K_WORKING_FILE.patch"
+
+# TMUX Paths
+export TMUX_PRISTINE_FILE="$PRISTINE_ROOT/tmux/tmux.conf"
+export TMUX_WORKING_FILE="$HOME/.config/tmux/tmux.conf"
+export TMUX_PATCH_FILE="$TMUX_WORKING_FILE.patch"
+
+# LSD Paths
+export LSD_PRISTINE_FILE="$PRISTINE_ROOT/lsd/config.yaml"
+export LSD_WORKING_FILE="$HOME/.config/lsd/config.yaml"
+export LSD_PATCH_FILE="$LSD_WORKING_FILE.patch"
+
+# NVIM Paths
+export NVIM_PRISTINE_DIR="$PRISTINE_ROOT/nvim"
+export NVIM_WORKING_DIR="$HOME/.config/nvim"
+
+# --- 3. Create All Directories in One Go ---
+mkdir -p \
+  "$PRISTINE_ROOT/"{tmux,zsh,nvim/lua,lsd} \
+  "$HOME/.config/"{tmux,zsh,nvim/lua/config,lsd} \
+  "$HOME/.local/"{bin,share,opt,logs} \
+  "$HOME/.cache" \
+  "$HOME/projects" \
+  "$HOME/work" \
+  "$PERSONAL_REPO_ROOT"
+
+# --- 4. Set Permissions and Ownership ---
+find "$HOME/.config" -type d -exec chmod 700 {} \;
+chmod 755 "$HOME/.local" "$HOME/.cache"
+chown -R "$USER:$USER" "$HOME/.config" "$HOME/.local" "$HOME/.cache"
+
+print_status "PATHS" "Setting up environment paths..."
+# Ensure personal repo exists immediately
+if [[ ! -d "$PERSONAL_REPO_ROOT/.git" ]]; then
+  cd "$PERSONAL_REPO_ROOT"
+  git init >/dev/null 2>&1
+  git branch -M main >/dev/null 2>&1
+fi
+
+print_success "DIRS" "Directory structure and paths defined."
+
+```
+
+--- FILE 20: lib/4_syst_ready_fn.sh ---
+```
+#!/bin/bash
+###     file name: 4_syst_ready_fn.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+# shellcheck disable=SC2206
+# shellcheck disable=SC1090
+# shellcheck disable=SC2296
+# shellcheck disable=SC2155
+# shellcheck disable=SC2164
+
+# Function to check if a command exists
+command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+get_packages_from_file() {
+  local file_path=$1
+  if [ -f "$file_path" ]; then
+    # Filter out comments and empty lines, then join with spaces.
+    grep -Ev '^#|^$' "$file_path" | tr '\n' ' '
+  fi
+}
+
+# Check Dependencies
+
+check_dependencies() {
+  local deps=("git" "curl" "sudo")
+  for dep in "${deps[@]}"; do
+    if ! command -v "$dep" >/dev/null 2>&1; then
+      print_error "Required dependency not found: $dep"
+      return 1
+    fi
+  done
+}
+
+stabilise_keyring() {
+  print_status "KEYRING" "Initializing pacman keyring..."
+
+  # Clean existing state
+  execute_and_log "sudo rm -rf /etc/pacman.d/gnupg" "Clean keyring" "KEYRING"
+  execute_and_log "sudo pkill gpg-agent || true" "Stop key processes" "KEYRING"
+
+  # Initialize keyring
+  execute_and_log_with_retry "sudo pacman-key --init" 3 5 "KEYRING"
+  execute_and_log "sudo chmod 700 /etc/pacman.d/gnupg" "Set permissions" "KEYRING"
+
+  # Temporarily allow weak signatures for initial setup
+  execute_and_log "echo 'allow-weak-key-signatures' | sudo tee -a /etc/pacman.d/gnupg/gpg.conf" \
+    "Allow weak keys" "KEYRING"
+
+  # Populate keys with retry logic
+  execute_and_log_with_retry "sudo pacman-key --populate archlinux" 3 5 "KEYRING"
+
+  # Remove weak signature allowance
+  execute_and_log "sudo sed -i '/allow-weak-key-signatures/d' /etc/pacman.d/gnupg/gpg.conf" \
+    "Remove weak key allowance" "KEYRING"
+
+  return 0
+}
+
+optimise_pacman() {
+  print_status "PACMAN" "Optimizing pacman configuration"
+
+  # Enable parallel downloads, color, and multilib
+  execute_and_log "sudo sed -i \
+        -e 's/^#ParallelDownloads = 5/ParallelDownloads = 10/' \
+        -e 's/^#Color/Color/' \
+        -e 's/^#\[multilib\]/\[multilib\]/; /^\[multilib\]/,/Include/ s/^#Include/Include/' \
+        /etc/pacman.conf" \
+    "Optimise pacman.conf" \
+    "PACMAN" || return 1
+
+  # Update databases with new configuration
+  execute_and_log "sudo pacman -Syy" \
+    "Refresh package databases" \
+    "PACMAN" || return 1
+}
+check_filesystem_health() {
+  print_status "HEALTH" "Checking filesystem health..."
+
+  # Test if we can write to various locations
+  local test_locations=("/tmp" "$HOME" "/var/tmp")
+  local working_location=""
+
+  for location in "${test_locations[@]}"; do
+    if echo "test" >"$location/filesystem_test" 2>/dev/null; then
+      rm "$location/filesystem_test" 2>/dev/null
+      working_location="$location"
+      break
+    fi
+  done
+
+  if [[ -z "$working_location" ]]; then
+    print_error "HEALTH" "Critical: No writable filesystem locations found"
+    return 1
+  fi
+
+  # Update LOGFILE to use working location if needed
+  if [[ ! -w "$(dirname "$LOGFILE")" ]]; then
+    export LOGFILE="$working_location/wsl_install_$(date +%Y%m%d_%H%M%S).log"
+    print_warning "HEALTH" "Switched to fallback log location: $LOGFILE"
+  fi
+
+  return 0
+}
+
+sync_wsl_time() {
+  print_status "TIME" "Synchronizing WSL system time with Windows host..."
+
+  # Force time sync from Windows host
+  local wintime
+  if wintime=$(powershell.exe -Command "Get-Date -Format 'yyyy-MM-dd HH:mm:ss'" 2>/dev/null); then
+    execute_and_log "sudo date -s \"$wintime\"" \
+      "Setting system time from Windows host" "TIME"
+  else
+    print_warning "TIME" "Cannot access Windows PowerShell from WSL, using system time"
+  fi
+
+  print_status "TIME" "Current system time: $(date)"
+}
+
+optimise_mirrors() {
+  print_status "MIRROR" "Optimizing mirror list for best performance..."
+
+  # Check Python Deps before installing reflector
+  execute_and_log "sudo pacman -S --noconfirm --needed python" "Ensuring Python is installed" "MIRROR" || return 1
+
+  # Install reflector
+  if ! command_exists reflector; then
+    execute_and_log "sudo pacman -S --noconfirm reflector" "Install reflector" "MIRROR" || return 1
+  fi
+
+  # Backup the current mirrorlist
+  execute_and_log "sudo cp /etc/pacman.d/mirrorlist /etc/pacman.d/mirrorlist.backup" \
+    "Backup current mirrorlist" "MIRROR" || return 1
+
+  # Use a more conservative reflector command with shorter timeout and fewer mirrors
+  print_status "MIRROR" "Running reflector with conservative settings..."
+  local reflector_cmd="timeout 120 sudo reflector --protocol https --latest 20 --age 6 --sort rate --save /etc/pacman.d/mirrorlist --download-timeout 5 --connection-timeout 10"
+
+  # Run reflector with explicit timeout and capture exit code
+  print_status "MIRROR" "Executing: $reflector_cmd"
+  eval "$reflector_cmd" 2>&1
+  local exit_code=$?
+
+  # Check the result and handle different failure modes
+  if [ $exit_code -eq 0 ]; then
+    print_success "MIRROR" "Reflector successfully generated an optimized mirror list."
+    # Verify the new mirrorlist has content
+    if [ -s /etc/pacman.d/mirrorlist ] && grep -q "^Server" /etc/pacman.d/mirrorlist; then
+      print_success "MIRROR" "New mirrorlist verified and contains valid servers."
+    else
+      print_warning "MIRROR" "New mirrorlist appears empty or invalid. Restoring backup."
+      execute_and_log "sudo cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist" \
+        "Restoring backup mirrorlist due to invalid output" "MIRROR"
+    fi
+  elif [ $exit_code -eq 124 ]; then
+    print_warning "MIRROR" "Reflector timed out after 2 minutes. This is common with slow networks."
+    print_warning "MIRROR" "Restoring the previous working mirrorlist."
+    execute_and_log "sudo cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist" \
+      "Restoring backup mirrorlist after timeout" "MIRROR"
+  else
+    print_warning "MIRROR" "Reflector failed with exit code: $exit_code (network or server issues)."
+    print_warning "MIRROR" "This is non-fatal. Restoring the previous working mirrorlist."
+    execute_and_log "sudo cp /etc/pacman.d/mirrorlist.backup /etc/pacman.d/mirrorlist" \
+      "Restoring backup mirrorlist after failure" "MIRROR"
+  fi
+
+  # Test that pacman can still work with the current mirrorlist
+  print_status "MIRROR" "Testing pacman functionality with current mirrorlist..."
+  if timeout 30 sudo pacman -Sy >/dev/null 2>&1; then
+    print_success "MIRROR" "Pacman database refresh successful - mirrors are working."
+  else
+    print_error "MIRROR" "Pacman cannot refresh databases. This suggests mirror issues."
+    return 1
+  fi
+
+  # This function should always succeed as long as pacman works
+  return 0
+}
+
+update_system() {
+  print_status "UPDT" "Performing critical system update..."
+
+  # Step 1: Force a refresh of all package databases. -yy is critical.
+  print_status "UPDT" "Step 1/5: Forcing package database refresh..."
+  execute_and_log_with_retry "sudo pacman -Syy" 3 5 "UPDT" || return 1
+
+  # Step 2: Update the keyring to ensure we have the latest signing keys.
+  print_status "UPDT" "Step 2/5: Updating archlinux-keyring..."
+  execute_and_log_with_retry "sudo pacman -S --noconfirm archlinux-keyring" 3 5 "UPDT" || return 1
+
+  # Step 3: Update pacman itself. This is essential to handle repo structure changes.
+  print_status "UPDT" "Step 3/5: Updating pacman package manager..."
+  execute_and_log_with_retry "sudo pacman -S --noconfirm pacman" 3 5 "UPDT" || return 1
+
+  # Step 4: Now, perform the full system upgrade.
+  print_status "UPDT" "Step 4/5: Performing full system upgrade..."
+  execute_and_log_with_retry "sudo pacman -Syu --noconfirm" 3 5 "UPDT" || return 1
+
+  # Step 5: Explicitly rebuild the system's certificate trust store.
+  print_status "UPDT" "Step 5/5: Rebuilding certificate trust store..."
+  execute_and_log "sudo update-ca-trust" "Rebuilding CA trust" "UPDT" || return 1
+
+  print_success "UPDT" "System update sequence completed successfully."
+}
+
+setup_locale() {
+  print_status "LOCALE" "Setting up system-wide locale..."
+
+  # Enable locale in locale.gen
+  execute_and_log "sudo sed -i 's/#en_ZA.UTF-8/en_ZA.UTF-8/' /etc/locale.gen" \
+    "Uncommenting en_ZA.UTF-8 in locale.gen" \
+    "LOCALE" || return 1
+
+  # Create system-wide locale.conf
+  execute_and_log "sudo tee /etc/locale.conf << 'EOL'
+LANG=en_ZA.UTF-8
+LC_ALL=en_ZA.UTF-8
+LC_CTYPE=en_ZA.UTF-8
+LC_NUMERIC=en_ZA.UTF-8
+LC_TIME=en_ZA.UTF-8
+LC_COLLATE=en_ZA.UTF-8
+LC_MONETARY=en_ZA.UTF-8
+LC_MESSAGES=en_ZA.UTF-8
+LC_PAPER=en_ZA.UTF-8
+LC_NAME=en_ZA.UTF-8
+LC_ADDRESS=en_ZA.UTF-8
+LC_TELEPHONE=en_ZA.UTF-8
+LC_MEASUREMENT=en_ZA.UTF-8
+LC_IDENTIFICATION=en_ZA.UTF-8
+EOL" \
+    "Setting system-wide locale configuration" \
+    "LOCALE" || return 1
+
+  # Generate locales
+  execute_and_log "sudo locale-gen" \
+    "Generating locales" \
+    "LOCALE" || return 1
+
+  print_success "LOCALE" "System-wide locale configuration complete"
+}
+
+install_base_packages() {
+  print_status "PACKAGES" "Installing base dependencies..."
+
+  local base_pkgs=$(get_packages_from_file "$PACKAGE_LISTS_SRC/base.installs")
+  local additional_pkgs=$(get_packages_from_file "$PACKAGE_LISTS_SRC/add.installs")
+  local all_pkgs="$base_pkgs $additional_pkgs"
+
+  # Split into smaller chunks for better error handling
+  local pkg_array=($all_pkgs)
+  local chunk_size=10
+  local failed_packages=()
+
+  for ((i = 0; i < ${#pkg_array[@]}; i += chunk_size)); do
+    local chunk="${pkg_array[@]:i:chunk_size}"
+    if ! execute_and_log "sudo pacman -S --needed --noconfirm $chunk" \
+      "Installing packages: ${chunk:0:50}..." "PACKAGES"; then
+      failed_packages+=($chunk)
+    fi
+  done
+
+  if [[ ${#failed_packages[@]} -gt 0 ]]; then
+    print_warning "PACKAGES" "Some packages failed to install: ${failed_packages[*]}"
+    return 1
+  fi
+}
+
+check_network_connectivity() {
+  local test_urls=("https://archlinux.org" "https://github.com" "https://google.com")
+  local success=false
+
+  for url in "${test_urls[@]}"; do
+    if curl -s --connect-timeout 5 "$url" >/dev/null 2>&1; then
+      success=true
+      break
+    fi
+  done
+
+  if ! $success; then
+    print_error "NETWORK" "No internet connectivity detected"
+    return 1
+  fi
+}
+
+```
+
+--- FILE 21: lib/5_install_dev.sh ---
+```
+#!/bin/bash
+###     file name: 5_install_dev.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+# shellcheck disable=SC2155
+
+install_db_tools() {
+  print_status "DB" "Installing database tools..."
+  # Add clients for databases you use
+  local DB_TOOLS="postgresql-libs sqlite"
+  execute_and_log "sudo pacman -S --needed --noconfirm $DB_TOOLS" \
+    "Installing database client tools" \
+    "DB" || return 1
+}
+
+install_dev_tools() {
+  print_status "DEV" "Installing development tools..."
+  local DEV_TOOLS="nodejs npm go rust zig rust-analyzer zls"
+  execute_and_log "sudo pacman -S --needed --noconfirm $DEV_TOOLS" \
+    "Installing development tools" \
+    "DEV" || return 1
+}
+
+install_python_environment() {
+  print_status "PYENV" "Installing Python environment..."
+  local PYTHON_DEPS="python python-pip python-pipx python-poetry python-pynvim"
+  execute_and_log "sudo pacman -S --needed --noconfirm $PYTHON_DEPS" \
+    "Installing Python packages" \
+    "PYENV" || return 1
+
+  # Setup Python virtual environment for Neovim
+  print_status "VIMENV" "Installing Python environment..."
+  execute_and_log "python -m venv ~/.local/share/nvim-venv" \
+    "Creating Neovim Python virtual environment" \
+    "VIMENV" || return 1
+
+  # Install Python packages in virtual environment
+  print_status "SETPYENV" "Installing Python packages in virtual environment"
+  execute_and_log "source ~/.local/share/nvim-venv/bin/activate && pip install pynvim debugpy && deactivate" \
+    "Installing Python packages in virtual environment" \
+    "SETPYENV" || return 1
+}
+
+```
+
+--- FILE 22: lib/5_install_serv.sh ---
+```
+#!/bin/bash
+###     file name: 5_install_serv.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+# shellcheck disable=SC2155
+
+setup_systemd_enabler() {
+  print_status "SYSTEMD" "Setting up native WSL2 systemd support..."
+
+  # Check if systemd is already the init process (PID 1)
+  if [ "$(ps -p 1 -o comm=)" = "systemd" ]; then
+    print_success "SYSTEMD" "Systemd is already active (PID 1)."
+    return 0
+  fi
+
+  print_status "SYSTEMD" "Configuring WSL for native systemd support..."
+
+  # Create a clean wsl.conf with systemd enabled
+  sudo tee /etc/wsl.conf >/dev/null <<EOF
+[user]
+default=$USER
+
+[boot]
+systemd=true
+
+[interop]
+enabled=true
+appendWindowsPath=true
+EOF
+
+  print_success "SYSTEMD" "WSL systemd configuration complete."
+  print_warning "SYSTEMD" "A full WSL shutdown and restart is required to activate systemd."
+  print_warning "SYSTEMD" "The PowerShell script will handle this restart automatically."
+
+  return 0
+}
+
+setup_watcher_service() {
+  print_status "WATCHER" "Setting up config file watcher service..."
+
+  # FIX: watcher.sh is now in lib/, not lib/config/
+  local watcher_script="$REPO_ROOT/lib/watcher.sh"
+  local commit_script="$REPO_ROOT/lib/7_commit_config.sh" # This path was already correct
+  local service_file_path="$HOME/.config/systemd/user/config-watcher.service"
+  local zshrc_file="$HOME/.config/zsh/.zshrc"
+
+  # Make scripts executable
+  chmod +x "$watcher_script" "$commit_script"
+
+  # Create systemd user directory
+  mkdir -p "$HOME/.config/systemd/user/"
+
+  # Create the service file
+  cat >"$service_file_path" <<EOL
+  
+[Unit]
+Description=Watches for user config file changes and commits them to Git
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/bash $watcher_script
+Restart=always
+RestartSec=10
+Environment="REPO_ROOT={{REPO_ROOT}}"
+Environment=HOME=$HOME
+
+[Install]
+WantedBy=default.target
+EOL
+
+  sed -i "s|{{REPO_ROOT}}|$REPO_ROOT|g" "$service_file_path"
+
+  # Add enabler to .zshrc that waits for systemd to be ready
+  cat >>"$zshrc_file" <<'EOL'
+
+# --- One-shot service enabler for config-watcher ---
+# Wait for systemd and enable service on first shell start
+if command -v systemctl >/dev/null 2>&1 && ! systemctl --user is-enabled -q config-watcher.service 2>/dev/null; then
+    echo "Setting up config watcher service..."
+    systemctl --user daemon-reload
+    systemctl --user enable --now config-watcher.service 2>/dev/null && \
+        echo "Config watcher service enabled." || \
+        echo "Config watcher will be enabled after systemd is fully initialized."
+fi
+# --- End one-shot enabler ---
+EOL
+
+  print_success "WATCHER" "Config watcher service configured."
+}
+
+setup_pacman_git_hook() {
+  print_status "HOOK_SETUP" "Setting up pacman hook for Git repository synchronization..."
+
+  local sync_script_source="$REPO_ROOT/Setup/lib/6_sync_packs.sh"
+  # Destination script gets the descriptive name.
+  local sync_script_target="/usr/local/bin/pacman-git-sync"
+  local hook_file="/etc/pacman.d/hooks/auto-git-sync.hook"
+  local hook_dir="/etc/pacman.d/hooks"
+
+  execute_and_log "sudo mkdir -p \"$hook_dir\"" \
+    "Creating pacman hooks directory" "HOOK_SETUP" || return 1
+
+  # This 'cp' command copies the original file but renames it at the destination.
+  execute_and_log "sudo cp \"$sync_script_source\" \"$sync_script_target\"" \
+    "Copying package sync script to $sync_script_target" "HOOK_SETUP" || return 1
+  execute_and_log "sudo chmod +x \"$sync_script_target\"" \
+    "Making package sync script executable" "HOOK_SETUP" || return 1
+
+  # Create the pacman hook file
+  execute_and_log "sudo tee \"$hook_file\" > /dev/null << EOL
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Operation = Remove
+Type = Package
+Target = *
+
+[Action]
+Description = Syncing installed packages to Git repository...
+When = PostTransaction
+Exec = $sync_script_target
+EOL" \
+    "Creating pacman hook file $hook_file" "HOOK_SETUP" || return 1
+
+  print_success "HOOK_SETUP" "Pacman Git sync hook setup complete."
+}
+
+setup_git_config() {
+  print_status "GIT_CONFIG" "Setting up Git configuration..."
+
+  # Add SSH key check if using SSH URLs
+  if [[ "$PERSONAL_REPO_URL" =~ ^git@ ]]; then
+    if ! ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
+      print_warning "GIT_CONFIG" "SSH key not configured for GitHub"
+      print_status "GIT_CONFIG" "Switching to HTTPS for clone..."
+      PERSONAL_REPO_URL="${PERSONAL_REPO_URL/git@github.com:/https://github.com/}"
+    fi
+  fi
+  # --- Configure Global Git Settings ---
+  local git_name=$(git config --global user.name 2>/dev/null)
+  local git_email=$(git config --global user.email 2>/dev/null)
+
+  if [[ -z "$git_name" ]] || [[ -z "$git_email" ]] || [[ "$FORCE_OVERWRITE" == "true" ]]; then
+    print_status "GIT_CONFIG" "Git user info needed..."
+    if [[ -n "$GIT_USER_NAME" ]] && [[ -n "$GIT_USER_EMAIL" ]]; then
+      execute_and_log "git config --global user.name '$GIT_USER_NAME'" "Setting git user name" "GIT_CONFIG" || return 1
+      execute_and_log "git config --global user.email '$GIT_USER_EMAIL'" "Setting git user email" "GIT_CONFIG" || return 1
+    else
+      print_warning "GIT_CONFIG" "No git credentials provided, using defaults"
+      execute_and_log "git config --global user.name 'WSL User'" "Setting default git user name" "GIT_CONFIG" || return 1
+      execute_and_log "git config --global user.email 'user@example.com'" "Setting default git user email" "GIT_CONFIG" || return 1
+    fi
+    execute_and_log "git config --global init.defaultBranch main" "Setting default branch" "GIT_CONFIG" || return 1
+    execute_and_log "git config --global pull.rebase false" "Setting pull strategy" "GIT_CONFIG" || return 1
+    execute_and_log "git config --global core.autocrlf input" "Setting line endings" "GIT_CONFIG" || return 1
+  else
+    print_success "GIT_CONFIG" "Git already configured for $git_name <$git_email>"
+  fi
+
+  # --- Clone Personal Dotfiles Repository ---
+  print_status "PERSONAL_REPO" "Setting up personal dotfiles repository..."
+  if [[ -n "$PERSONAL_REPO_URL" ]]; then
+    if [ -z "$(ls -A "$PERSONAL_REPO_ROOT")" ] || [ ! -d "$PERSONAL_REPO_ROOT/.git" ]; then
+      print_status "PERSONAL_REPO" "Cloning from $PERSONAL_REPO_URL..."
+      execute_and_log "git clone '$PERSONAL_REPO_URL' '$PERSONAL_REPO_ROOT'" \
+        "Cloning personal dotfiles repo" "PERSONAL_REPO" || return 1
+    else
+      print_warning "PERSONAL_REPO" "Directory $PERSONAL_REPO_ROOT is not empty. Skipping clone."
+    fi
+  else
+    print_warning "PERSONAL_REPO" "No personal repository URL provided. Skipping clone."
+  fi
+}
+
+setup_ssh_config() {
+  print_status "SSH_CONFIG" "Configuring SSH for optimal Git access..."
+
+  # Ensure .ssh directory exists with correct permissions
+  mkdir -p ~/.ssh
+  chmod 700 ~/.ssh
+
+  # Create/update SSH config for GitHub
+  local ssh_config=~/.ssh/config
+  local github_config="
+	# GitHub SSH Configuration
+	Host github.com
+	    HostName github.com
+	    User git
+	    IdentityFile ~/.ssh/id_ed25519
+	    IdentityFile ~/.ssh/id_rsa
+	    AddKeysToAgent yes
+	    StrictHostKeyChecking accept-new
+	"
+
+  # Check if GitHub config exists
+  if ! grep -q "Host github.com" "$ssh_config" 2>/dev/null; then
+    print_status "SSH_CONFIG" "Adding GitHub SSH configuration..."
+    echo "$github_config" >>"$ssh_config"
+    chmod 600 "$ssh_config"
+  fi
+
+  # Test SSH connection
+  print_status "SSH_TEST" "Testing SSH connection to GitHub..."
+  if ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
+    print_success "SSH_TEST" "GitHub SSH authentication successful"
+    return 0
+  else
+    print_warning "SSH_TEST" "SSH authentication test failed - you may need to add your key to GitHub"
+    return 1
+  fi
+}
+
+setup_ssh_agent() {
+  print_status "SSH_AGENT" "Configuring SSH agent auto-start..."
+
+  local zshrc="$HOME/.config/zsh/.zshrc"
+
+  if ! grep -q "SSH Agent Configuration" "$zshrc" 2>/dev/null; then
+    # Create the content as a variable first
+    local ssh_agent_config='
+# SSH Agent Configuration
+if [[ -z "$SSH_AUTH_SOCK" ]]; then
+    # Check for existing ssh-agent
+    if pgrep -u "$USER" ssh-agent > /dev/null; then
+        # Try to find existing agent
+        export SSH_AUTH_SOCK=$(find /tmp/ssh-* -name "agent.*" -uid $(id -u) 2>/dev/null | head -n1)
+    fi
+    
+    # Start new agent if needed
+    if [[ -z "$SSH_AUTH_SOCK" ]] || ! ssh-add -l &>/dev/null; then
+        eval "$(ssh-agent -s)" > /dev/null
+        
+        # Auto-add keys
+        for key in ~/.ssh/id_{ed25519,rsa,ecdsa}; do
+            if [[ -f "$key" ]]; then
+                ssh-add "$key" 2>/dev/null
+            fi
+        done
+    fi
+fi
+
+# Function to manually add SSH keys
+ssh-add-all() {
+    for key in ~/.ssh/id_*; do
+        if [[ -f "$key" && ! "$key" =~ \.pub$ ]]; then
+            ssh-add "$key"
+        fi
+    done
+}'
+
+    # Append using echo or printf
+    echo "$ssh_agent_config" >>"$zshrc"
+
+    print_success "SSH_AGENT" "SSH agent configuration added to shell profile"
+  else
+    print_status "SSH_AGENT" "SSH agent already configured"
+  fi
+}
+
+```
+
+--- FILE 23: lib/6_setup_tools.sh ---
+```
+#!/bin/bash
+###     file name: 6_setup_tools.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+
+setup_tmux() {
+  print_status "TMUX" "Setting up TMUX configuration..."
+  # 1. Copy the pristine file directly from the repo to the working directory.
+  cp "$PRISTINE_DOTFILES_SRC/tmux.conf" "$TMUX_WORKING_FILE"
+  # 2. Check for and apply the user patch.
+  if [ -f "$TMUX_PATCH_FILE" ]; then
+    print_status "TMUX_PATCH" "Applying patch for tmux.conf..."
+    patch "$TMUX_WORKING_FILE" <"$TMUX_PATCH_FILE"
+  fi
+  print_success "TMUX" "TMUX configuration complete."
+}
+
+setup_zsh() {
+  print_status "ZSH" "Setting up ZSH configuration..."
+  # OMZ and ZDOTDIR setup remains the same
+  if ! grep -q "export ZDOTDIR=\"\$HOME/.config/zsh\"" "$HOME/.zshenv" 2>/dev/null; then
+    echo 'export ZDOTDIR="$HOME/.config/zsh"' >>"$HOME/.zshenv"
+  fi
+  rm -f "$HOME/.zshrc"
+
+  if [ ! -d "$HOME/.local/share/zsh/oh-my-zsh" ]; then
+    export ZSH="$HOME/.local/share/zsh/oh-my-zsh"
+    execute_and_log "install_omz" "Installing Oh My Zsh" "OMZ_INST" || return 1
+    execute_and_log "zsh_auto" "Installing zsh-autosuggestions" "ZSHAUTO" || return 1
+    execute_and_log "install_omz_syntax" "Installing zsh-syntax-highlighting" "HGLGT_SYNT" || return 1
+    execute_and_log "install_p10k" "Installing powerlevel10k" "P10K" || return 1
+  fi
+
+  # 1. Copy the pristine file directly from the repo.
+  cp "$PRISTINE_DOTFILES_SRC/zsh/.zshrc" "$ZSH_WORKING_FILE"
+  # 2. Apply the patch.
+  if [ -f "$ZSH_PATCH_FILE" ]; then
+    print_status "ZSH_PATCH" "Applying patch for .zshrc..."
+    patch "$ZSH_WORKING_FILE" <"$ZSH_PATCH_FILE"
+  fi
+  print_success "ZSH" "ZSH configuration complete."
+}
+
+setup_neovim() {
+  print_status "NVIM" "Setting up NVIM configuration..."
+
+  execute_and_log "sudo npm install -g neovim tree-sitter-cli" "Installing Neovim Node packages" "NVIM" || return 1
+  setup_winyank || exit 1
+
+  # 1. Copy the pristine files directly from the repo.
+  cp "$PRISTINE_DOTFILES_SRC/nvim/init.lua" "$NVIM_WORKING_DIR/init.lua"
+  cp -r "$PRISTINE_DOTFILES_SRC/nvim/lua" "$NVIM_WORKING_DIR/"
+
+  # 2. Apply patches for each file.
+  local NVIM_CONFIG_FILES=("init.lua" "lua/preferences.lua" "lua/plugins.lua" "lua/keymaps.lua")
+  for file in "${NVIM_CONFIG_FILES[@]}"; do
+    local working_file="$NVIM_WORKING_DIR/$file"
+    local patch_file="$working_file.patch"
+    if [ -f "$patch_file" ]; then
+      print_status "NVIM_PATCH" "Applying patch for $file..."
+      patch "$working_file" <"$patch_file"
+    fi
+  done
+  print_success "NVIM" "Neovim configuration complete."
+}
+
+setup_p10k() {
+  print_status "P10K" "Setting up Powerlevel10k configuration..."
+
+  # 1. Copy the pristine file directly from the repo.
+  cp "$PRISTINE_DOTFILES_SRC/zsh/.p10k.zsh" "$P10K_WORKING_FILE"
+  # 2. Apply the patch.
+  if [ -f "$P10K_PATCH_FILE" ]; then
+    print_status "P10K_PATCH" "Applying patch for .p10k.zsh ..."
+    patch "$P10K_WORKING_FILE" <"$P10K_PATCH_FILE"
+  fi
+  print_success "P10K" "configuration complete."
+
+}
+
+setup_lsd_theme() {
+  print_status "LSD" "Setting up Super LS ..."
+
+  # 1. Copy the pristine file directly from the repo.
+  cp "$PRISTINE_DOTFILES_SRC/config.yaml" "$LSD_WORKING_FILE"
+  # 2. Apply the patch.
+  if [ -f "$LSD_PATCH_FILE" ]; then
+    print_status "LSD_PATCH" "Applying patch for LSD config.yaml ..."
+    patch "$LSD_WORKING_FILE" <"$LSD_PATCH_FILE"
+  fi
+  print_success "LSD" "configuration complete."
+
+}
+
+setup_winyank() {
+  print_status "CLIPBOARD" "Setting up win32yank for Neovim clipboard..."
+
+  # Create directory for win32yank
+  execute_and_log "mkdir -p ~/.local/bin" \
+    "Creating local bin directory" \
+    "CLIPBOARD" || return 1
+
+  # Download win32yank
+  execute_and_log "curl -sLo /tmp/win32yank.zip https://github.com/equalsraf/win32yank/releases/download/v0.0.4/win32yank-x64.zip" \
+    "Downloading win32yank" \
+    "CLIPBOARD" || return 1
+
+  # Extract win32yank
+  execute_and_log "unzip -o /tmp/win32yank.zip -d /tmp/" \
+    "Extracting win32yank" \
+    "CLIPBOARD" || return 1
+
+  # Move to local bin and make executable
+  execute_and_log "mv /tmp/win32yank.exe ~/.local/bin/" \
+    "Installing win32yank" \
+    "CLIPBOARD" || return 1
+
+  execute_and_log "chmod +x ~/.local/bin/win32yank.exe" \
+    "Making win32yank executable" \
+    "CLIPBOARD" || return 1
+
+  # Clean up
+  execute_and_log "rm /tmp/win32yank.zip" \
+    "Cleaning up" \
+    "CLIPBOARD" || return 1
+}
+
+install_omz() {
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+}
+zsh_auto() {
+  git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-autosuggestions
+}
+install_omz_syntax() {
+  git clone https://github.com/zsh-users/zsh-syntax-highlighting ${ZSH_CUSTOM:-$ZSH/custom}/plugins/zsh-syntax-highlighting
+}
+install_p10k() {
+  git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$ZSH/custom}/themes/powerlevel10k
+}
+
+setup_shell() {
+  local zsh_path=$(which zsh)
+
+  # First set up ZSH and its configurations
+  setup_zsh || return 1
+
+  # Set it as default shell if needed
+  if [ "$SHELL" != "$zsh_path" ]; then
+    print_status "DEF_SHELL" "Setting zsh as default shell..."
+    execute_and_log "sudo chsh -s $zsh_path $USER" \
+      "Setting ZSH as default shell" \
+      "DEF_SHELL" || return 1
+
+    # Add verification here
+    print_status "DEF_SHELL" "Verifying shell change..."
+    if grep -q "$zsh_path" /etc/passwd; then
+      print_success "DEF_SHELL" "Shell change verified in /etc/passwd"
+    else
+      print_error "DEF_SHELL" "Shell change verification failed"
+      return 1
+    fi
+  fi
+}
+
+```
+
+--- FILE 24: lib/6_sync_packs.sh ---
+```
+#!/bin/bash
+###     file name: 6_sync_packs.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+
+# This script is intended to be run by a pacman hook.
+# It should perform Git operations as the user who invoked sudo pacman.
+
+# --- Define Paths ---
+# Derive PERSONAL_REPO_ROOT and PACKAGE_LISTS_SRC as these may not be directly inherited by the hook.
+
+PERSONAL_REPO_ROOT="$HOME/.config/dotfiles" # E.g., /mnt/c/wsl/wsl_dev_setup
+PACKAGE_LISTS_SRC="$PERSONAL_REPO_ROOT/packages"
+timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+# Path to the manual additions file, now managed by the hook.
+ADD_INSTALLS_FILE="$PACKAGE_LISTS_SRC/add.installs"
+
+#Create Directory for Changed Installs
+mkdir -p "$PACKAGE_LISTS_SRC"
+
+# Path to the log directory for the hook (inside the repo for consistency).
+LOG_DIR="$HOME/.local/logs/$timestamp"
+LOGFILE="$LOG_DIR/pacman_git_sync.log"
+
+# Get the user who invoked sudo (important for Git operations).
+CURRENT_USER="$SUDO_USER"
+
+# --- Logging setup for this specific script ---
+mkdir -p "$LOG_DIR"
+exec >>"$LOGFILE" 2>&1 # Redirect all output to the log file.
+
+echo "--- $(date) - Starting package sync hook for user $CURRENT_USER ---"
+
+if [ -z "$CURRENT_USER" ]; then
+	echo "ERROR: SUDO_USER environment variable not set. Cannot determine the user to run Git as. Exiting."
+	exit 1
+fi
+
+# Function to run commands as the current user.
+run_as_user() {
+	sudo -u "$CURRENT_USER" bash -c "$1"
+}
+
+# Ensure the Git repository exists and is accessible.
+if [ ! -d "$PERSONAL_REPO_ROOT" ]; then
+	echo "ERROR: Git repository root '$PERSONAL_REPO_ROOT' not found or not a directory. Exiting."
+	exit 1
+fi
+
+# Change to the Git repository root directory as the current user.
+if ! run_as_user "cd \"$PERSONAL_REPO_ROOT\""; then
+	echo "ERROR: Failed to change to repository directory '$PERSONAL_REPO_ROOT' as user '$CURRENT_USER'. Exiting."
+	exit 1
+fi
+
+# Create add.installs if it doesn't exist (e.g., very first run or manual deletion).
+if [ ! -f "$ADD_INSTALLS_FILE" ]; then
+	echo "# Manually added packages, or auto-tracked packages from pacman hook" | run_as_user "tee '$ADD_INSTALLS_FILE'"
+fi
+
+# Generate list of ALL explicitly installed packages (excluding base and dependencies).
+current_installed_pkgs_temp="/tmp/current_installed_pkgs.tmp"
+echo "Generating list of explicitly installed packages currently on system..."
+if ! pacman -Qqet >"$current_installed_pkgs_temp" 2>/dev/null; then
+	echo "WARNING: Failed to generate current package list using 'pacman -Qqet'. Skipping update."
+	rm -f "$current_installed_pkgs_temp"
+	exit 0 # Exit successfully as pacman operation completed, but sync failed.
+fi
+
+# Get list of packages already in add.installs (cleanly, ignoring comments).
+existing_pkgs_raw=$(grep -Ev '^#|^$' "$ADD_INSTALLS_FILE" 2>/dev/null | sort)
+# Get list of packages currently installed on the system (explicitly installed, non-deps).
+system_pkgs_raw=$(cat "$current_installed_pkgs_temp" | sort)
+
+new_pkgs_found=0
+packages_to_append=""
+
+# Compare and identify new packages to append to add.installs.
+echo "Checking for new packages to add to '$ADD_INSTALLS_FILE'..."
+while IFS= read -r pkg; do
+	# If the system package is not found in the existing add.installs list.
+	if ! grep -q "^${pkg}$" <<<"$existing_pkgs_raw"; then
+		echo "Found new package to append: $pkg"
+		packages_to_append+="$pkg"$'\n'
+		new_pkgs_found=1
+	fi
+done <<<"$system_pkgs_raw"
+
+rm -f "$current_installed_pkgs_temp" # Clean up temp file.
+
+if [ "$new_pkgs_found" -eq 1 ]; then
+	echo "New packages detected. Appending to '$ADD_INSTALLS_FILE' and committing..."
+
+	# Append new packages with a timestamp and comment.
+	timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+	append_header=$'\n'"# Auto-added by pacman hook on $timestamp"$'\n' # Newline before and after comment.
+
+	# Use run_as_user to ensure correct permissions for Git operations.
+	(
+		echo "$append_header"
+		echo "$packages_to_append" | sort # Sort for consistent ordering.
+	) | run_as_user "tee -a '$ADD_INSTALLS_FILE'"
+
+	# --- Perform Git operations as the current user ---
+	if ! run_as_user "cd \"$PERSONAL_REPO_ROOT\" && git add \"$ADD_INSTALLS_FILE\""; then
+		echo "ERROR: Failed to add '$ADD_INSTALLS_FILE' to Git staging. Exiting."
+		exit 1
+	fi
+
+	# Check if there are actual changes staged before committing.
+	if run_as_user "cd \"$PERSONAL_REPO_ROOT\" && git diff-index --quiet HEAD"; then
+		echo "No actual changes to commit after 'git add'. This should not happen if new packages were found."
+	else
+		# Commit the changes.
+		if ! run_as_user "cd \"$PERSONAL_REPO_ROOT\" && git commit -m \"Auto: Update $ADD_INSTALLS_FILE with new packages from pacman hook on $timestamp\""; then
+			echo "ERROR: Failed to commit changes to Git. Exiting."
+			exit 1
+		fi
+
+		# Attempt to pull and rebase before pushing to minimize conflicts.
+		echo "Attempting to pull and rebase before pushing..."
+		if ! run_as_user "cd \"$PERSONAL_REPO_ROOT\" && git pull --rebase"; then
+			echo "WARNING: 'git pull --rebase' failed. Manual intervention may be required to resolve conflicts before the next push."
+			# Continue to push, but user might need to resolve conflicts later.
+		fi
+
+		# Push to GitHub.
+		echo "Pushing changes to GitHub..."
+		if ! run_as_user "cd \"$PERSONAL_REPO_ROOT\" && git push"; then
+			echo "ERROR: Failed to push changes to GitHub. Please check your Git credentials and network connectivity."
+			echo "Manual push from '$PERSONAL_REPO_ROOT' as user '$CURRENT_USER' may be required."
+			exit 1 # Indicate failure for the hook.
+		fi
+		echo "Successfully updated and pushed '$ADD_INSTALLS_FILE' to GitHub."
+	fi
+else
+	echo "No new packages to add to '$ADD_INSTALLS_FILE'. Skipping Git commit."
+fi
+
+echo "--- $(date) - Package sync hook finished ---"
+exit 0 # Ensure the hook always exits successfully from pacman's perspective.
+
+```
+
+--- FILE 25: lib/7_commit_config.sh ---
+```
+#!/bin/bash
+###     file name: 7_commit_config.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+# shellcheck disable=SC1090
+# generate_and_commit_patch.sh - Creates a .patch file from a modified config
+# and commits it to Git.
+# Load configuration
+CONFIG_FILE="$HOME/.config/arch-dev-env.conf"
+if [[ -f "$CONFIG_FILE" ]]; then
+    source "$CONFIG_FILE"
+else
+    echo "$(date): ERROR - Config file not found at $CONFIG_FILE"
+    exit 1
+fi
+
+# --- Do not edit below this line ---
+source "$CONFIG_FILE" || {
+    echo "$(date): ERROR - Config file not found at $CONFIG_FILE. Exiting."
+    exit 1
+}
+source "$SETUP_REPO_ROOT/lib/3_set_dirs.sh" || {
+    echo "$(date): ERROR - Central directory definitions not found. Exiting."
+    exit 1
+}
+
+mkdir -p "$(dirname "$LOG_FILE")"
+exec >>"$LOG_FILE" 2>&1
+
+WORKING_FILE="$1"
+if [ -z "$WORKING_FILE" ]; then
+    echo "$(date): ERROR - No file path provided. Exiting."
+    exit 1
+fi
+
+# Derive the pristine and patch file paths
+RELATIVE_PATH=${WORKING_FILE#$HOME/}                                # e.g., .config/tmux/tmux.conf
+PRISTINE_FILE="$HOME/.config/dotfiles-pristine/${RELATIVE_PATH#*/}" # e.g., .../tmux/tmux.conf
+PATCH_FILE="$WORKING_FILE.patch"
+FILENAME=$(basename "$WORKING_FILE")
+
+echo "---"
+echo "$(date): Processing change for $FILENAME"
+
+if [ ! -f "$PRISTINE_FILE" ]; then
+    echo "ERROR: Pristine file not found at '$PRISTINE_FILE'. Cannot generate patch."
+    exit 1
+fi
+
+# Generate the patch using diff
+# -u: unified format (standard for patches)
+# The labels 'a/' and 'b/' are conventional for diff.
+echo "Generating patch for $FILENAME..."
+diff -u "$PRISTINE_FILE" "$WORKING_FILE" >"$PATCH_FILE"
+
+# Check if the patch file is empty (meaning no changes)
+if [ ! -s "$PATCH_FILE" ]; then
+    echo "No differences found. Removing empty patch file and skipping commit."
+    rm "$PATCH_FILE"
+    exit 0
+fi
+
+cd "$REPO_ROOT" || {
+    echo "ERROR: Could not cd to $REPO_ROOT"
+    exit 1
+}
+
+echo "Staging patch file: $PATCH_FILE"
+git add "$PATCH_FILE"
+
+echo "Committing patch for $FILENAME..."
+git commit -m "Auto-sync: Update patch for $FILENAME"
+
+echo "Pushing changes to remote..."
+if git push; then
+    echo "Successfully pushed patch for $FILENAME."
+else
+    echo "ERROR: Failed to push changes. Manual intervention may be required."
+fi
+
+echo "---"
+
+```
+
+--- FILE 26: lib/99_wrapper.sh ---
+```
+#!/bin/bash
+###     file name: 99_wrapper.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+
+set -e
+
+# Environment setup
+export SYSTEM_LOCALE='en_ZA.UTF-8'
+export POWERSHELL_EXECUTION='true'
+
+# Force unbuffered output for real-time streaming
+export PYTHONUNBUFFERED=1
+export DEBIAN_FRONTEND=noninteractive
+export TERM=xterm-256color
+
+stty -icanon min 1 time 0 2>/dev/null || true
+
+echo "### PHASE_BOUNDARY ###"
+echo ">>> PHASE_START: WRAPPER_INIT"
+echo "DESCRIPTION: WSL Setup Starting"
+echo "### PHASE_BOUNDARY ###"
+
+# Force output flush and add visual separator
+# Force output flush
+sync
+printf "\n" >&2
+sleep 0.2
+
+# Get the repository root (assuming this script is in Setup/lib/)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
+
+echo "Script directory: $SCRIPT_DIR"
+echo "Repository root: $REPO_ROOT"
+sync
+
+# Change to repository directory
+cd "$REPO_ROOT" || {
+    echo "ERROR: Cannot cd to $REPO_ROOT"
+    exit 1
+}
+
+echo "Changed to: $(pwd)"
+sync
+
+# Verify main script exists
+if [ ! -f Setup/1_sys_init.sh ]; then
+    echo "ERROR: Setup/1_sys_init.sh not found"
+    ls -la Setup/
+    exit 1
+fi
+
+echo "Starting 1_sys_init.sh..."
+
+echo "### PHASE_BOUNDARY ###"
+echo ">>> PHASE_START: SCRIPT_EXECUTION"
+echo "DESCRIPTION: Starting main installation script"
+echo "### PHASE_BOUNDARY ###"
+
+sync
+
+# Use unbuffered execution
+stdbuf -oL -eL bash Setup/1_sys_init.sh
+exit 0
+
+```
+
+--- FILE 27: lib/watcher.sh ---
+```
+#!/bin/bash
+###     file name: watcher.sh
+###     dir: /mnt/c/wsl/wsl_dev_setup/lib/.
+
+# --- Derive essential paths (robust for hook execution) ---
+# This script's own directory (e.g., /mnt/c/wsl/wsl_dev_setup/lib)
+SCRIPT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# The repository root (e.g., /mnt/c/wsl/wsl_dev_setup)
+REPO_ROOT="$(dirname "$SCRIPT_LIB_DIR")"
+
+# Path to the Git action script (7_commit_config.sh)
+PATCH_GENERATOR_SCRIPT="$REPO_ROOT/lib/7_commit_config.sh"
+
+# Path to the log directory for the watcher (inside the repo for consistency).
+LOG_DIR="$REPO_ROOT/tmp/logs"
+LOGFILE="$LOG_DIR/watcher_git_sync.log"
+
+# An array of configuration files to watch. These paths are relative to $HOME.
+FILES_TO_WATCH=(
+	".config/zsh/.zshrc"
+	".config/zsh/.p10k.zsh"
+	".config/lsd/config.yaml"
+	".config/tmux/tmux.conf"
+	".config/nvim/init.lua"
+	".config/nvim/lua/preferences.lua"
+	".config/nvim/lua/plugins.lua"
+	".config/nvim/lua/keymaps.lua"
+)
+
+# Convert to absolute paths
+declare -a ABSOLUTE_PATHS
+for file in "${FILES_TO_WATCH[@]}"; do
+	ABSOLUTE_PATHS+=("$HOME/$file")
+done
+
+# --- Logging setup for this specific script ---
+mkdir -p "$LOG_DIR"
+exec >>"$LOGFILE" 2>&1 # Redirect all output to the log file.
+
+echo "--- $(date) - Starting config watcher for $USER ---"
+
+# Ensure inotifywait is installed (should be in base_packages)
+if ! command -v inotifywait >/dev/null; then
+	echo "ERROR: inotifywait not found. Config watcher cannot start."
+	exit 1
+fi
+
+inotifywait -m -q -e close_write --format '%w' "${ABSOLUTE_PATHS[@]}" | while read -r CHANGED_FILE; do
+	echo "$(date): Detected change in '$CHANGED_FILE'. Triggering patch generation."
+	bash "$PATCH_GENERATOR_SCRIPT" "$CHANGED_FILE"
+done
+
+echo "--- $(date) - Config watcher stopped ---"
+
+```
+
+--- FILE 28: packages/add.installs ---
+```
+# Additional Packages that are tracked by hooking into pacman
+```
+
+--- FILE 29: packages/base.installs ---
+```
+# Core packages required for a functional development environment.
+base-devel
+git
+luarocks
+github-cli
+bat
+cmake
+ninja
+zsh
+tmux
+neovim
+htop
+btop
+duf
+ncdu
+lsd
+ripgrep
+fd
+fzf
+zoxide
+lazygit
+git-delta
+jq
+yq
+shellcheck
+tree
+tree-sitter
+unzip
+zip
+tar
+wl-clipboard
+xclip
+curl
+wget
+httpie
+procs
+tldr
+man-db
+man-pages
+inotify-tools
+```
+
+--- FILE 30: packages/db.installs ---
+```
+# Client libraries for common databases.
+postgresql-libs
+sqlite
+```
+
+--- FILE 31: packages/dev.installs ---
+```
+# Core language toolchains and servers.
+nodejs
+npm
+go
+rust
+zig
+rust-analyzer
+zls
+```
+

@@ -1,0 +1,1653 @@
+
+--- FILE 2: Install.ps1 ---
+```
+# Install.ps1 - Main entry point for Arch Linux WSL setup
+
+$ErrorActionPreference = "Stop" # Set to Stop for better error propagation
+# Import modules and create the logger
+$scriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
+. "$scriptPath\PowerShell\Header.ps1"
+. "$scriptPath\PowerShell\Logging.ps1"
+. "$scriptPath\PowerShell\Test.ps1"
+. "$scriptPath\PowerShell\Utils.ps1"
+. "$scriptPath\PowerShell\Import-Distro.ps1"
+. "$scriptPath\PowerShell\Export-Image.ps1"
+$logger = [WslLogger]::new("C:\wsl")
+
+# --- Call the consolidated user configuration function ---
+$userConfig = Get-InstallationUserConfig `
+  -WslUsernameDefault $wslUsernameDefault `
+  -GitUserNameDefault $gitUserNameDefault `
+  -GitUserEmailDefault $gitUserEmailDefault `
+  -PersonalRepoUrlDefault $personalRepoUrlDefault `
+  -HttpProxyDefault $httpProxyDefault `
+  -HttpsProxyDefault $httpsProxyDefault
+
+# Assign results to the main script variables
+$wslUsername = $userConfig.WslUsername
+$gitUserName = $userConfig.GitUserName
+$gitUserEmail = $userConfig.GitUserEmail
+$personalRepoUrl = $userConfig.PersonalRepoUrl
+$sshKeyReady = $userConfig.SshKeyReady
+$sshKeyPath = $userConfig.SshKeyPath  # This is where we actually use it
+$httpProxy = $userConfig.HttpProxy
+$httpsProxy = $userConfig.HttpsProxy
+
+try {
+  # --- Step 1: Ensure execution environment is clean ---
+  $repoPathToManage = Split-Path -Parent $PSScriptRoot
+  $currentWorkingDir = (Get-Location).Path
+
+  if ($currentWorkingDir -like "$repoPathToManage*" -or $currentWorkingDir -eq $repoPathToManage) {
+    Write-Host "Current directory ('$currentWorkingDir') is inside or equal to the target repository path ('$repoPathToManage'). Setting a neutral directory..." -ForegroundColor Yellow
+    Set-NeutralDirectory
+  }
+
+  $logger.WritePhaseStatus("INIT", "STARTING", "WSL Arch Linux Configuration for user '$wslUsername'")
+	  
+  # --- Step 2: Prerequisites Validation ---
+  # 2a. Check fundamental WSL and local Git command prerequisites.
+  if (-not (Test-WSLPrerequisites -Logger $logger -WslDistroName $wslDistroName)) {
+    throw "Prerequisites check failed."
+  }
+  $logger.WritePhaseStatus("PREREQ", "SUCCESS", "WSL prerequisites validated.")
+  
+  # 2b. Configure Git for Windows (safe.directory, global user, protocol, proxy).
+  if (-not (Set-GitGlobalConfig -Logger $logger `
+        -GitUserName $gitUserName `
+        -GitUserEmail $gitUserEmail `
+        -SshKeyReady $sshKeyReady `
+        -HttpProxy $httpProxy `
+        -HttpsProxy $httpsProxy `
+        -PSScriptRootContext $PSScriptRoot)) {
+    # Pass $PSScriptRoot for path derivation
+    throw "Git for Windows global configuration failed."
+  }
+  $logger.WritePhaseStatus("GIT_CONFIG_COMPLETE", "SUCCESS", "Git for Windows global configuration applied.")
+
+  # 2c. Final check of Git functionality (after all configurations are applied).
+  if (-not (Test-GitFunctionality -Logger $logger)) {
+    throw "Git for Windows is not functional (post-configuration check failed)."
+  }
+  $logger.WritePhaseStatus("GIT_CHECK_COMPLETE", "SUCCESS", "Git for Windows functionality verified (post-configuration).")
+
+  # --- Step 3: Distro Import ---
+  if (-not (Import-ArchDistro -Logger $logger -WslDistroName $wslDistroName -WslUsername $wslUsername -DefaultTarballPath $cleanArchTarballDefaultPath)) {
+    throw "Distro import failed."
+  }
+  $logger.WritePhaseStatus("IMPORT", "SUCCESS", "Distro imported successfully.")
+	  
+  # --- Step 4: Clone the Setup Repository ---
+  # SourceRepoUrl is always https://github.com/CorneliusWalters/Arch_Dev_Env.git for this specific clone.
+  if (-not (Clone-SetupRepository -Logger $logger `
+        -GitCloneTarget "C:\wsl\wsl_dev_setup" `
+        -SourceRepoUrl "https://github.com/CorneliusWalters/Arch_Dev_Env.git" `
+        -ForceOverwrite $ForceOverwrite)) {
+    throw "Cloning of setup repository failed."
+  }
+  $logger.WritePhaseStatus("CLONE_SETUP_REPO", "SUCCESS", "Setup repository cloned to '$wslRepoPath'")
+
+  # --- Step 5: Root Preparation (basic OS config, user creation, sudoers) ---
+  $logger.WritePhaseStatus("ROOT_PREP", "STARTING", "Preparing pristine environment as root (user, sudo, basic packages)...")
+  $prepCommand = "$wslRepoPath/Setup/lib/0_prepare_root.sh $wslUsername"
+  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username "root" -Command $prepCommand -Description "Root preparation" -Logger $logger)) {
+    throw "Root preparation failed"
+  }
+  $logger.WritePhaseStatus("ROOT_PREP", "SUCCESS", "Root preparation completed")
+
+  # --- Step 5a: Copy SSH Keys (AFTER user creation) ---
+  if ($sshKeyPath -and (Test-Path $sshKeyPath)) {
+    $logger.WritePhaseStatus("SSH_SETUP", "STARTING", "Setting up SSH keys from $sshKeyPath")
+    
+    if (Copy-SSHKeysToWSL -Logger $logger -WindowsSshPath $sshKeyPath `
+        -WslDistroName $wslDistroName -WslUsername $wslUsername) {
+      $logger.WritePhaseStatus("SSH_SETUP", "SUCCESS", "SSH keys configured successfully")
+    }
+    else {
+      $logger.WriteLog("WARNING", "SSH key setup failed - will use HTTPS for Git", "Yellow")
+      $sshKeyReady = $false
+    }
+  }
+  elseif ($sshKeyPath) {
+    $logger.WriteLog("WARNING", "SSH key path specified but not found: $sshKeyPath", "Yellow")
+    $sshKeyReady = $false
+  }
+  
+  # --- Step 6: Initial WSL Configuration (sets default user, systemd in /etc/wsl.conf) ---
+  # Initialize WSL capture for the main setup execution
+  $wslCapture = [WSLProcessCapture]::new($logger, $wslDistroName, $wslUsername)
+  
+  if (-not (Set-WslConfDefaults -Logger $logger -DistroName $wslDistroName -Username $wslUsername -WslRepoPath $wslRepoPath)) {
+    throw "Initial WSL configuration in /etc/wsl.conf failed."
+  }
+  $logger.WritePhaseStatus("WSL_CONF", "SUCCESS", "Initial /etc/wsl.conf set.")
+	  
+  # --- Step 7: WSL Restart (applies /etc/wsl.conf changes) ---
+  $logger.WritePhaseStatus("WSL_RESTART_CONF", "STARTING", "Applying /etc/wsl.conf settings (terminating distro)...")
+  wsl --terminate $wslDistroName
+  if (-not (Wait-WSLShutdown -DistroName $wslDistroName -Logger $logger)) {
+    throw "WSL shutdown timeout during /etc/wsl.conf application."
+  }
+  $logger.WritePhaseStatus("WSL_RESTART_CONF", "SUCCESS", "WSL restarted with new /etc/wsl.conf settings.")
+
+  # --- Step 8: Export REPO_ROOT to a /etc/ file for Bash scripts ---
+  $logger.WritePhaseStatus("EXPORT_REPO_PATH", "STARTING", "Creating /etc/arch-dev-env.conf for REPO_ROOT export...")
+  $configCommand = "echo 'REPO_ROOT=`"$wslRepoPath`"' | sudo tee /etc/arch-dev-env.conf > /dev/null"
+  if (-not (Invoke-WSLCommand -DistroName $wslDistroName -Username $wslUsername -Command $configCommand -Description "Config file creation (REPO_ROOT)" -Logger $logger)) {
+    throw "Config file creation failed (REPO_ROOT)"
+  }
+  $logger.WritePhaseStatus("EXPORT_REPO_PATH", "SUCCESS", "/etc/arch-dev-env.conf created with REPO_ROOT")
+
+  # --- Step 9: Final WSL shutdown for config application and user verification setup ---
+  $logger.WritePhaseStatus("WSL_RESTART_FINAL", "STARTING", "Shutting down WSL for final config application and user verification prep...")
+  wsl --shutdown
+  Start-Sleep -Seconds 5 # Give ample time for shutdown
+  
+  # --- Step 10: User Verification ---
+  if (-not (Test-WslBasicFunctionality -Logger $logger -DistroName $wslDistroName -Username $wslUsername -WslRepoPath $wslRepoPath)) {
+    throw "User context verification or basic WSL functionality failed."
+  }
+  $logger.WritePhaseStatus("USER_VERIFY_COMPLETE", "SUCCESS", "User context and basic WSL functionality verified.")
+
+  # --- Step 11: Main Setup (using the robust WSLProcessCapture for the long-running Bash script) ---
+  $logger.WritePhaseStatus("MAIN_SETUP", "STARTING", "Executing main setup script via repository wrapper...")
+
+  # Exporting git and personal repo variables to the WSL environment for the wrapper script.
+  $environmentVars = "export GIT_USER_NAME='$gitUserName' && export GIT_USER_EMAIL='$gitUserEmail'"
+  if (-not [string]::IsNullOrWhiteSpace($personalRepoUrl)) {
+    $environmentVars += " && export PERSONAL_REPO_URL='$personalRepoUrl'"
+  }
+  if (-not [string]::IsNullOrWhiteSpace($httpProxy)) {
+    $environmentVars += " && export HTTP_PROXY='$httpProxy'"
+  }
+  if (-not [string]::IsNullOrWhiteSpace($httpsProxy)) {
+    $environmentVars += " && export HTTPS_PROXY='$httpsProxy'"
+  }
+  
+  $wrapperPath = "$wslRepoPath/Setup/lib/99_wrapper.sh"
+  $fullCommand = "$environmentVars && bash '$wrapperPath'"
+  
+  if (-not $wslCapture.ExecuteCommand($fullCommand, "Execute main setup script")) {
+    throw "Main setup script execution failed"
+  }
+  $logger.WritePhaseStatus("MAIN_SETUP", "SUCCESS", "Main setup completed.")
+	
+  # --- Step 12: Export Configured Image (optional) ---
+  Export-WSLImage -Logger $logger -WslDistroName $wslDistroName -ExportPath $configuredArchTarballExportPath
+	
+  $logger.WritePhaseStatus("COMPLETE", "SUCCESS", "Setup completed successfully.")
+  $logger.WriteHeader("Setup Complete! Shutting down WSL to apply changes.")
+  Start-Sleep -Seconds 10
+  wsl --shutdown # Final shutdown
+	    
+}
+catch {
+  $logger.WritePhaseStatus("FATAL", "ERROR", "Script failed: $($_.Exception.Message)")
+  $logger.WriteRecoveryInfo($wslDistroName, $wslUsername, $wslRepoPath)
+  exit 1
+}
+```
+
+--- FILE 3: PowerShell/Export-Image.ps1 ---
+```
+# Export-WSLImage.ps1
+function Export-WSLImage {
+    param (
+        [PSCustomObject]$Logger,
+        [string]$WslDistroName,
+        [string]$ExportPath
+    )
+    
+    $Logger.WriteHeader("Optional: Exporting Configured WSL Instance")
+    $exportConfirm = Read-Host "Do you want to export this configured WSL instance to '$ExportPath'? (Y/N)"
+
+    if ($exportConfirm -eq 'Y') {
+        $Logger.WriteLog("INFO", "Exporting current state of '$WslDistroName'...", "Cyan")
+        wsl --terminate $WslDistroName
+        
+        $exportDir = Split-Path $ExportPath -Parent
+        if (-not (Test-Path $exportDir)) {
+            New-Item -ItemType Directory -Path $exportDir -Force | Out-Null
+        }
+        
+        wsl --export $WslDistroName $ExportPath
+        $Logger.WriteLog("SUCCESS", "Configured WSL distribution exported successfully.", "Green")
+    } else {
+        $Logger.WriteLog("INFO", "Skipping export of configured WSL instance.", "Green")
+    }
+}
+```
+
+--- FILE 4: PowerShell/Header.ps1 ---
+```
+# --- CONFIGURATION ---
+$wslDistroName = "Arch"
+$cleanArchTarballDefaultPath = "C:\wsl\tmp\arch_clean.tar"
+$configuredArchTarballExportPath = "C:\wsl\tmp\arch_configured.tar"
+$ForceOverwrite = $true # Hardcoded true for setup runs to ensure a clean slate
+
+# --- Default Values (Used if user input is empty) ---
+$wslUsernameDefault = "chw"
+$gitUserNameDefault = "CorneliusWalters"
+$gitUserEmailDefault = "seven.nomad@gmail.com"
+$personalRepoUrlDefault = "https://github.com/CorneliusWalters/Arch_Dev_Env.git" # Your upstream repo
+$httpProxyDefault = "" # e.g., "http://your.proxy.com:8080"
+$httpsProxyDefault = "" # e.g., "http://your.proxy.com:8080"
+
+
+# --- Call the consolidated user configuration function ---
+$userConfig = Get-InstallationUserConfig `
+  -WslUsernameDefault $wslUsernameDefault `
+  -GitUserNameDefault $gitUserNameDefault `
+  -GitUserEmailDefault $gitUserEmailDefault `
+  -PersonalRepoUrlDefault $personalRepoUrlDefault `
+  -HttpProxyDefault $httpProxyDefault `
+  -HttpsProxyDefault $httpsProxyDefault
+
+# Assign results to the main script variables
+$wslUsername = $userConfig.WslUsername
+$gitUserName = $userConfig.GitUserName
+$gitUserEmail = $userConfig.GitUserEmail
+$personalRepoUrl = $userConfig.PersonalRepoUrl
+$sshKeyReady = $userConfig.SshKeyReady
+$httpProxy = $userConfig.HttpProxy
+$httpsProxy = $userConfig.HttpsProxy
+$sshKeyPath = $userConfig.SshKeyPath
+
+$scriptWindowsRepoRoot = (Convert-Path $PSScriptRoot | Get-Item).Parent.FullName
+$wslRepoPath = $scriptWindowsRepoRoot.Replace('C:\', '/mnt/c/').Replace('\', '/')
+
+```
+
+--- FILE 5: PowerShell/Import-Distro.ps1 ---
+```
+# Import-Distro.ps1
+
+function Import-ArchDistro {
+	param (
+		[PSCustomObject]$Logger,
+		[string]$WslDistroName,
+		[string]$WslUsername,
+		[string]$DefaultTarballPath
+	)
+
+	# --- PHASE 1: CREATE PRISTINE IMAGE IF NEEDED ---
+	$Logger.WriteHeader("Checking for Pristine Arch Image")
+	if (-not (Test-Path $DefaultTarballPath)) {
+		$baseDistroName = "ArchLinux"
+		if (-not (wsl -l -v | Select-String -Quiet $baseDistroName)) {
+			$Logger.WriteLog("INFO", "Attempting to install '$baseDistroName' from the Microsoft Store...", "Cyan")
+			wsl --install -d $baseDistroName
+		}
+		$Logger.WriteLog("INFO", "Now waiting for you to complete the initial setup in the '$baseDistroName' window...", "Cyan")
+		while (wsl -l -v | Select-String -Quiet "$baseDistroName\s+Running") {
+			Write-Host -NoNewline "."
+			Start-Sleep -Seconds 5
+		}
+		Write-Host ""
+		$Logger.WriteLog("SUCCESS", "Initial setup complete. Now creating the pristine image...", "Green")
+		$tmpDir = Split-Path $DefaultTarballPath -Parent
+		if (-not (Test-Path $tmpDir)) { New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null }
+		wsl --export $baseDistroName $DefaultTarballPath
+		$Logger.WriteLog("SUCCESS", "Successfully created pristine image at '$DefaultTarballPath'.", "Green")
+		wsl --unregister $baseDistroName
+	}
+
+	# --- PHASE 2: IMPORT DISTRO FOR AUTOMATED SETUP ---
+	$Logger.WriteHeader("Importing '$WslDistroName' for Automated Setup")
+    
+	# Aggressive Cleanup: Forcefully unregister any old distro with the same name.
+	try {
+		$Logger.WriteLog("INFO", "Attempting to unregister any existing '$WslDistroName' distro to ensure a clean slate...", "Yellow")
+		wsl --unregister $WslDistroName
+		$Logger.WriteLog("INFO", "Cleanup successful.", "Gray")
+	}
+	catch {
+		# This is expected if the distro doesn't exist. We can ignore this error.
+		$Logger.WriteLog("INFO", "No pre-existing distro to clean up.", "Gray")
+	}
+
+	$archInstallDir = "c:\WSL\$WslDistroName"
+	if (-not (Test-Path $archInstallDir)) {
+		New-Item -ItemType Directory -Path $archInstallDir -Force | Out-Null
+	}
+    
+	$Logger.WriteLog("INFO", "Importing '$WslDistroName' from '$DefaultTarballPath'...", "Cyan")
+	wsl --import $WslDistroName $archInstallDir $DefaultTarballPath
+    
+	# Definitive Verification: Check if the virtual disk was actually created.
+	$vhdxPath = "$archInstallDir\ext4.vhdx"
+	if (-not (Test-Path $vhdxPath)) {
+		throw "FATAL: 'wsl --import' failed to create the virtual disk at '$vhdxPath'. Cannot continue."
+	}
+	$Logger.WriteLog("SUCCESS", "Virtual disk verified. Import was successful.", "Green")
+
+	# --- FIX: Removed manual wsl.conf default user setting ---
+	# This is now handled by Set-WslConfDefaults in Install.ps1, to avoid conflicts.
+	# The current user will temporarily be root until after a WSL shutdown/restart cycle in Install.ps1.
+    
+	$Logger.WriteLog("SUCCESS", "Distro imported and configured. Proceeding with setup.", "Green")
+	return $true
+}
+```
+
+--- FILE 6: PowerShell/Logging.ps1 ---
+```
+﻿class WSLProcessCapture {
+	[PSCustomObject]$Logger
+	[string]$DistroName
+	[string]$Username
+	[string]$OutputLogFile
+	[string]$ErrorLogFile
+	[string]$PipeName
+
+	WSLProcessCapture(
+		[PSCustomObject]$Logger,
+		[string]$DistroName,
+		[string]$Username
+	) {
+		$this.Logger = $Logger
+		$this.DistroName = $DistroName
+		$this.Username = $Username
+		$this.OutputLogFile = "$($Logger.LogDir)\wsl_output.log"
+		$this.ErrorLogFile = "$($Logger.LogDir)\wsl_error.log"
+		$this.PipeName = "wsl_output_$(Get-Random)"
+	}
+
+	[bool] ExecuteCommand([string]$Command, [string]$Description) {
+		$this.Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
+
+		try {
+			$this.Logger.WriteLog("INFO", "Starting: $Description", "Cyan")
+			$this.Logger.WriteLog("INFO", "Using file-based streaming approach", "Cyan")
+			return $this.ExecuteWithFileTailing($Command, $Description)
+		}
+		catch {
+			$this.Logger.WritePhaseStatus(
+				"WSL_EXEC",
+				"ERROR",
+				"$Description - Exception: $($_.Exception.Message)"
+			)
+			return $false
+		}
+	}
+
+	[bool] ExecuteWithFileTailing([string]$Command, [string]$Description) {
+		$outputFile = "/tmp/wsl_output_$([System.IO.Path]::GetRandomFileName().Replace('.',''))"
+		$finishFile = "$outputFile.finished"
+		$windowsOutputFile = "\\wsl$\$($this.DistroName)$outputFile"
+		$tailJob = $null
+		$wslProcess = $null
+
+		try {
+			$this.Logger.WriteLog("INFO", "Using enhanced file-based streaming: $outputFile", "Gray")
+
+			$tailJob = Start-Job -ScriptBlock {
+				param($FilePath, $FinishPath, $LogPath, $DistroName)
+
+				$lastSize = 0
+				$maxWaitTime = 900
+				$startTime = Get-Date
+				$consecutiveEmptyReads = 0
+				# PSUseDeclaredVarsMoreThanAssignments:False Positive. This variable is used.
+				$maxConsecutiveEmpty = 150 
+				$currentPhaseStartTime = $null # Local variable for duration calculation inside job
+
+				while (((Get-Date) - $startTime).TotalSeconds -lt $maxWaitTime) {
+					if (Test-Path $FilePath) {
+						try {
+							$content = Get-Content $FilePath -Raw -ErrorAction SilentlyContinue -Encoding UTF8
+							if ($content -and $content.Length -gt $lastSize) {
+								$consecutiveEmptyReads = 0
+								$newContent = $content.Substring($lastSize)
+								$lines = $newContent -split "`r?`n" | Where-Object { $_ -ne "" }
+                            
+								foreach ($line in $lines) {
+									if (-not [string]::IsNullOrWhiteSpace($line.Trim())) {
+										$timestamp = Get-Date -Format "HH:mm:ss"
+										$trimmedLine = $line.Trim()
+										$wasCustomColorized = $false
+
+										# --- CUSTOM PHASE BOUNDARIES & MARKERS (PowerShell colored) ---
+										if ($trimmedLine -match '^### PHASE_BOUNDARY ###') {
+											Write-Host ""
+											Write-Host ("=" * 80) -ForegroundColor Cyan
+											$wasCustomColorized = $true
+										}
+										elseif ($trimmedLine -match '^>>> PHASE_START: (.+)') {
+											$currentPhase = $matches[1]
+											$currentPhaseStartTime = Get-Date
+											Write-Host ""
+											Write-Host "🚀 STARTING PHASE: " -NoNewline -ForegroundColor Green
+											Write-Host "$currentPhase" -ForegroundColor Yellow -BackgroundColor DarkBlue
+											Write-Host ("=" * 80) -ForegroundColor Green
+											$wasCustomColorized = $true
+										}
+										elseif ($trimmedLine -match '^<<< PHASE_END: (.+)') {
+											$endPhase = $matches[1]
+											$phaseDuration = $null
+											if ($currentPhaseStartTime) {
+												$phaseDuration = ((Get-Date) - $currentPhaseStartTime).TotalSeconds
+												$currentPhaseStartTime = $null
+											}
+											Write-Host ("=" * 80) -ForegroundColor Green
+											Write-Host "✅ COMPLETED PHASE: " -NoNewline -ForegroundColor Green
+											Write-Host "$endPhase" -ForegroundColor Yellow -BackgroundColor DarkGreen
+											if ($phaseDuration -ne $null) {
+												Write-Host "⏱️  Duration: $([math]::Round($phaseDuration, 1))s" -ForegroundColor Cyan
+											}
+											Write-Host ("=" * 80) -ForegroundColor Green
+											Write-Host ""
+											$wasCustomColorized = $true
+										}
+										elseif ($trimmedLine -match '^>>> PROGRESS: \[(\d+)/(\d+)\] (.+) - (.+)') {
+											$current = [int]$matches[1]
+											$total = [int]$matches[2]
+											$phase = $matches[3]
+											$action = $matches[4]
+											$percentage = [math]::Round(($current / $total) * 100, 1)
+											Write-Host ""
+											Write-Host "📊 PROGRESS: " -NoNewline -ForegroundColor Magenta
+											$progressText = "[$current/$total] ($percentage)percent"
+											Write-Host $progressText -NoNewline -ForegroundColor Cyan
+											Write-Host " $phase - $action" -ForegroundColor White
+											$wasCustomColorized = $true
+										}
+										elseif ($trimmedLine -match '^>>> PHASE_SEPARATOR <<<') {
+											Write-Host ""
+											Write-Host (("-" * 40) + " PHASE BREAK " + ("-" * 40)) -ForegroundColor DarkGray
+											Write-Host ""
+											$wasCustomColorized = true
+										}
+										elseif ($trimmedLine -match '^================== (EXECUTING|COMPLETED): (.+) ==================') {
+											$action = $matches[1]
+											$phaseName = $matches[2]
+											if ($action -eq "EXECUTING") {
+												Write-Host "🔧 $action" + ": " -NoNewline -ForegroundColor Blue
+												Write-Host "$phaseName" -ForegroundColor White -BackgroundColor DarkBlue
+											}
+											else {
+												Write-Host "✅ $action" + ": " -NoNewline -ForegroundColor Green
+												Write-Host "$phaseName" -ForegroundColor White -BackgroundColor DarkGreen
+											}
+											$wasCustomColorized = $true
+										}
+										elseif ($trimmedLine -match '^=== PHASE:.*START ===') {
+											Write-Host ""
+											Write-Host "🚀 " -NoNewline -ForegroundColor Green
+											Write-Host "$trimmedLine" -ForegroundColor Magenta
+											$wasCustomColorized = $true
+										}
+										elseif ($trimmedLine -match '^=== PHASE:.*SUCCESS ===') {
+											Write-Host "✅ " -NoNewline -ForegroundColor Green
+											Write-Host "$trimmedLine" -ForegroundColor Green
+											Write-Host ""
+											$wasCustomColorized = $true
+										}
+										# --- BASH log_message OUTPUT (PowerShell colored) ---
+										elseif ($trimmedLine -match '^\[ERROR\]') { 
+											Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+											Write-Host "$line" -ForegroundColor Red
+											$wasCustomColorized = $true
+										}
+										elseif ($trimmedLine -match '^\[SUCCESS\]') { 
+											Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+											Write-Host "$line" -ForegroundColor Green
+											$wasCustomColorized = true
+										}
+										elseif ($trimmedLine -match '^\[STATUS\]') { 
+											Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+											Write-Host "$line" -ForegroundColor Cyan
+											$wasCustomColorized = true
+										}
+										elseif ($trimmedLine -match '^\[WARNING\]') { 
+											Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+											Write-Host "$line" -ForegroundColor Yellow
+											$wasCustomColorized = true
+										}
+										elseif ($trimmedLine -match '^\[COMMAND\]') {
+											Write-Host "[$timestamp] " -NoNewline -ForegroundColor White
+											Write-Host "$line" -ForegroundColor DarkGray
+											$wasCustomColorized = true
+										}
+										elseif ($trimmedLine -match '^===.*===') {
+											# Generic header like "=== System Information ==="
+											Write-Host "$line" -ForegroundColor Cyan
+											$wasCustomColorized = $true
+										}
+
+										if (-not $wasCustomColorized) {
+											Write-Host "[$timestamp] WSL: $line"
+										}
+                                    
+										[Console]::Out.Flush()
+                                        
+										try {
+											Add-Content -Path $LogPath -Value "[$timestamp] WSL: $line" -ErrorAction SilentlyContinue -Encoding UTF8
+										}
+										catch { 
+											# Ignore logging errors
+										}
+									}
+								}
+								$lastSize = $content.Length
+							}
+							else {
+								$consecutiveEmptyReads++
+								if ($consecutiveEmptyReads -gt $maxConsecutiveEmpty) {
+									if (Test-Path $FinishPath) {
+										break
+									}
+								}
+							}
+						}
+						catch {
+							$consecutiveEmptyReads++
+						}
+					}
+					else {
+						$consecutiveEmptyReads++
+					}
+                
+					if (Test-Path $FinishPath) {
+						Start-Sleep -Milliseconds 500
+						break
+					}
+                                    
+					if ($consecutiveEmptyReads -lt 10) { Start-Sleep -Milliseconds 100 }
+					else { Start-Sleep -Milliseconds 300 }
+				}
+				Write-Host ""
+				Write-Host "📋 Background log tailing job finished for $DistroName." -ForegroundColor Gray
+			} -ArgumentList $windowsOutputFile, "\\wsl$\$($this.DistroName)$finishFile", $this.Logger.LogFile
+
+			Start-Sleep -Milliseconds 500
+        
+			$wrappedCommand = @"
+{
+    exec > >(tee '$outputFile') 2>&1
+    $Command
+} && touch '$finishFile' || { 
+    echo '[ERROR] Command execution failed with a non-zero exit code.' >&2
+    touch '$finishFile'
+}
+"@
+        
+			$this.Logger.WriteLog("INFO", "Executing command asynchronously...", "Cyan")
+        
+			$processArgs = "-d $($this.DistroName) -u $($this.Username) bash -c `"$wrappedCommand`""
+			$wslProcess = Start-Process -FilePath "wsl" -ArgumentList $processArgs -NoNewWindow -PassThru
+        
+			$this.Logger.WriteLog("INFO", "Waiting for WSL process to complete. Tailing logs in real-time...", "Gray")
+			while (-not $wslProcess.HasExited) {
+				Start-Sleep -Seconds 1
+			}
+        
+			$exitCode = $wslProcess.ExitCode
+        
+			Start-Sleep -Seconds 2
+        
+			if ($exitCode -eq 0) {
+				$this.Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
+			}
+			else {
+				$this.Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - WSL process exited with code: $exitCode")
+			}
+        
+			return ($exitCode -eq 0)
+		}
+		catch {
+			if ($tailJob) {
+				Stop-Job $tailJob -ErrorAction SilentlyContinue
+				Remove-Job $tailJob -Force -ErrorAction SilentlyContinue
+			}
+			try {
+				wsl -d $this.DistroName -u $this.Username bash -c "rm -f '$outputFile' '$finishFile'" 2>&1 | Out-Null
+			}
+			catch { }
+			throw
+		}
+		finally {
+			if ($tailJob) {
+				Stop-Job $tailJob -ErrorAction SilentlyContinue
+				Remove-Job $tailJob -Force -ErrorAction SilentlyContinue
+			}
+			try {
+				wsl -d $this.DistroName -u $this.Username bash -c "rm -f '$outputFile' '$finishFile'" 2>&1 | Out-Null
+			}
+			catch { }
+		}
+	}
+
+	Cleanup() {
+		if (Test-Path $this.OutputLogFile) {
+			$this.Logger.WriteLog(
+				"INFO",
+				"WSL output log: $($this.OutputLogFile)",
+				"Gray"
+			)
+		}
+		if (Test-Path $this.ErrorLogFile) {
+			$this.Logger.WriteLog(
+				"INFO",
+				"WSL error log: $($this.ErrorLogFile)",
+				"Gray"
+			)
+		}
+	}
+}
+
+class WslLogger {
+	# Properties
+	[string]$LogFile
+	[string]$LogDir
+
+	# Constructor
+	WslLogger([string]$BasePath = "c:\wsl") {
+		$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+		$this.LogDir = "$BasePath\tmp\logs\$timestamp"
+		$this.LogFile = "$($this.LogDir)\powershell_install.log"
+		$directoriesToCreate = @(
+			"$BasePath",
+			"$BasePath\tmp",
+			"$BasePath\tmp\logs",
+			$this.LogDir
+		)
+		foreach ($dir in $directoriesToCreate) {
+			if (-not (Test-Path $dir)) {
+				New-Item -ItemType Directory -Path $dir -Force | Out-Null
+			}
+		}
+	}
+
+	# Methods without return type annotations
+	WriteLog(
+		[string]$Level,
+		[string]$Message,
+		[ConsoleColor]$ForegroundColor = "White"
+	) {
+		$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+		$logMessage = "[$timestamp] [$Level] $Message"
+		Write-Host $logMessage -ForegroundColor $ForegroundColor
+		Add-Content -Path $this.LogFile -Value $logMessage
+	}
+
+	WriteHeader([string]$Message) {
+		$separator = "=" * 80
+		$this.WriteLog("HEADER", $separator, "Cyan")
+		$this.WriteLog("HEADER", $Message, "Cyan")
+		$this.WriteLog("HEADER", $separator, "Cyan")
+	}
+
+	WritePhaseStatus([string]$Phase, [string]$Status, [string]$Details = "") {
+		$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+		$message = "[$timestamp] [PHASE: $Phase] [$Status] $Details"
+
+		$color = switch ($Status) {
+			"SUCCESS" { "Green" }
+			"ERROR" { "Red" }
+			"STARTING" { "Cyan" }
+			"TIMEOUT" { "Yellow" }
+			default { "White" }
+		}
+
+		$this.WriteLog("PHASE", $message, $color)
+
+		# Also write to a separate phase log for debugging
+		$phaseLogPath = "$($this.LogDir)\phases.log"
+		Add-Content -Path $phaseLogPath -Value $message
+	}
+
+	[bool] InvokeWSLWithRealTimeOutput(
+		[string]$DistroName,
+		[string]$Username,
+		[string]$Command,
+		[string]$Description
+	) {
+		$this.WritePhaseStatus("WSL_REAL", "STARTING", $Description)
+
+		try {
+			$psi = New-Object System.Diagnostics.ProcessStartInfo
+			$psi.FileName = "wsl"
+			$psi.Arguments = "-d $DistroName -u $Username bash -c `"$Command`""
+			$psi.RedirectStandardOutput = $true
+			$psi.RedirectStandardError = $true
+			$psi.UseShellExecute = $false
+			$psi.CreateNoWindow = true
+
+			$process = New-Object System.Diagnostics.Process
+			$process.StartInfo = $psi
+
+			# Real-time output handling
+			$process.add_OutputDataReceived({
+					param($processObject, $e)
+					if (-not [string]::IsNullOrEmpty($e.Data)) {
+						if ($e.Data -match '\[ERROR\]') {
+							Write-Host "WSL: $($e.Data)" -ForegroundColor Red
+						}
+						elseif ($e.Data -match '\[SUCCESS\]') {
+							Write-Host "WSL: $($e.Data)" -ForegroundColor Green
+						}
+						elseif ($e.Data -match '\[STATUS\]') {
+							Write-Host "WSL: $($e.Data)" -ForegroundColor Cyan
+						}
+						elseif ($e.Data -match '\[WARNING\]') {
+							Write-Host "WSL: $($e.Data)" -ForegroundColor Yellow
+						}
+						else {
+							Write-Host "WSL: $($e.Data)" -ForegroundColor White
+						}
+
+						Add-Content -Path $this.LogFile -Value "WSL: $($e.Data)"
+					}
+				})
+
+			$process.add_ErrorDataReceived({
+					param($processObject, $e)
+					if (-not [string]::IsNullOrEmpty($e.Data)) {
+						Write-Host "WSL-ERR: $($e.Data)" -ForegroundColor Red
+						Add-Content -Path $this.LogFile -Value "WSL-ERR: $($e.Data)"
+					}
+				})
+
+			$process.Start()
+			$process.BeginOutputReadLine()
+			$process.BeginErrorReadLine()
+			$process.WaitForExit()
+
+			$exitCode = $process.ExitCode
+
+			if ($exitCode -eq 0) {
+				$this.WritePhaseStatus("WSL_REAL", "SUCCESS", $Description)
+				return $true
+			}
+			else {
+				$this.WritePhaseStatus(
+					"WSL_REAL",
+					"ERROR",
+					"$Description - Exit code: $exitCode"
+				)
+				return $false
+			}
+		}
+		catch {
+			$this.WritePhaseStatus(
+				"WSL_REAL",
+				"ERROR",
+				"$Description - Exception: $($_.Exception.Message)"
+			)
+			return $false
+		}
+	}
+
+	WriteRecoveryInfo(
+		[string]$DistroName,
+		[string]$Username,
+		[string]$RepoPath
+	) {
+		$this.WriteLog("RECOVERY", "=== RECOVERY INSTRUCTIONS ===", "Yellow")
+		$this.WriteLog("RECOVERY", "To continue manually, run:", "Yellow")
+		$this.WriteLog("RECOVERY", "wsl -d $DistroName -u $Username", "Yellow")
+		$this.WriteLog(
+			"RECOVERY",
+			"cd $RepoPath && export FORCE_OVERWRITE=true && ./Setup/1_sys_init.sh",
+			"Yellow"
+		)
+		$this.WriteLog(
+			"RECOVERY",
+			"=== END RECOVERY INSTRUCTIONS ===",
+			"Yellow"
+		)
+	}
+}
+```
+
+--- FILE 7: PowerShell/Test.ps1 ---
+```
+function Test-WSLPrerequisites {
+	param (
+		[PSCustomObject]$Logger,
+		[string]$WslDistroName
+	)
+    
+	$Logger.WriteLog("INFO", "Checking WSL version...", "Cyan")
+	$wslVersionInfo = wsl --version | Select-String "WSL version:"
+	if ($wslVersionInfo -match "WSL version: (\d+\.\d+\.\d+\.\d+)") {
+		$wslVersion = $matches[1]
+		$Logger.WriteLog("SUCCESS", "WSL Version: $wslVersion", "Green")
+	}
+	else {
+		$Logger.WriteLog("WARNING", "Could not determine WSL version. Assuming modern WSL.", "Yellow")
+	}
+    
+	$Logger.WriteLog("INFO", "Checking for prerequisites (git)...", "White")
+	if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+		$Logger.WriteLog("ERROR", "Git is not installed or not in your PATH.", "Red")
+		throw "Git is not installed."
+	}
+    
+	$Logger.WriteLog("SUCCESS", "Prerequisites check completed.", "Green")
+	return $true
+}
+
+function Test-GitFunctionality {
+	param (
+		[PSCustomObject]$Logger
+	)
+
+	$Logger.WritePhaseStatus("GIT_CHECK", "STARTING", "Verifying Git for Windows functionality...")
+    
+	# --- FIX: Explicitly create and manage the base Git test directory ---
+	# We will use 'C:\wsl\git' as the base, ensuring it exists and is logged.
+	$gitTestBaseDirPath = "C:\wsl\git"
+    
+	try {
+		if (-not (Test-Path $gitTestBaseDirPath -PathType Container)) {
+			New-Item -Path $gitTestBaseDirPath -ItemType Directory -Force | Out-Null
+			$Logger.WriteLog("INFO", "Created Git test base directory: '$gitTestBaseDirPath'", "DarkGray")
+		}
+		else {
+			$Logger.WriteLog("INFO", "Git test base directory already exists: '$gitTestBaseDirPath'", "DarkGray")
+		}
+
+		# Log permissions of the base directory (useful for debugging if it's a permission issue)
+		$Logger.WriteLog("INFO", "Permissions for '$gitTestBaseDirPath':", "DarkGray")
+		(Get-Acl $gitTestBaseDirPath | Format-List -Property AccessToString, Owner, Group) | ForEach-Object {
+			$Logger.WriteLog("INFO", $_, "DarkGray")
+		}
+
+		# Derive unique temporary paths within the managed base directory
+		$testGitCloneDir = Join-Path $gitTestBaseDirPath "git_test_clone_$((Get-Random))"
+		$testStdoutFile = Join-Path $gitTestBaseDirPath "git_test_stdout_$((Get-Random)).log"
+		$testStderrFile = Join-Path $gitTestBaseDirPath "git_test_stderr_$((Get-Random)).log"
+
+		$Logger.WriteLog("INFO", "Attempting Git clone into: '$testGitCloneDir'", "DarkGray")
+		$Logger.WriteLog("INFO", "Git version: $((git --version 2>&1 | Out-String).Trim())", "DarkGray")
+		$Logger.WriteLog("INFO", "Git global config (user.name): $((git config --global user.name 2>&1 | Out-String).Trim())", "DarkGray")
+		$Logger.WriteLog("INFO", "Git global config (user.email): $((git config --global user.email 2>&1 | Out-String).Trim())", "DarkGray")
+        
+		# --- FIX: Ensure -v for verbose output is included in git clone ---
+		Start-Process -FilePath "git" -ArgumentList "clone", "-v", "http://github.com/octocat/Spoon-Knife.git", $testGitCloneDir `
+			-RedirectStandardOutput $testStdoutFile -RedirectStandardError $testStderrFile -NoNewWindow -Wait `
+			-ErrorAction Stop
+		$testExitCode = $LASTEXITCODE
+        
+		$testOutput = ""
+		if (Test-Path $testStdoutFile) { $testOutput += (Get-Content $testStdoutFile | Out-String) }
+		if (Test-Path $testStderrFile) { $testOutput += (Get-Content $testStderrFile | Out-String) }
+
+		if ($testExitCode -ne 0) {
+			$Logger.WriteLog("ERROR", "Git functionality check failed (Exit Code: $testExitCode). Full output:", "Red")
+			$testOutput.Split("`n") | ForEach-Object { $Logger.WriteLog("ERROR", $_, "DarkRed") }
+			return $false
+		}
+		$Logger.WritePhaseStatus("GIT_CHECK", "SUCCESS", "Git for Windows is functional.")
+		return $true
+	}
+	catch {
+		$Logger.WriteLog("ERROR", "Exception during Git functionality check: $($_.Exception.Message)", "Red")
+		# Include any captured output in the error if available
+		if (Test-Path $testStdoutFile) { $Logger.WriteLog("ERROR", (Get-Content $testStdoutFile | Out-String), "DarkRed") }
+		if (Test-Path $testStderrFile) { $Logger.WriteLog("ERROR", (Get-Content $testStderrFile | Out-String), "DarkRed") }
+		return $false
+	}
+	finally {
+		# --- FIX: Robust cleanup of the test Git clone directory and temporary log files ---
+		if (Test-Path $testGitCloneDir) {
+			$Logger.WriteLog("INFO", "Cleaning up test Git clone directory: '$testGitCloneDir'", "DarkGray")
+			Remove-Item -Recurse -Force $testGitCloneDir -ErrorAction SilentlyContinue
+		}
+		if (Test-Path $testStdoutFile) { Remove-Item $testStdoutFile -ErrorAction SilentlyContinue }
+		if (Test-Path $testStderrFile) { Remove-Item $testStderrFile -ErrorAction SilentlyContinue }
+		# Note: We do NOT remove $gitTestBaseDirPath (C:\wsl\git) here, as it's the intended base for future tests.
+	}
+}
+```
+
+--- FILE 8: PowerShell/Utils.ps1 ---
+```
+# Setup/PowerShell/WSL-Utils.ps1
+
+
+function Invoke-WSLCommand {
+	param(
+		[string]$DistroName,
+		[string]$Username,
+		[string]$Command,
+		[string]$Description,
+		[PSCustomObject]$Logger
+	)
+    
+	$Logger.WritePhaseStatus("WSL_EXEC", "STARTING", $Description)
+    
+	try {
+		# Use cmd /c to get proper exit codes
+		$result = cmd /c "wsl -d $DistroName -u $Username -e bash -c `"$Command`" 2>&1 && echo WSL_SUCCESS || echo WSL_FAILED"
+        
+		# Convert to string and check for success marker
+		$resultString = $result -join "`n"
+        
+		if ($resultString -match "WSL_SUCCESS") {
+			$Logger.WritePhaseStatus("WSL_EXEC", "SUCCESS", $Description)
+			return $true
+		}
+		else {
+			$Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Output: $($result -join '; ')")
+			return $false
+		}
+	}
+	catch {
+		$Logger.WritePhaseStatus("WSL_EXEC", "ERROR", "$Description - Exception: $($_.Exception.Message)")
+		return $false
+	}
+}
+
+function Get-InstallationUserConfig {
+	param(
+		[string]$WslUsernameDefault,
+		[string]$GitUserNameDefault,
+		[string]$GitUserEmailDefault,
+		[string]$PersonalRepoUrlDefault,
+		[string]$HttpProxyDefault,
+		[string]$HttpsProxyDefault
+	)
+
+	Write-Host "`n--- Collecting User Configuration ---" -ForegroundColor Yellow
+
+	# Collect WSL Username
+	$wslUsernameInput = Read-Host -Prompt "Please enter your desired username for Arch Linux (default: '$WslUsernameDefault')"
+	$finalWslUsername = if ([string]::IsNullOrWhiteSpace($wslUsernameInput)) { $WslUsernameDefault } else { $wslUsernameInput }
+	Write-Host "Using WSL Username: $finalWslUsername" -ForegroundColor DarkGreen
+
+	# Collect Git Username
+	$gitUserNameInput = Read-Host -Prompt "Enter your GitHub username (for commits and repo detection, default: '$GitUserNameDefault')"
+	$finalGitUserName = if ([string]::IsNullOrWhiteSpace($gitUserNameInput)) { $GitUserNameDefault } else { $gitUserNameInput }
+	Write-Host "Using Git Username: $finalGitUserName" -ForegroundColor DarkGreen
+
+	# Collect Git Email
+	$gitUserEmailInput = Read-Host -Prompt "Enter your Git email (for commits, default: '$GitUserEmailDefault')"
+	$finalGitUserEmail = if ([string]::IsNullOrWhiteSpace($gitUserEmailInput)) { $GitUserEmailDefault } else { $gitUserEmailInput }
+	Write-Host "Using Git Email: $finalGitUserEmail" -ForegroundColor DarkGreen
+
+	$finalPersonalRepoUrl = $null # Initialize to null, we'll try to detect or ask
+	
+	Write-Host "`n--- GitHub SSH Setup ---" -ForegroundColor Yellow
+	$sshKeySetupInput = Read-Host -Prompt "Have you generated an SSH key and added it to your GitHub account? (Y/N)"
+	$finalSshKeyReady = if ($sshKeySetupInput -eq 'Y') { $true } else { $false }
+    
+	$sshKeyPath = $null
+	if ($finalSshKeyReady) {
+		Write-Host "`nLet's set up your SSH key for WSL." -ForegroundColor Cyan
+		Write-Host "Common locations:" -ForegroundColor Gray
+		Write-Host "  1. C:\Users\$env:USERNAME\.ssh" -ForegroundColor Gray
+		Write-Host "  2. C:\Users\$env:USERNAME\Documents\.ssh" -ForegroundColor Gray
+		Write-Host "  3. Custom location" -ForegroundColor Gray
+        
+		$sshChoice = Read-Host -Prompt "Choose location (1/2/3) or press Enter to skip"
+        
+		switch ($sshChoice) {
+			"1" { $testPath = "C:\Users\$env:USERNAME\.ssh" }
+			"2" { $testPath = "C:\Users\$env:USERNAME\Documents\.ssh" }
+			"3" { 
+				$testPath = Read-Host -Prompt "Enter the full path to your .ssh directory"
+				$testPath = [System.Environment]::ExpandEnvironmentVariables($testPath)
+			}
+			default { $testPath = $null }
+		}
+        
+		if ($testPath -and (Test-Path $testPath)) {
+			# Check for common SSH key files
+			$foundKeys = @()
+			foreach ($keyFile in @("id_rsa", "id_ed25519", "id_ecdsa")) {
+				if (Test-Path "$testPath\$keyFile") {
+					$foundKeys += $keyFile
+				}
+			}
+            
+			if ($foundKeys.Count -gt 0) {
+				Write-Host "Found SSH keys: $($foundKeys -join ', ')" -ForegroundColor Green
+				$sshKeyPath = $testPath
+			}
+			else {
+				Write-Host "No SSH keys found in $testPath" -ForegroundColor Yellow
+			}
+		}
+		elseif ($testPath) {
+			Write-Host "Path not found: $testPath" -ForegroundColor Red
+		}
+	}
+
+	Write-Host "`n--- GitHub SSH Setup ---" -ForegroundColor Yellow
+	$finalSshKeyReady = if ($sshKeySetupInput -eq 'Y') { $true } else { $false }
+	if (-not $finalSshKeyReady) {
+		Write-Host "WARNING: SSH key is highly recommended for Git operations. Please follow GitHub's guide to create an SSH key and add it to your account:" -ForegroundColor Yellow
+		Write-Host "         https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent" -ForegroundColor Yellow
+		Write-Host "         https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account" -ForegroundColor Yellow
+		Write-Host "         You may encounter issues if your network interferes with HTTPS." -ForegroundColor Yellow
+	}
+	# Try to auto-detect the forked repository using GitHub CLI
+	Write-Host "`nAttempting to auto-detect your forked repository on GitHub..." -ForegroundColor Cyan
+	if (Get-Command gh -ErrorAction SilentlyContinue) {
+		$ghStatus = gh auth status --hostname github.com 2>&1
+		if ($ghStatus -match 'Logged in as') {
+			Write-Host "GitHub CLI detected and authenticated." -ForegroundColor DarkGreen
+			$originalRepoOwner = (Split-Path -Parent $PersonalRepoUrlDefault).Replace("https://github.com/", "")
+			$originalRepoName = (Split-Path $PersonalRepoUrlDefault -Leaf).Replace(".git", "")
+
+			try {
+				$userForksJson = gh repo list $finalGitUserName --source --fork --json name, url, parent 2>$null | ConvertFrom-Json
+				$foundFork = $userForksJson | Where-Object { $_.parent.nameWithOwner -eq "$originalRepoOwner/$originalRepoName" }
+
+				if ($foundFork) {
+					$finalPersonalRepoUrl = $foundFork.url
+					Write-Host "Auto-detected forked repository: $($finalPersonalRepoUrl)" -ForegroundColor Green
+				}
+				else {
+					Write-Host "No fork of '$originalRepoOwner/$originalRepoName' found under '$finalGitUserName'." -ForegroundColor Yellow
+				}
+			}
+			catch {
+				Write-Host "WARNING: Failed to query GitHub for forks. Error: $($_.Exception.Message)" -ForegroundColor Yellow
+			}
+		}
+		else {
+			Write-Host "GitHub CLI detected but not authenticated. Run 'gh auth login' first." -ForegroundColor Yellow
+		}
+	}
+ else {
+		Write-Host "GitHub CLI ('gh' command) not found. Cannot auto-detect forks." -ForegroundColor Yellow
+	}
+
+	# If auto-detection failed, prompt the user manually
+	if ([string]::IsNullOrWhiteSpace($finalPersonalRepoUrl)) {
+		$personalRepoUrlInput = Read-Host -Prompt "Enter your personal dotfiles GitHub repo URL (optional - default: '$PersonalRepoUrlDefault' or generated based on your GitHub username')"
+		if ([string]::IsNullOrWhiteSpace($personalRepoUrlInput)) {
+			# Fallback to default generated URL if manual input is also empty
+			if ([string]::IsNullOrWhiteSpace($finalGitUserName)) {
+				Write-Host "WARNING: Git username is empty. Cannot generate default personal repo URL, using hardcoded default." -ForegroundColor Yellow
+				$finalPersonalRepoUrl = $PersonalRepoUrlDefault # Final fallback to hardcoded default
+			}
+			else {
+				# Generated from user's GH name, ensuring $originalRepoName is available.
+				$originalRepoName = (Split-Path $PersonalRepoUrlDefault -Leaf).Replace(".git", "")
+				$finalPersonalRepoUrl = "https://github.com/$finalGitUserName/$originalRepoName.git"
+			}
+		}
+		else {
+			$finalPersonalRepoUrl = $personalRepoUrlInput
+		}
+	}
+	Write-Host "`nUsing personal dotfiles repository: $($finalPersonalRepoUrl)" -ForegroundColor Green # Confirm final URL
+
+	# Return all collected values as a custom object
+	return [PSCustomObject]@{
+		WslUsername     = $finalWslUsername
+		GitUserName     = $finalGitUserName
+		GitUserEmail    = $finalGitUserEmail
+		PersonalRepoUrl = $finalPersonalRepoUrl
+		SshKeyReady     = $finalSshKeyReady
+	}
+}
+
+function Test-IsGitSafeDirectory {
+	param(
+		[string]$PathToCheck # The path, e.g., "C:/wsl/git" or "C:/wsl/wsl_dev_setup"
+	)
+
+	# Git expects forward slashes for safe.directory entries
+	$gitFormattedPath = $PathToCheck.Replace('\', '/')
+
+	try {
+		# Get all global safe.directory entries
+		$safeDirs = Start-Process -FilePath "git" -ArgumentList "config", "--global", "--get-all", "safe.directory" `
+			-NoNewWindow -Wait -PassThru -ErrorAction Stop | Select-Object -ExpandProperty StandardOutput | Out-String | ConvertFrom-Csv -Header Value
+
+		if ($safeDirs -is [System.Array]) {
+			# Handle multiple entries
+			foreach ($entry in $safeDirs) {
+				# Check for exact match or wildcard match (e.g., C:/foo vs C:/foo/*)
+				if ($entry.Value -eq $gitFormattedPath -or $entry.Value -eq "$gitFormattedPath/*") {
+					return $true
+				}
+			}
+		}
+		elseif ($safeDirs -is [PSCustomObject]) {
+			# Handle single entry
+			if ($safeDirs.Value -eq $gitFormattedPath -or $safeDirs.Value -eq "$gitFormattedPath/*") {
+				return $true
+			}
+		}
+		return $false
+	}
+	catch {
+		# Git config will error if safe.directory is not set at all, which means it's not safe.
+		# So we catch and return false, or log a more specific error if needed.
+		Write-Host "WARNING: Could not check Git safe.directory status for '$PathToCheck'. Error: $($_.Exception.Message)" -ForegroundColor Yellow
+		return $false
+	}
+}
+
+
+function Set-NeutralDirectory {
+	try {
+		$setupDir = $PSScriptRoot
+		$repoDir = Split-Path -Parent $setupDir
+		$neutralBaseDir = Split-Path -Parent $repoDir 
+
+		# Ensure the path exists before attempting to set location
+		if (-not (Test-Path $neutralBaseDir -PathType Container)) {
+			throw "Neutral directory path '$neutralBaseDir' does not exist or is not a container."
+		}
+
+		Set-Location -Path $neutralBaseDir -ErrorAction Stop -PassThru | Out-Null
+        
+		Write-Host "Working directory set to '$neutralBaseDir' to prevent file locks." -ForegroundColor Green
+	}
+	catch {
+		Write-Host "ERROR: Critical failure to set neutral directory. $($_.Exception.Message)" -ForegroundColor Red
+		throw "Failed to set neutral directory: $($_.Exception.Message). Please ensure C:\wsl exists and is writable, and that no other process is locking it."
+	}
+}
+
+function Wait-WSLShutdown {
+	param(
+		[string]$DistroName, 
+		[int]$TimeoutSeconds = 60,
+		[PSCustomObject]$Logger
+	)
+    
+	$Logger.WritePhaseStatus("WSL_SHUTDOWN", "STARTING", "Waiting for $DistroName to shut down")
+    
+	$startTime = Get-Date
+	do {
+		Start-Sleep -Seconds 2
+		try {
+			$null = wsl -d $DistroName -e echo "test" 2>$null
+			$isRunning = $LASTEXITCODE -eq 0
+		}
+		catch {
+			$isRunning = $false
+		}
+	} while ($isRunning -and ((Get-Date) - $startTime).TotalSeconds -lt $TimeoutSeconds)
+    
+
+    
+	$Logger.WritePhaseStatus("WSL_SHUTDOWN", "TIMEOUT", "Timed out waiting for shutdown")
+	return -not $isRunning
+}
+
+function Set-WslConfDefaults {
+	param (
+		[PSCustomObject]$Logger,
+		[string]$DistroName,
+		[string]$Username,
+		[string]$WslRepoPath
+	)
+
+	$Logger.WritePhaseStatus("WSL_CONF", "STARTING", "Creating initial /etc/wsl.conf with user and systemd defaults...")
+
+	try {
+		# Create wsl.conf content with proper variable substitution
+		$wslConfContent = @"
+[user]
+default=$Username
+
+[boot]
+systemd=true
+
+[interop]
+enabled=true
+appendWindowsPath=true
+"@
+
+		# Write to a temporary file first
+		$tempFile = [System.IO.Path]::GetTempFileName()
+		$wslConfContent | Out-File -FilePath $tempFile -Encoding UTF8 -NoNewline
+
+		# Get the WSL path for the temp file
+		$tempFileWSLPath = "/mnt/c" + ($tempFile.Replace('\', '/').Substring(2))
+
+		$Logger.WriteLog("INFO", "Creating /etc/wsl.conf with default user: $Username", "Cyan")
+
+		# Copy the temp file to /etc/wsl.conf in one command
+		$copyResult = wsl -d $DistroName -u root -- bash -c "cp '$tempFileWSLPath' /etc/wsl.conf && echo 'SUCCESS' || echo 'FAILED'"
+
+		if ($copyResult -contains "SUCCESS") {
+			$Logger.WritePhaseStatus("WSL_CONF", "SUCCESS", "Initial /etc/wsl.conf created with user '$Username' and systemd enabled.")
+			
+			# Verify the content was written correctly
+			$verifyResult = wsl -d $DistroName -u root -- bash -c "cat /etc/wsl.conf"
+			$Logger.WriteLog("INFO", "Verification - /etc/wsl.conf contents:", "Gray")
+			$verifyResult | ForEach-Object { $Logger.WriteLog("INFO", $_, "Gray") }
+			
+			return $true
+		}
+		else {
+			throw "Failed to copy wsl.conf to /etc/wsl.conf"
+		}
+	}
+	catch {
+		$Logger.WritePhaseStatus("WSL_CONF", "ERROR", "Exception: $($_.Exception.Message)")
+		throw "Failed to write initial /etc/wsl.conf."
+	}
+	finally {
+		# Clean up temp file
+		if (Test-Path $tempFile) {
+			Remove-Item $tempFile -Force
+		}
+	}
+}
+
+#function Test-WSLDistroExists {
+#    param([string]$DistroName)
+#    
+#    try {
+#        $distros = wsl -l -v
+#        return ($null -ne ($distros | Where-Object { $_ -match $DistroName })) 
+#    } catch {
+#        return $false
+#    }
+#}
+
+# --- NEW: Function to configure all Git for Windows global settings ---
+# This includes safe.directory, user info, protocol, and proxy.
+function Set-GitGlobalConfig {
+	param(
+		[PSCustomObject]$Logger,
+		[string]$GitUserName,
+		[string]$GitUserEmail,
+		[bool]$SshKeyReady,
+		[string]$HttpProxy,
+		[string]$HttpsProxy,
+		[string]$PSScriptRootContext # Pass $PSScriptRoot so utility can derive mainRepoWindowsPath
+	)
+
+	$logger.WritePhaseStatus("GIT_SECURITY", "STARTING", "Configuring Git 'safe.directory' exceptions...")
+	$gitTestBasePath = "C:/wsl/git" # Git prefers forward slashes
+
+	# Ensure C:\wsl\git (for test clones) is safe
+	if (-not (Test-IsGitSafeDirectory -PathToCheck $gitTestBasePath)) {
+		$Logger.WriteLog("INFO", "Adding '$gitTestBasePath' to Git's safe.directory list (for test clones).", "DarkGreen")
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "--add", "safe.directory", $gitTestBasePath `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+	}
+ else {
+		$Logger.WriteLog("INFO", "'$gitTestBasePath' already in Git's safe.directory list.", "DarkGreen")
+	}
+
+	# Ensure the main setup repository path (C:\wsl\wsl_dev_setup) is safe
+	$mainRepoWindowsPath = (Convert-Path $PSScriptRootContext | Get-Item).Parent.FullName
+	$mainRepoGitFormattedPath = $mainRepoWindowsPath.Replace('\', '/')
+	if (-not (Test-IsGitSafeDirectory -PathToCheck $mainRepoGitFormattedPath)) {
+		$Logger.WriteLog("INFO", "Adding '$mainRepoGitFormattedPath' to Git's safe.directory list (for setup repo).", "DarkGreen")
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "--add", "safe.directory", $mainRepoGitFormattedPath `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+	}
+ else {
+		$Logger.WriteLog("INFO", "'$mainRepoGitFormattedPath' already in Git's safe.directory list.", "DarkGreen")
+	}
+
+	# Also add the wildcard version for subdirectories within C:/wsl/git, but only if needed
+	if (-not (Test-IsGitSafeDirectory -PathToCheck "$gitTestBasePath/*")) {
+		$Logger.WriteLog("INFO", "Adding '$gitTestBasePath/*' to Git's safe.directory list (for subdirectories).", "DarkGreen")
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "--add", "safe.directory", "$gitTestBasePath/*" `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+	}
+ else {
+		$Logger.WriteLog("INFO", "'$gitTestBasePath/*' already in Git's safe.directory list.", "DarkGreen")
+	}
+	$logger.WritePhaseStatus("GIT_SECURITY", "SUCCESS", "Git 'safe.directory' configuration completed.")
+
+	# Set global Git user.name and user.email.
+	$logger.WritePhaseStatus("GIT_GLOBAL_CONFIG", "STARTING", "Setting Git for Windows global user.name and user.email...")
+	Start-Process -FilePath "git" -ArgumentList "config", "--global", "user.name", "'$GitUserName'" `
+		-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+	Start-Process -FilePath "git" -ArgumentList "config", "--global", "user.email", "'$GitUserEmail'" `
+		-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+	$logger.WritePhaseStatus("GIT_GLOBAL_CONFIG", "SUCCESS", "Git global user.name and user.email set to '$GitUserName' <$GitUserEmail>.")
+
+	# Configure Git's SSH/HTTPS protocol.
+	if ($SshKeyReady) {
+		$logger.WritePhaseStatus("GIT_PROTOCOL", "STARTING", "Configuring Git to use SSH for GitHub automatically...")
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "url.git@github.com:.insteadOf", "https://github.com/" `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+		$logger.WritePhaseStatus("GIT_PROTOCOL", "SUCCESS", "Git configured to use SSH for GitHub.com.")
+	}
+ else {
+		$Logger.WriteLog("WARNING", "SSH key not confirmed. Git will continue to use HTTPS, which may fail in restrictive networks.", "Yellow")
+	}
+	$logger.WritePhaseStatus("GIT_PROTOCOL", "SUCCESS", "Git protocol configured.")
+
+	# Configure Git's HTTP/S proxy.
+	$logger.WritePhaseStatus("GIT_PROXY", "STARTING", "Configuring Git for Windows proxy settings...")
+	if (-not [string]::IsNullOrWhiteSpace($HttpProxy)) {
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "http.proxy", "'$HttpProxy'" `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+		$Logger.WriteLog("INFO", "Git http.proxy set to '$HttpProxy'.", "DarkGreen")
+	}
+ else {
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "--unset", "http.proxy" `
+			-NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+		$Logger.WriteLog("INFO", "Git http.proxy not set.", "DarkGray")
+	}
+	if (-not [string]::IsNullOrWhiteSpace($HttpsProxy)) {
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "https.proxy", "'$HttpsProxy'" `
+			-NoNewWindow -Wait -ErrorAction Stop | Out-Null
+		$Logger.WriteLog("INFO", "Git https.proxy set to '$HttpsProxy'.", "DarkGreen")
+	}
+ else {
+		Start-Process -FilePath "git" -ArgumentList "config", "--global", "--unset", "https.proxy" `
+			-NoNewWindow -Wait -ErrorAction SilentlyContinue | Out-Null
+		$Logger.WriteLog("INFO", "Git https.proxy not set.", "DarkGray")
+	}
+	$logger.WritePhaseStatus("GIT_PROXY", "SUCCESS", "Git proxy configuration completed.")
+	return $true
+}
+
+# --- NEW: Function to clone the main setup repository (Arch_Dev_Env) ---
+function Clone-SetupRepository {
+	param(
+		[PSCustomObject]$Logger,
+		[string]$GitCloneTarget, # The Windows path where the repo will be cloned
+		[string]$SourceRepoUrl, # The URL of the upstream repo
+		[bool]$ForceOverwrite # Whether to forcibly delete existing target
+	)
+
+	$Logger.WritePhaseStatus("CLONE_SETUP_REPO", "STARTING", "Cloning setup repository into Windows path '$GitCloneTarget' from '$SourceRepoUrl'...")
+    
+	if ($ForceOverwrite -or -not (Test-Path $GitCloneTarget)) {
+		if (Test-Path $GitCloneTarget) { 
+			Remove-Item -Recurse -Force $GitCloneTarget 
+		}
+
+		$cloneOutput = ""
+		$cloneExitCode = 0
+		# --- FIX: Use separate temporary files for StandardOutput and StandardError ---
+		$tempStdoutFile = Join-Path $env:TEMP "git_clone_stdout_$((Get-Random)).log"
+		$tempStderrFile = Join-Path $env:TEMP "git_clone_stderr_$((Get-Random)).log"
+
+		try {
+			Start-Process -FilePath "git" -ArgumentList "clone", $SourceRepoUrl, $GitCloneTarget `
+				-RedirectStandardOutput $tempStdoutFile -RedirectStandardError $tempStderrFile -NoNewWindow -Wait `
+				-ErrorAction Stop
+			$cloneExitCode = $LASTEXITCODE
+            
+			# Combine output from both files
+			if (Test-Path $tempStdoutFile) { $cloneOutput += (Get-Content $tempStdoutFile | Out-String) }
+			if (Test-Path $tempStderrFile) { $cloneOutput += (Get-Content $tempStderrFile | Out-String) }
+		}
+		catch {
+			# Catch exceptions during Start-Process itself
+			$Logger.WriteLog("ERROR", "Exception during setup repository clone: $($_.Exception.Message)", "Red")
+			# Include any captured output in the error if available
+			if (Test-Path $tempStdoutFile) { $Logger.WriteLog("ERROR", (Get-Content $tempStdoutFile | Out-String), "DarkRed") }
+			if (Test-Path $tempStderrFile) { $Logger.WriteLog("ERROR", (Get-Content $tempStderrFile | Out-String), "DarkRed") }
+			throw # Re-throw to propagate the original error
+		}
+		finally {
+			# Clean up all temporary files
+			if (Test-Path $tempStdoutFile) { Remove-Item $tempStdoutFile -ErrorAction SilentlyContinue }
+			if (Test-Path $tempStderrFile) { Remove-Item $tempStderrFile -ErrorAction SilentlyContinue }
+		}
+
+		if ($cloneExitCode -ne 0) {
+			$Logger.WriteLog("ERROR", "Git clone of setup repository failed (Exit Code: $cloneExitCode). Full output:", "Red")
+			$cloneOutput.Split("`n") | ForEach-Object { $Logger.WriteLog("ERROR", $_, "DarkRed") }
+			$Logger.WriteLog("RECOVERY", "--- MANUAL GIT CLONE TROUBLESHOOTING ---", "Yellow")
+			$Logger.WriteLog("RECOVERY", "Attempted to clone: $SourceRepoUrl", "Yellow")
+			$Logger.WriteLog("RECOVERY", "Target directory: $GitCloneTarget", "Yellow")
+			$Logger.WriteLog("RECOVERY", "Possible causes:", "Yellow")
+			$Logger.WriteLog("RECOVERY", "1. Network/Proxy interference with HTTPS. Ensure Git proxy settings are correct.", "Yellow")
+			$Logger.WriteLog("RECOVERY", "2. Git 'safe.directory' issue (ensure C:/wsl/git and C:/wsl/wsl_dev_setup are added globally).", "Yellow")
+			$Logger.WriteLog("RECOVERY", "3. Missing/incorrect SSH key if using SSH protocol.", "Yellow")
+			$Logger.WriteLog("RECOVERY", "To manually test, open PowerShell as Administrator and run:", "Yellow")
+			$Logger.WriteLog("RECOVERY", "   git clone $SourceRepoUrl C:\\test_clone_manual", "Yellow")
+			$Logger.WriteLog("RECOVERY", "--- END MANUAL GIT CLONE TROUBLESHOOTING ---", "Yellow")
+			throw "Git clone of setup repository failed with exit code $cloneExitCode. Check logs for full output and manual troubleshooting steps."
+		}
+	}
+ else {
+		$Logger.WriteLog("INFO", "Setup repository '$GitCloneTarget' already exists. Skipping clone.", "Green")
+	}
+	return $true
+}
+
+# --- NEW: Function to run basic WSL functionality debug commands ---
+function Test-WslBasicFunctionality {
+	param(
+		[PSCustomObject]$Logger,
+		[string]$DistroName,
+		[string]$Username,
+		[string]$WslRepoPath # Path to the repo inside WSL
+	)
+
+	$Logger.WritePhaseStatus("CONF_STATUS", "STARTING", "Running basic WSL functionality and repository access tests...")
+	$confCommands = @(
+		"whoami",
+		"pwd", 
+		"echo `$HOME",
+		"test -d '$WslRepoPath' && echo 'REPO_DIR_EXISTS' || echo 'REPO_DIR_MISSING'",
+		"test -f '$WslRepoPath/Setup/1_sys_init.sh' && echo 'SCRIPT_EXISTS' || echo 'SCRIPT_MISSING'",
+		"ls -la '$WslRepoPath/Setup/' | head -5"
+	)
+	foreach ($cmd in $confCommands) {
+		# Use Invoke-WSLCommand for consistent logging and error handling
+		if (-not (Invoke-WSLCommand -DistroName $DistroName -Username $Username -Command $cmd -Description "Debug command: $cmd" -Logger $Logger)) {
+			$Logger.WriteLog("Conf_Status", "Debug command FAILED: $cmd", "Red")
+		}
+	}
+	$logger.WritePhaseStatus("CONF_STATUS", "SUCCESS", "Basic WSL functionality tests completed.")
+	return $true
+}
+function Find-WindowsSSHKeys {
+	param([PSCustomObject]$Logger)
+    
+	$Logger.WriteLog("INFO", "Searching for SSH keys on Windows...", "Cyan")
+    
+	# Common SSH key locations
+	$searchPaths = @(
+		"$env:USERPROFILE\.ssh",
+		"$env:USERPROFILE\Documents\.ssh",
+		"$env:USERPROFILE\OneDrive\Documents\.ssh",
+		"$env:USERPROFILE\Desktop\.ssh"
+	)
+    
+	$foundPaths = @()
+    
+	foreach ($path in $searchPaths) {
+		if (Test-Path $path) {
+			$keyFiles = Get-ChildItem -Path $path -File -ErrorAction SilentlyContinue | Where-Object {
+				$_.Name -match '^(id_rsa|id_ed25519|id_ecdsa|id_dsa)$'
+			}
+            
+			if ($keyFiles.Count -gt 0) {
+				$Logger.WriteLog("SUCCESS", "Found SSH keys in: $path", "Green")
+				$Logger.WriteLog("INFO", "Keys found: $($keyFiles.Name -join ', ')", "Gray")
+				$foundPaths += $path
+			}
+		}
+	}
+    
+	return $foundPaths
+}
+
+function Copy-SSHKeysToWSL {
+	param(
+		[PSCustomObject]$Logger,
+		[string]$WindowsSshPath,
+		[string]$WslDistroName,
+		[string]$WslUsername
+	)
+    
+	if ([string]::IsNullOrWhiteSpace($WindowsSshPath) -or -not (Test-Path $WindowsSshPath)) {
+		$Logger.WriteLog("ERROR", "SSH path not found: $WindowsSshPath", "Red")
+		return $false
+	}
+    
+	$Logger.WritePhaseStatus("SSH_COPY", "STARTING", "Copying SSH keys from $WindowsSshPath to WSL")
+    
+	try {
+		# Create WSL .ssh directory first
+		$createSshCmd = @"
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+"@
+        
+		if (-not (Invoke-WSLCommand -DistroName $WslDistroName -Username $WslUsername `
+					-Command $createSshCmd -Description "Create .ssh directory" -Logger $Logger)) {
+			throw "Failed to create .ssh directory"
+		}
+        
+		# Get files to copy
+		$filesToCopy = Get-ChildItem -Path $WindowsSshPath -File | Where-Object {
+			$_.Name -match '^(id_|config$|known_hosts$|authorized_keys$)'
+		}
+        
+		if ($filesToCopy.Count -eq 0) {
+			$Logger.WriteLog("WARNING", "No SSH files found in $WindowsSshPath", "Yellow")
+			return $false
+		}
+        
+		foreach ($file in $filesToCopy) {
+			$Logger.WriteLog("INFO", "Processing: $($file.Name)", "Cyan")
+            
+			# Read content and fix line endings
+			$content = Get-Content -Path $file.FullName -Raw -Encoding UTF8
+			if ($null -eq $content) { continue }
+            
+			$content = $content.Replace("`r`n", "`n").TrimEnd() + "`n"
+            
+			# Pipe directly to WSL to create the file
+			$content | wsl -d $WslDistroName -u $WslUsername -- bash -c "cat > ~/.ssh/$($file.Name)"
+	
+			# Set permissions in a separate command
+			$permCmd = "chmod $permissions ~/.ssh/$($file.Name) && chown `$USER:`$USER ~/.ssh/$($file.Name)"
+			Invoke-WSLCommand -DistroName $WslDistroName -Username $WslUsername -Command $permCmd -Description "Set permissions for $($file.Name)" -Logger $Logger
+			
+			if (-not (Invoke-WSLCommand -DistroName $WslDistroName -Username $WslUsername `
+						-Command $copyCmd -Description "Copy $($file.Name)" -Logger $Logger)) {
+				$Logger.WriteLog("ERROR", "Failed to copy $($file.Name)", "Red")
+				Remove-Item $tempFile -Force
+				continue
+			}
+            
+			Remove-Item $tempFile -Force
+			$Logger.WriteLog("SUCCESS", "Copied $($file.Name) with permissions $permissions", "Green")
+		}
+        
+		# Add GitHub to known hosts to prevent prompt
+		$addKnownHostCmd = @"
+ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+"@
+		Invoke-WSLCommand -DistroName $WslDistroName -Username $WslUsername `
+			-Command $addKnownHostCmd -Description "Add GitHub to known hosts" -Logger $Logger | Out-Null
+        
+		# Test SSH
+		$Logger.WriteLog("INFO", "Testing SSH connection to GitHub...", "Cyan")
+		$testResult = wsl -d $WslDistroName -u $WslUsername -- bash -c "ssh -T git@github.com 2>&1 || true"
+        
+		if ($testResult -match "successfully authenticated") {
+			$Logger.WritePhaseStatus("SSH_COPY", "SUCCESS", "SSH keys copied and GitHub access verified")
+			return $true
+		}
+		else {
+			$Logger.WriteLog("WARNING", "SSH test output: $testResult", "Yellow")
+			$Logger.WriteLog("INFO", "SSH keys copied but GitHub authentication not verified", "Yellow")
+			return $true # Still return true as keys were copied
+		}
+	}
+	catch {
+		$Logger.WritePhaseStatus("SSH_COPY", "ERROR", "Exception: $($_.Exception.Message)")
+		return $false
+	}
+}
+
+# Update your existing Get-InstallationUserConfig function
+function Get-InstallationUserConfig {
+	param(
+		[string]$WslUsernameDefault,
+		[string]$GitUserNameDefault,
+		[string]$GitUserEmailDefault,
+		[string]$PersonalRepoUrlDefault,
+		[string]$HttpProxyDefault = "",
+		[string]$HttpsProxyDefault = ""
+	)
+
+	Write-Host "`n--- Collecting User Configuration ---" -ForegroundColor Yellow
+
+	# ... existing username, git name, email collection code ...
+
+	# SSH Configuration Section
+	Write-Host "`n--- SSH Key Configuration ---" -ForegroundColor Yellow
+    
+	# Auto-detect SSH keys first
+	$tempLogger = [PSCustomObject]@{
+		WriteLog = { param($level, $msg, $color) Write-Host "[$level] $msg" -ForegroundColor $color }
+	}
+	$detectedPaths = Find-WindowsSSHKeys -Logger $tempLogger
+    
+	$sshKeyPath = $null
+	$sshKeyReady = $false
+    
+	if ($detectedPaths.Count -gt 0) {
+		Write-Host "`nFound SSH keys in the following locations:" -ForegroundColor Green
+		for ($i = 0; $i -lt $detectedPaths.Count; $i++) {
+			Write-Host "  $($i + 1). $($detectedPaths[$i])" -ForegroundColor Cyan
+		}
+		Write-Host "  0. Enter custom path" -ForegroundColor Gray
+		Write-Host "  S. Skip SSH setup (use HTTPS)" -ForegroundColor Gray
+        
+		$choice = Read-Host "Select location (1-$($detectedPaths.Count)/0/S)"
+        
+		if ($choice -match '^\d+$') {
+			$choiceNum = [int]$choice
+			if ($choiceNum -gt 0 -and $choiceNum -le $detectedPaths.Count) {
+				$sshKeyPath = $detectedPaths[$choiceNum - 1]
+				$sshKeyReady = $true
+			}
+			elseif ($choiceNum -eq 0) {
+				$customPath = Read-Host "Enter full path to .ssh directory"
+				if (Test-Path $customPath) {
+					$sshKeyPath = $customPath
+					$sshKeyReady = $true
+				}
+				else {
+					Write-Host "Path not found: $customPath" -ForegroundColor Red
+				}
+			}
+		}
+	}
+ else {
+		Write-Host "No SSH keys found in common locations." -ForegroundColor Yellow
+		$manualChoice = Read-Host "Would you like to specify a custom path? (Y/N)"
+        
+		if ($manualChoice -eq 'Y') {
+			$customPath = Read-Host "Enter full path to .ssh directory"
+			if (Test-Path $customPath) {
+				$sshKeyPath = $customPath
+				$sshKeyReady = $true
+			}
+		}
+	}
+    
+	# Proxy configuration
+	Write-Host "`n--- Network Configuration ---" -ForegroundColor Yellow
+	$httpProxyInput = Read-Host "HTTP Proxy (blank for none, default: '$httpProxyDefault')"
+	$finalHttpProxy = if ([string]::IsNullOrWhiteSpace($httpProxyInput)) { $httpProxyDefault } else { $httpProxyInput }
+    
+	$httpsProxyInput = Read-Host "HTTPS Proxy (blank for none, default: '$httpsProxyDefault')"
+	$finalHttpsProxy = if ([string]::IsNullOrWhiteSpace($httpsProxyInput)) { $httpsProxyDefault } else { $httpsProxyInput }
+    
+	# ... rest of your existing personal repo detection code ...
+    
+	return [PSCustomObject]@{
+		WslUsername     = $finalWslUsername
+		GitUserName     = $finalGitUserName
+		GitUserEmail    = $finalGitUserEmail
+		PersonalRepoUrl = $finalPersonalRepoUrl
+		SshKeyReady     = $sshKeyReady
+		SshKeyPath      = $sshKeyPath
+		HttpProxy       = $finalHttpProxy
+		HttpsProxy      = $finalHttpsProxy
+	}
+}
+```

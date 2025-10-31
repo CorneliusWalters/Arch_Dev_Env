@@ -96,8 +96,7 @@ step_locale_setup() {
 
 step_base_packages() {
 	print_phase_start "BASE_PACKAGES" "Installing base packages and configuring environment paths"
-	setup_environment_paths || exit 1 # Creates ~/.config/dotfiles git repo
-	install_base_packages || exit 1   # Installs packages from base.installs & add.installs
+	install_base_packages || exit 1 # Installs packages from base.installs & add.installs
 	print_phase_end "BASE_PACKAGES" "SUCCESS"
 }
 
@@ -180,7 +179,7 @@ list_steps() {
 validate_step() {
 	local step=$1
 	if [[ ! "$step" =~ ^[0-9]+$ ]] || [ "$step" -lt 1 ] || [ "$step" -gt 11 ]; then
-		print_error "PARAM" "Invalid step number: $step (must be 1-10)"
+		print_error "PARAM" "Invalid step number: $step (must be 1-11)"
 		return 1
 	fi
 	return 0

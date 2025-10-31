@@ -62,13 +62,15 @@ function Get-InstallationUserConfig {
 	Write-Host "Using Git Email: $finalGitUserEmail" -ForegroundColor DarkGreen
 
 	$finalPersonalRepoUrl = $null # Initialize to null, we'll try to detect or ask
-	
+	$sshKeyPath = $null
+    
+	# --- SSH SETUP BLOCK ---
 	Write-Host "`n--- GitHub SSH Setup ---" -ForegroundColor Yellow
 	$sshKeySetupInput = Read-Host -Prompt "Have you generated an SSH key and added it to your GitHub account? (Y/N)"
 	$finalSshKeyReady = if ($sshKeySetupInput -eq 'Y') { $true } else { $false }
     
-	$sshKeyPath = $null
 	if ($finalSshKeyReady) {
+		# This block runs if the user answered 'Y'
 		Write-Host "`nLet's set up your SSH key for WSL." -ForegroundColor Cyan
 		Write-Host "Common locations:" -ForegroundColor Gray
 		Write-Host "  1. C:\Users\$env:USERNAME\.ssh" -ForegroundColor Gray
@@ -88,12 +90,9 @@ function Get-InstallationUserConfig {
 		}
         
 		if ($testPath -and (Test-Path $testPath)) {
-			# Check for common SSH key files
 			$foundKeys = @()
 			foreach ($keyFile in @("id_rsa", "id_ed25519", "id_ecdsa")) {
-				if (Test-Path "$testPath\$keyFile") {
-					$foundKeys += $keyFile
-				}
+				if (Test-Path "$testPath\$keyFile") { $foundKeys += $keyFile }
 			}
             
 			if ($foundKeys.Count -gt 0) {
@@ -108,17 +107,17 @@ function Get-InstallationUserConfig {
 			Write-Host "Path not found: $testPath" -ForegroundColor Red
 		}
 	}
-
-	Write-Host "`n--- GitHub SSH Setup ---" -ForegroundColor Yellow
-	$finalSshKeyReady = if ($sshKeySetupInput -eq 'Y') { $true } else { $false }
-	if (-not $finalSshKeyReady) {
+ else {
+		# This block runs if the user answered 'N'
 		Write-Host "WARNING: SSH key is highly recommended for Git operations. Please follow GitHub's guide to create an SSH key and add it to your account:" -ForegroundColor Yellow
 		Write-Host "         https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent" -ForegroundColor Yellow
 		Write-Host "         https://docs.github.com/en/authentication/connecting-to-github-with-ssh/adding-a-new-ssh-key-to-your-github-account" -ForegroundColor Yellow
 		Write-Host "         You may encounter issues if your network interferes with HTTPS." -ForegroundColor Yellow
 	}
-	# Try to auto-detect the forked repository using GitHub CLI
+
+	# --- PERSONAL REPO DETECTION (UNCHANGED) ---
 	Write-Host "`nAttempting to auto-detect your forked repository on GitHub..." -ForegroundColor Cyan
+	# ... (rest of the function is the same from here) ...
 	if (Get-Command gh -ErrorAction SilentlyContinue) {
 		$ghStatus = gh auth status --hostname github.com 2>&1
 		if ($ghStatus -match 'Logged in as') {
@@ -146,21 +145,18 @@ function Get-InstallationUserConfig {
 			Write-Host "GitHub CLI detected but not authenticated. Run 'gh auth login' first." -ForegroundColor Yellow
 		}
 	}
- else {
+	else {
 		Write-Host "GitHub CLI ('gh' command) not found. Cannot auto-detect forks." -ForegroundColor Yellow
 	}
 
-	# If auto-detection failed, prompt the user manually
 	if ([string]::IsNullOrWhiteSpace($finalPersonalRepoUrl)) {
 		$personalRepoUrlInput = Read-Host -Prompt "Enter your personal dotfiles GitHub repo URL (optional - default: '$PersonalRepoUrlDefault' or generated based on your GitHub username')"
 		if ([string]::IsNullOrWhiteSpace($personalRepoUrlInput)) {
-			# Fallback to default generated URL if manual input is also empty
 			if ([string]::IsNullOrWhiteSpace($finalGitUserName)) {
 				Write-Host "WARNING: Git username is empty. Cannot generate default personal repo URL, using hardcoded default." -ForegroundColor Yellow
-				$finalPersonalRepoUrl = $PersonalRepoUrlDefault # Final fallback to hardcoded default
+				$finalPersonalRepoUrl = $PersonalRepoUrlDefault
 			}
 			else {
-				# Generated from user's GH name, ensuring $originalRepoName is available.
 				$originalRepoName = (Split-Path $PersonalRepoUrlDefault -Leaf).Replace(".git", "")
 				$finalPersonalRepoUrl = "https://github.com/$finalGitUserName/$originalRepoName.git"
 			}
@@ -169,18 +165,17 @@ function Get-InstallationUserConfig {
 			$finalPersonalRepoUrl = $personalRepoUrlInput
 		}
 	}
-	Write-Host "`nUsing personal dotfiles repository: $($finalPersonalRepoUrl)" -ForegroundColor Green # Confirm final URL
+	Write-Host "`nUsing personal dotfiles repository: $($finalPersonalRepoUrl)" -ForegroundColor Green
 
-	# Return all collected values as a custom object
 	return [PSCustomObject]@{
 		WslUsername     = $finalWslUsername
 		GitUserName     = $finalGitUserName
 		GitUserEmail    = $finalGitUserEmail
 		PersonalRepoUrl = $finalPersonalRepoUrl
 		SshKeyReady     = $finalSshKeyReady
+		SshKeyPath      = $sshKeyPath
 	}
 }
-
 function Test-IsGitSafeDirectory {
 	param(
 		[string]$PathToCheck # The path, e.g., "C:/wsl/git" or "C:/wsl/wsl_dev_setup"
@@ -610,22 +605,26 @@ mkdir -p ~/.ssh && chmod 700 ~/.ssh
             
 			# Pipe directly to WSL to create the file
 			$content | wsl -d $WslDistroName -u $WslUsername -- bash -c "cat > ~/.ssh/$($file.Name)"
-	
-			# Set permissions in a separate command
-			$permCmd = "chmod $permissions ~/.ssh/$($file.Name) && chown `$USER:`$USER ~/.ssh/$($file.Name)"
-			Invoke-WSLCommand -DistroName $WslDistroName -Username $WslUsername -Command $permCmd -Description "Set permissions for $($file.Name)" -Logger $Logger
-			
-			if (-not (Invoke-WSLCommand -DistroName $WslDistroName -Username $WslUsername `
-						-Command $copyCmd -Description "Copy $($file.Name)" -Logger $Logger)) {
-				$Logger.WriteLog("ERROR", "Failed to copy $($file.Name)", "Red")
-				Remove-Item $tempFile -Force
-				continue
+            
+			# Determine correct permissions
+			$permissions = if ($file.Name -match '\.pub$|config$|known_hosts$|authorized_keys$') { 
+				"644" 
+			}
+			else { 
+				"600" 
 			}
             
-			Remove-Item $tempFile -Force
+			# Set permissions in a separate command
+			$permCmd = "chmod $permissions ~/.ssh/$($file.Name) && chown `$USER:`$USER ~/.ssh/$($file.Name)"
+			if (-not (Invoke-WSLCommand -DistroName $WslDistroName -Username $WslUsername `
+						-Command $permCmd -Description "Set permissions for $($file.Name)" -Logger $Logger)) {
+				$Logger.WriteLog("ERROR", "Failed to set permissions for $($file.Name)", "Red")
+				continue # Move to the next file
+			}
+            
 			$Logger.WriteLog("SUCCESS", "Copied $($file.Name) with permissions $permissions", "Green")
 		}
-        
+
 		# Add GitHub to known hosts to prevent prompt
 		$addKnownHostCmd = @"
 ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
