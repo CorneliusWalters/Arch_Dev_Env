@@ -41,6 +41,7 @@ declare -A STEPS=(
 	["9"]="step_ssh_setup" # Add this
 	["10"]="step_git_setup"
 	["11"]="step_hooks_services" # Increment this
+	["12"]="step_secure_system"
 )
 
 declare -A STEP_NAMES=(
@@ -55,6 +56,7 @@ declare -A STEP_NAMES=(
 	["9"]="Setup SSH Config"
 	["10"]="Git Configuration"
 	["11"]="System Hooks and Services"
+	["12"]="step_secure_system"
 )
 
 # Step implementations
@@ -146,6 +148,11 @@ step_ssh_setup() {
 	print_phase_end "SSH_SETUP" "COMPLETE"
 }
 
+step_secure_system() {
+	print_phase_start "Clear_Wheel_group" "Clear Sudo Permisions for passwordless user"
+	secure_system || exit 1
+	print_phase_end "ClearWheel" "SUCCESS"
+}
 # Function to show available steps
 show_help() {
 	echo "Usage: $0 [OPTION]"
@@ -169,7 +176,7 @@ show_help() {
 list_steps() {
 	echo "Available steps:"
 	echo ""
-	for i in {1..11}; do
+	for i in {1..12}; do
 		printf "  %2d. %s\n" "$i" "${STEP_NAMES[$i]}"
 	done
 	echo ""
@@ -178,7 +185,7 @@ list_steps() {
 # Function to validate step number
 validate_step() {
 	local step=$1
-	if [[ ! "$step" =~ ^[0-9]+$ ]] || [ "$step" -lt 1 ] || [ "$step" -gt 11 ]; then
+	if [[ ! "$step" =~ ^[0-9]+$ ]] || [ "$step" -lt 1 ] || [ "$step" -gt 12 ]; then
 		print_error "PARAM" "Invalid step number: $step (must be 1-11)"
 		return 1
 	fi
@@ -257,6 +264,7 @@ run_all_steps() {
 	step_tool_configs
 	step_git_setup
 	step_hooks_services
+	step_secure_system
 
 	print_success "MAIN" "Installation complete!"
 	print_status "MAIN" "Please log out and log back in for all changes to take effect."

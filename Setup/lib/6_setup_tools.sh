@@ -160,3 +160,19 @@ setup_shell() {
     fi
   fi
 }
+
+secure_system() {
+  print_phase_start "SECURE" "Locking down sudo permissions"
+  local sudo_rule_file="/etc/sudoers.d/10-$USER-pacman"
+  local temp_sudo_file="/etc/sudoers.d/10-$USER-temp-setup"
+
+  # Create the final, restrictive sudo rule
+  local final_sudo_rule="$USER ALL=(ALL) NOPASSWD: /usr/bin/pacman, /usr/bin/systemctl"
+  execute_and_log "echo \"$final_sudo_rule\" | sudo tee \"$sudo_rule_file\"" "Writing final sudo rule" "SUDO"
+
+  # Remove the temporary, permissive rule
+  if [ -f "$temp_sudo_file" ]; then
+    execute_and_log "sudo rm -f \"$temp_sudo_file\"" "Removing temporary sudo rule" "SUDO"
+  fi
+  print_phase_end "SECURE" "SUCCESS"
+}
