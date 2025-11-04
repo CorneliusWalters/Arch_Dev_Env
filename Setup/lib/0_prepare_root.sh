@@ -35,5 +35,6 @@ passwd -d "${USERNAME}"
 
 echo "--> Granting passwordless sudo to 'wheel' group..."
 echo echo "$USERNAME ALL=(ALL) NOPASSWD: ALL" >"/etc/sudoers.d/10-$USERNAME-temp-setup"
+chmod 0440 "/etc/sudoers.d/10-$USERNAME-temp-setup"
 
 echo "--- Root Preparation Complete ---"
