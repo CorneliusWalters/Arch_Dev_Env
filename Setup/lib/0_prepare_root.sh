@@ -19,7 +19,7 @@ pacman-key --init
 pacman-key --populate archlinux
 
 echo "--> Updating package databases..."
-pacman -Sy
+pacman -Syu --noconfirm sudo git inetutils curl
 
 echo "--> Installing essential packages: sudo..."
 pacman -S --noconfirm sudo git inetutils curl
