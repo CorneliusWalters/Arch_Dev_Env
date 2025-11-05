@@ -34,7 +34,7 @@ echo "--> Unlocking user account..."
 passwd -d "${USERNAME}"
 
 echo "--> Granting passwordless sudo to 'wheel' group..."
-echo echo "$USERNAME ALL=(ALL) NOPASSWD: ALL" >"/etc/sudoers.d/10-$USERNAME-temp-setup"
+printf '%s ALL=(ALL) NOPASSWD: ALL\n' "$USERNAME" >"/etc/sudoers.d/10-$USERNAME-temp-setup"
 chmod 0440 "/etc/sudoers.d/10-$USERNAME-temp-setup"
 
 echo "--- Root Preparation Complete ---"
