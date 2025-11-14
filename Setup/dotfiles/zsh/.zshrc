@@ -109,5 +109,7 @@ alias conf='cd ~/.config/'
 alias zshconf='${EDITOR:-nvim} ~/.config/zsh/.zshrc'
 alias tmuxconf='${EDITOR:-nvim} ~/.config/tmux/tmux.conf'
 alias nvimconf='${EDITOR:-nvim} ~/.config/nvim/init.lua'
-
+alias nvimprefs='${EDITOR:-nvim} ~/.config/nvim/lua/preferences.lua'
+alias nvimplugs='${EDITOR:-nvim} ~/.config/nvim/lua/plugins.lua'
+alias nvimkeys='${EDITOR:-nvim} ~/.config/nvim/lua/keymaps.lua'
 

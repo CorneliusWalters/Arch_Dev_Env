@@ -20,7 +20,29 @@ return {
       }
     }
   },
-
+  -- Formatter
+  {
+    "stevearc/conform.nvim",
+    event = { "BufWritePre" },
+    cmd = { "ConformInfo" },
+    opts = {
+      formatters_by_ft = {
+        lua = { "stylua" },
+        python = { "ruff_format" },
+        sh = { "shfmt" },
+        bash = { "shfmt" },
+        -- Use prettier for most web stuff
+        javascript = { "prettier" },
+        typescript = { "prettier" },
+        json = { "prettier" },
+      },
+      -- format on save
+      format_on_save = {
+        timeout_ms = 500,
+        lsp_fallback = true,
+      },
+    },
+  },
   -- LSP, Completion, Snippets
   {
     "neovim/nvim-lspconfig",

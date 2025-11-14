@@ -5,4 +5,9 @@ go
 rust
 zig
 rust-analyzer
+lua-language-server
 zls
+stylua
+prettier
+ruff
+shfmt
