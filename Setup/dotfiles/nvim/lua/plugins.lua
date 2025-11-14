@@ -53,18 +53,54 @@ return {
       "saadparwaiz1/cmp_luasnip"
     },
     config = function()
+      local on_attach = function(client, bufnr)
+        -- See `:help vim.lsp.buf` for a full list of LSP buffer actions.
+        local opts = { noremap = true, silent = true, buffer = bufnr }
+        vim.keymap.set('n', 'gD', vim.lsp.buf.declaration, opts)
+        vim.keymap.set('n', 'gd', vim.lsp.buf.definition, opts)
+        vim.keymap.set('n', 'K', vim.lsp.buf.hover, opts)
+        vim.keymap.set('n', 'gi', vim.lsp.buf.implementation, opts)
+        vim.keymap.set('n', '<C-k>', vim.lsp.buf.signature_help, opts)
+        vim.keymap.set('n', '<space>wa', vim.lsp.buf.add_workspace_folder, opts)
+        vim.keymap.set('n', '<space>wr', vim.lsp.buf.remove_workspace_folder, opts)
+        vim.keymap.set('n', '<space>wl', function()
+          print(vim.inspect(vim.lsp.buf.list_workspace_folders()))
+        end, opts)
+        vim.keymap.set('n', '<space>D', vim.lsp.buf.type_definition, opts)
+        vim.keymap.set('n', '<space>rn', vim.lsp.buf.rename, opts)
+        vim.keymap.set('n', '<space>ca', vim.lsp.buf.code_action, opts)
+        vim.keymap.set('n', 'gr', vim.lsp.buf.references, opts)
+        vim.keymap.set('n', '<space>e', vim.diagnostic.open_float, opts)
+      end
+
       local lspconfig = require('lspconfig')
       local capabilities = require('cmp_nvim_lsp').default_capabilities()
-      -- Setup servers
-      lspconfig.pyright.setup { capabilities = capabilities }
-      lspconfig.tsserver.setup { capabilities = capabilities }
-      lspconfig.rust_analyzer.setup({}) -- Basic setup is fine
-      lspconfig.zls.setup({})           -- Basic setup is fine
-      lspconfig.lua_ls.setup {
+
+      -- Define the list of servers to set up
+      local servers = { "pyright", "ts_ls", "rust_analyzer", "zls" }
+
+      -- Loop through the servers and set them up with the shared configuration
+      for _, server_name in ipairs(servers) do
+        lspconfig[server_name].setup({
+          on_attach = on_attach,
+          capabilities = capabilities,
+        })
+      end
+
+      -- Special setup for lua_ls with custom settings
+      lspconfig.lua_ls.setup({
+        on_attach = on_attach,
         capabilities = capabilities,
-        settings = { Lua = { diagnostics = { globals = { 'vim' } } } }
-      }
-      -- Setup completion
+        settings = {
+          Lua = {
+            diagnostics = {
+              globals = { 'vim' }
+            }
+          }
+        }
+      })
+
+      -- Setup completion (this part remains the same)
       local cmp = require('cmp')
       cmp.setup {
         snippet = { expand = function(args) require('luasnip').lsp_expand(args.body) end },
@@ -74,9 +110,7 @@ return {
           ['<CR>'] = cmp.mapping.confirm({ select = true }),
         }),
       }
-      -- Setup LSP keymaps
-      vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { desc = "Go to definition" })
-      vim.keymap.set('n', 'K', vim.lsp.buf.hover, { desc = "Show hover info" })
+      -- The old global keymaps are no longer needed here as they are in on_attach
     end
   },
 
